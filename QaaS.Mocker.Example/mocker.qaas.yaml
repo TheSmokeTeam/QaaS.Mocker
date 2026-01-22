@@ -1,0 +1,80 @@
+DataSources:
+  - Name: FromFileSystemTestMockerServerExample
+    Generator: FromFileSystem
+    GeneratorSpecificConfiguration:
+      DataArrangeOrder: AsciiAsc
+      FileSystem:
+        Path: Data
+  - Name: Samples
+    Generator: FromFileSystem
+    GeneratorSpecificConfiguration:
+      DataArrangeOrder: AsciiAsc
+      FileSystem:
+        Path: SocketData
+
+#Stubs:
+#  - Name: ExampleStub
+#    Processor: ExampleProcessor
+#      
+#  - Name: DummyStub
+#    Processor: DummyTransactionProcessor 
+#    ResponseBodySerialization:
+#      Serializer: Json
+#    ProcessorSpecificConfiguration:
+#      DummyKey: ExampleKey
+#      DummyValue: ExampleValueDifferent
+  
+Controller:
+  ServerName: socket-runner-mocker-integration-tests
+  Redis:
+    AbortOnConnectFail: false
+    Host: bigger:6379
+
+Server:
+  Type: Socket
+  Socket:
+    
+    EndPoints:
+      - Port: ${variables:socket:broadcastPort}
+        ProtocolType: ${variables:socket:protocol}
+        BufferSizeBytes: ${variables:socket:commBuffer}
+        NagleAlgorithm: ${variables:socket:server:nagle}
+        TimeoutMs: 5000
+        Action:
+          Name: BroadcastSamples
+          Method: Broadcast
+          DataSourceName: Samples
+
+      - Port: ${variables:socket:collectPort}
+        ProtocolType: ${variables:socket:protocol}
+        BufferSizeBytes: ${variables:socket:commBuffer}
+        NagleAlgorithm: ${variables:socket:server:nagle}
+        TimeoutMs: 5000
+        Action:
+          Name: CollectSamples
+          Method: Collect
+
+#Server:
+#  Type: Http
+#  Http:
+#    Port: 8080
+#    # NotFoundTransactionStubName: DummyStub
+#    # InternalErrorTransactionStubName: DummyStub
+#    Endpoints:
+#      - Path: /
+#        Actions:
+#          - Name: testAction1
+#            Method: Get
+#            TransactionStubName: ExampleStub
+#          - Method: Post
+#            TransactionStubName: ExampleStub
+#      - Path: /example/
+#        Actions:
+#          - Name: testAction3
+#            Method: Get
+#            TransactionStubName: DummyStub 
+#      - Path: /userid/{userid}/{param2}
+#        Actions:
+#          - Name: testAction4
+#            Method: Get
+#            TransactionStubName: DummyStub

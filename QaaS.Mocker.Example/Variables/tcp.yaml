@@ -1,0 +1,13 @@
+variables:
+  socket:
+    sessionName: SocketClientConnectionToMockerTest
+    broadcastPort: 6000
+    collectPort: 7001
+    commBuffer: 2048
+    protocol: Tcp
+    client:
+      host: 127.0.0.1
+      nagle: true
+    server:
+      bind: 0.0.0.0
+      nagle: true

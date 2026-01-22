@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <VersionPrefix>0.0.0</VersionPrefix>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="QaaS.Framework.Serialization" Version="1.0.0-beta.19-mocker.1" />
+
+
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\QaaS.Mocker.Stubs\QaaS.Mocker.Stubs.csproj" />
+    </ItemGroup>
+
+
+
+
+</Project>

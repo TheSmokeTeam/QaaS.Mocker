@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <VersionPrefix>0.0.0</VersionPrefix>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Autofac" Version="6.5.0" />
+      <PackageReference Include="QaaS.Framework.SDK" Version="1.0.0-beta.19" />
+      <PackageReference Include="QaaS.Framework.Serialization" Version="1.0.0-beta.19-mocker.1" />
+    </ItemGroup>
+
+</Project>

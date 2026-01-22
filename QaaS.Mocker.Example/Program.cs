@@ -1,0 +1,1 @@
+﻿QaaS.Mocker.Initialization.Initialize(args);
