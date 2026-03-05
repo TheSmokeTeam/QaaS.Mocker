@@ -26,7 +26,7 @@ public class Controller(IConnectionMultiplexer redisConnection, int redisDataBas
         new PingHandler(serverState, subscriber, serverName, logger).Start();
         new CommandHandler(serverState, database, subscriber, serverName, logger).Start();
 
-        while (true) {}
+        Thread.Sleep(Timeout.Infinite);
     }
 
     /// <summary>

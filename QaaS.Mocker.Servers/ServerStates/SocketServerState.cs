@@ -68,9 +68,10 @@ public class SocketServerState : IServerState
     public IEnumerable<Data<object>> Process(int port, IEnumerable<Data<object>> dataToProcess)
     {
         var stub = ResolveTransactionStub(port);
-        // If input-output state is not defined in given port - use property's value of current instance
-        var inputOutputState = _socketActions.TryGetValue(port, out var state) ? state.State : InputOutputState;
-        var actionName = _socketActions[port].ActionName ?? "NotFoundTransactionStub";
+        // If input-output state is not defined in given port - use property's value of current instance.
+        var actionExists = _socketActions.TryGetValue(port, out var state);
+        var inputOutputState = actionExists ? state!.State : InputOutputState;
+        var actionName = state?.ActionName ?? "NotFoundTransactionStub";
         foreach (var data in dataToProcess)
         {
             if (inputOutputState is InputOutputState.OnlyInput or InputOutputState.BothInputOutput)
@@ -125,7 +126,8 @@ public class SocketServerState : IServerState
     /// </summary>
     private TransactionStub GetTransactionStub(string transactionStubName)
     {
-        return _transactionStubList.FirstOrDefault(transactionStub => transactionStub.Name.Equals(transactionStubName))
+        return _transactionStubList.FirstOrDefault(transactionStub =>
+                   transactionStub.Name.Equals(transactionStubName, StringComparison.OrdinalIgnoreCase))
                ?? throw new StubNotLoadedException
                    ($"Transaction Stub for actions: '{transactionStubName}' is not loaded!");
     }
@@ -144,9 +146,12 @@ public class SocketServerState : IServerState
     /// </summary>
     public void TriggerAction(string actionName, int? timeoutMs)
     {
-        _socketActions
-            .FirstOrDefault(actionState => actionState.Value.ActionName == actionName)
-            .Value.SetEnabledForTimeoutMs(timeoutMs.GetValueOrDefault()).Start();
+        var actionState = _socketActions.Values.FirstOrDefault(state =>
+            string.Equals(state.ActionName, actionName, StringComparison.OrdinalIgnoreCase));
+        if (actionState == null)
+            throw new ActionDoesNotExistException($"Cannot trigger action '{actionName}' that doesn't exist");
+
+        _ = actionState.SetEnabledForTimeoutMs(timeoutMs.GetValueOrDefault());
     }
 
     public bool IsEndpointPortActionEnabled(int port)

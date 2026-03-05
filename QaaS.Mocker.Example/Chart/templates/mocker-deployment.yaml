@@ -1,0 +1,54 @@
+{{- if .Values.mocker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "qaas-mocker-example.fullname" . }}
+  labels:
+    {{- include "qaas-mocker-example.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mocker
+spec:
+  replicas: {{ .Values.mocker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: mocker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: mocker
+      {{- with .Values.mocker.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      containers:
+        - name: mocker
+          image: "{{ .Values.mocker.image.repository }}:{{ .Values.mocker.image.tag }}"
+          imagePullPolicy: {{ .Values.mocker.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.mocker.service.httpPort }}
+            - name: grpc
+              containerPort: {{ .Values.mocker.service.grpcPort }}
+          {{- with .Values.mocker.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.mocker.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.mocker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.mocker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.mocker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

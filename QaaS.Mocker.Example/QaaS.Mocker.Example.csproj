@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -13,13 +13,38 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Update="mocker.qaas.yaml">
-            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-        </None>
+      <None Update="mocker.qaas.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="mocker.grpc.qaas.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Data\**\*">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="SocketData\**\*">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Variables\**\*">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Certificates\**\*">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="QaaS.Framework.Configuration" Version="1.0.0-beta.19-mocker.1" />
-      <PackageReference Include="QaaS.Common.Generators" Version="3.0.0-beta.3" />
+      <PackageReference Include="Google.Protobuf" Version="3.34.0" />
+      <PackageReference Include="Grpc.Core" Version="2.46.6" />
+      <PackageReference Include="Grpc.Tools" Version="2.78.0">
+        <PrivateAssets>all</PrivateAssets>
+      </PackageReference>
+      <PackageReference Include="QaaS.Common.Generators" Version="3.0.0-alpha.6" />
+      <PackageReference Include="QaaS.Framework.Configurations" Version="1.0.1-alpha.3" />
     </ItemGroup>
+
+    <ItemGroup>
+      <Protobuf Include="Protos\echo.proto" GrpcServices="Both" />
+    </ItemGroup>
+
 </Project>

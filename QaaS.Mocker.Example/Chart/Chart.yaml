@@ -1,20 +1,6 @@
-﻿apiVersion: v2
+apiVersion: v2
 name: qaas-mocker-example
-version: 0.1.0
-repository: &repository REDA
-dependencies:
-  - alias: qaas-mocker-example
-    name: helm-common
-    version: 5.13.3
-    repository: *repository
-    condition: conditions.qaas-mocker-example
-  - alias: qaas-keydb
-    name: keydb
-    version: 0.3.1
-    repository: *repository
-    condition: conditions.qaas-keydb
-  - alias: redis-insight
-    name: helm-common
-    version: 5.13.3
-    repository: *repository
-    condition: conditions.redis-insight
+description: Helm chart for running QaaS Mocker example services.
+type: application
+version: 0.2.0
+appVersion: "1.0.0"

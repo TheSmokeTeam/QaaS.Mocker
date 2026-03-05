@@ -1,0 +1,19 @@
+{{- if .Values.keydb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "qaas-mocker-example.fullname" . }}-keydb
+  labels:
+    {{- include "qaas-mocker-example.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keydb
+spec:
+  type: {{ .Values.keydb.service.type }}
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: keydb
+  ports:
+    - name: redis
+      port: {{ .Values.keydb.service.port }}
+      targetPort: redis
+      protocol: TCP
+{{- end }}
