@@ -33,6 +33,23 @@ public class HttpServerStateTests
     }
 
     [Test]
+    public void Process_WithPathParameters_ExposesParametersToStubProcessor()
+    {
+        var state = CreateState(
+            ("MainStub", request =>
+            {
+                var id = request.MetaData?.Http.PathParameters?["id"] ?? "missing";
+                return CreateResponse(id);
+            }),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => CreateResponse("internal")));
+
+        var response = state.Process("/users/42", HttpMethod.Get, CreateRequestData());
+
+        Assert.That(Encoding.UTF8.GetString((byte[])response.Body!), Is.EqualTo("42"));
+    }
+
+    [Test]
     public void Process_WithUnknownEndpoint_UsesNotFoundStub()
     {
         var state = CreateState(
@@ -56,6 +73,18 @@ public class HttpServerStateTests
         var response = state.Process("/users/42", HttpMethod.Get, CreateRequestData());
 
         Assert.That(Encoding.UTF8.GetString((byte[])response.Body!), Is.EqualTo("internal"));
+    }
+
+    [Test]
+    public void Process_WhenPrimaryAndInternalErrorStubsThrow_ThrowsFatalInternalErrorException()
+    {
+        var state = CreateState(
+            ("MainStub", _ => throw new InvalidOperationException("boom")),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => throw new InvalidOperationException("internal-boom")));
+
+        Assert.Throws<FatalInternalErrorException>(() =>
+            state.Process("/users/42", HttpMethod.Get, CreateRequestData()));
     }
 
     [Test]

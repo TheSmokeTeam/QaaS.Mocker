@@ -44,6 +44,19 @@ public class GrpcServerStateTests
     }
 
     [Test]
+    public void Process_WithUnknownService_UsesNotFoundStub()
+    {
+        var state = CreateState(
+            ("MainStub", _ => CreateResponse("main")),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => CreateResponse("internal")));
+
+        var response = state.Process("MissingService", "Echo", CreateRequestData());
+
+        Assert.That(Encoding.UTF8.GetString((byte[])response.Body!), Is.EqualTo("not-found"));
+    }
+
+    [Test]
     public void Process_WhenPrimaryStubThrows_UsesInternalErrorStub()
     {
         var state = CreateState(
@@ -54,6 +67,18 @@ public class GrpcServerStateTests
         var response = state.Process("EchoService", "Echo", CreateRequestData());
 
         Assert.That(Encoding.UTF8.GetString((byte[])response.Body!), Is.EqualTo("internal"));
+    }
+
+    [Test]
+    public void Process_WhenPrimaryAndInternalErrorStubsThrow_ThrowsFatalInternalErrorException()
+    {
+        var state = CreateState(
+            ("MainStub", _ => throw new InvalidOperationException("boom")),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => throw new InvalidOperationException("internal-boom")));
+
+        Assert.Throws<FatalInternalErrorException>(() =>
+            state.Process("EchoService", "Echo", CreateRequestData()));
     }
 
     [Test]
