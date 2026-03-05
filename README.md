@@ -117,4 +117,5 @@ docker run --rm -p 8443:8443 qaas-mocker-example
 Workflow: `.github/workflows/ci.yml`
 
 - Restores, builds with `-warnaserror`, and runs tests
+- Uses workflow concurrency to cancel duplicate branch/PR runs in progress
 - On tags: validates SemVer, packs `QaaS.Mocker`, pushes NuGet package
