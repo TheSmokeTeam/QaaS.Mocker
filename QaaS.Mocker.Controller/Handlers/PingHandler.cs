@@ -1,9 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
-using QaaS.Framework.SDK.MockerObjects;
-using QaaS.Framework.SDK.MockerObjects.ConfigurationObjects.Ping;
+using QaaS.Framework.SDK.ConfigurationObjects;
+using Qaas.Mocker.CommunicationObjects;
+using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Ping;
 using QaaS.Mocker.Servers.ServerStates;
 using StackExchange.Redis;
-using CommunicationInputOutputState = QaaS.Framework.SDK.ConfigurationObjects.InputOutputState;
+using CommunicationInputOutputState = Qaas.Mocker.CommunicationObjects.ConfigurationObjects.InputOutputState;
 
 namespace QaaS.Mocker.Controller.Handlers;
 
@@ -32,4 +33,3 @@ public class PingHandler(
         };
     }
 }
-

@@ -1,12 +1,13 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
-using QaaS.Framework.SDK.ConfigurationObjects;
-using QaaS.Framework.SDK.MockerObjects.ConfigurationObjects.Ping;
+using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Ping;
 using QaaS.Mocker.Controller.Handlers;
 using QaaS.Mocker.Servers.Caches;
 using QaaS.Mocker.Servers.ServerStates;
 using StackExchange.Redis;
+using CommunicationInputOutputState = Qaas.Mocker.CommunicationObjects.ConfigurationObjects.InputOutputState;
+using ServerInputOutputState = QaaS.Framework.SDK.ConfigurationObjects.InputOutputState;
 
 namespace QaaS.Mocker.Controller.Tests.HandlersTests;
 
@@ -25,10 +26,15 @@ public class PingHandlerTests
         });
     }
 
-    [Test]
-    public void HandleRequest_ReturnsServerIdentityAndInputOutputState()
+    [TestCase(ServerInputOutputState.NoInputOutput, CommunicationInputOutputState.NoInputOutput)]
+    [TestCase(ServerInputOutputState.OnlyInput, CommunicationInputOutputState.OnlyInput)]
+    [TestCase(ServerInputOutputState.OnlyOutput, CommunicationInputOutputState.OnlyOutput)]
+    [TestCase(ServerInputOutputState.BothInputOutput, CommunicationInputOutputState.BothInputOutput)]
+    public void HandleRequest_ReturnsServerIdentityAndInputOutputState(
+        ServerInputOutputState inputOutputState,
+        CommunicationInputOutputState expectedResponseState)
     {
-        var handler = CreateHandler("server-a", "instance-42", InputOutputState.OnlyOutput);
+        var handler = CreateHandler("server-a", "instance-42", inputOutputState);
 
         var response = handler.Invoke(new PingRequest { Id = "ping-1" });
 
@@ -38,14 +44,14 @@ public class PingHandlerTests
             Assert.That(response!.Id, Is.EqualTo("ping-1"));
             Assert.That(response.ServerName, Is.EqualTo("server-a"));
             Assert.That(response.ServerInstanceId, Is.EqualTo("instance-42"));
-            Assert.That(response.ServerInputOutputState, Is.EqualTo(InputOutputState.OnlyOutput));
+            Assert.That(response.ServerInputOutputState, Is.EqualTo(expectedResponseState));
         });
     }
 
     private static TestablePingHandler CreateHandler(
         string serverName,
         string serverInstanceId,
-        InputOutputState inputOutputState = InputOutputState.BothInputOutput)
+        ServerInputOutputState inputOutputState = ServerInputOutputState.BothInputOutput)
     {
         var cache = new Mock<ICache>();
         var serverState = new Mock<IServerState>();

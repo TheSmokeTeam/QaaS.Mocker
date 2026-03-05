@@ -10,9 +10,7 @@
 
     <ItemGroup>
       <PackageReference Include="Autofac" Version="9.0.0" />
-      <PackageReference Include="QaaS.Common.Processors" Version="1.0.0-alpha.1" />
-      <PackageReference Include="QaaS.Framework.SDK" Version="1.1.0-alpha.3" />
-      <PackageReference Include="QaaS.Framework.Serialization" Version="1.1.0-alpha.3" />
+      <PackageReference Include="QaaS.Framework.SDK" Version="1.1.0-alpha.4" />
     </ItemGroup>
 
 </Project>

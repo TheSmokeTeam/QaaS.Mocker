@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using QaaS.Framework.SDK.MockerObjects;
+using Qaas.Mocker.CommunicationObjects;
 using StackExchange.Redis;
 
 namespace QaaS.Mocker.Controller.Handlers;
