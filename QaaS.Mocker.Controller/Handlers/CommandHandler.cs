@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using QaaS.Framework.SDK.ConfigurationObjects;
-using Qaas.Mocker.CommunicationObjects;
-using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Command;
+using QaaS.Framework.SDK.MockerObjects;
+using QaaS.Framework.SDK.MockerObjects.ConfigurationObjects.Command;
 using QaaS.Mocker.Servers.Caches;
 using QaaS.Mocker.Servers.ServerStates;
 using StackExchange.Redis;

@@ -11,12 +11,12 @@
 
     <ItemGroup>
       <PackageReference Include="Autofac" Version="9.0.0" />
+      <PackageReference Include="QaaS.Framework.SDK" Version="1.1.0-alpha.3" />
       <PackageReference Include="StackExchange.Redis" Version="2.11.8" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\QaaS.Mocker.Servers\QaaS.Mocker.Servers.csproj" />
-      <ProjectReference Include="..\..\Qaas.Mocker.CommunicationObjects\Qaas.Mocker.CommunicationObjects\Qaas.Mocker.CommunicationObjects.csproj" />
     </ItemGroup>
 
 </Project>

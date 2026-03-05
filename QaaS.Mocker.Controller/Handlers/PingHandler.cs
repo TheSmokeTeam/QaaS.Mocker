@@ -1,9 +1,9 @@
 ﻿using Microsoft.Extensions.Logging;
-using Qaas.Mocker.CommunicationObjects;
-using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Ping;
+using QaaS.Framework.SDK.MockerObjects;
+using QaaS.Framework.SDK.MockerObjects.ConfigurationObjects.Ping;
 using QaaS.Mocker.Servers.ServerStates;
 using StackExchange.Redis;
-using CommunicationInputOutputState = Qaas.Mocker.CommunicationObjects.ConfigurationObjects.InputOutputState;
+using CommunicationInputOutputState = QaaS.Framework.SDK.ConfigurationObjects.InputOutputState;
 
 namespace QaaS.Mocker.Controller.Handlers;
 
