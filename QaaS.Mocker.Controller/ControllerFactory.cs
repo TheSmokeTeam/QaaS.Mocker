@@ -29,14 +29,28 @@ public class ControllerFactory(Context context, ControllerConfig? controller)
                 return null;
             }
         }
-        catch (Exception exception) // TODO better exception handling
+        catch (RedisConnectionException exception)
         {
             context.Logger.LogError("Couldn't connect to Redis API - Not initiating Controller API. " +
                                     "Exception: {ExceptionMessage}", exception.Message);
             return null;
         }
+        catch (Exception exception)
+        {
+            throw new ControllerInitializationException("Unexpected error while creating redis controller", exception);
+        }
 
-        return new Controllers.Controller(redisConnection, controller.Redis!.RedisDataBase,
-                serverState, serverName, context.Logger);
+        var serverInstanceId = $"{Environment.MachineName}-{Environment.ProcessId}-{Guid.NewGuid():N}";
+        context.Logger.LogInformation(
+            "Initialized redis controller for server '{ServerName}' with instance id '{ServerInstanceId}'",
+            serverName, serverInstanceId);
+
+        return new Controllers.Controller(
+            redisConnection,
+            controller.Redis!.RedisDataBase,
+            serverState,
+            serverName,
+            serverInstanceId,
+            context.Logger);
     }
 }

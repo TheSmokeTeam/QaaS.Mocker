@@ -1,8 +1,8 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using QaaS.Framework.SDK.ConfigurationObjects;
-using QaaS.Framework.SDK.MockerObjects;
-using QaaS.Framework.SDK.MockerObjects.ConfigurationObjects.Command;
+using Qaas.Mocker.CommunicationObjects;
+using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Command;
 using QaaS.Mocker.Servers.Caches;
 using QaaS.Mocker.Servers.ServerStates;
 using StackExchange.Redis;
@@ -12,9 +12,14 @@ namespace QaaS.Mocker.Controller.Handlers;
 /// <summary>
 /// Handler class that handles command messages.
 /// </summary>
-public class CommandHandler(IServerState serverState, IDatabase databaseClient, ISubscriber subscriberClient, 
-    string serverName, ILogger logger) :
-    BaseHandler<CommandRequest, CommandResponse>(subscriberClient, serverName, logger)
+public class CommandHandler(
+    IServerState serverState,
+    IDatabase databaseClient,
+    ISubscriber subscriberClient,
+    string serverName,
+    string serverInstanceId,
+    ILogger logger) :
+    BaseHandler<CommandRequest, CommandResponse>(subscriberClient, serverName, serverInstanceId, logger)
 {
     protected override string ContentType => "command";
     
@@ -27,7 +32,7 @@ public class CommandHandler(IServerState serverState, IDatabase databaseClient, 
         CommunicationMethods.CreateConsumerEndpointOutput(serverName);
 
 
-    private bool _consumeState; 
+    private int _consumeState; 
     
     protected override CommandResponse? HandleRequest(RedisChannel channel, CommandRequest request)
     {
@@ -49,7 +54,7 @@ public class CommandHandler(IServerState serverState, IDatabase databaseClient, 
         return new CommandResponse
         {
             Id = request.Id,
-            ServerInstanceId = Environment.MachineName,
+            ServerInstanceId = serverInstanceId,
             Command = request.Command,
             Status = status ? Status.Succeeded : Status.Failed,
             ExceptionMessage = exceptionMessage
@@ -76,33 +81,53 @@ public class CommandHandler(IServerState serverState, IDatabase databaseClient, 
     
     private void StartConsuming(Consume request)
     {
-        if (_consumeState) return;
+        if (Interlocked.CompareExchange(ref _consumeState, 1, 0) != 0)
+        {
+            logger.LogDebug("Consume command already running for server '{ServerName}', ignoring duplicate request",
+                serverName);
+            return;
+        }
+
+        logger.LogInformation("Starting consume lifecycle for server '{ServerName}' and action '{ActionName}'",
+            serverName, request.ActionName);
         Task.Run(() => CreateAndDisposeConsumerLifecycle(request));
     }
 
-    private async void CreateAndDisposeConsumerLifecycle(Consume request)
+    private async Task CreateAndDisposeConsumerLifecycle(Consume request)
     {
-        _serverStateCache.InputDataFilter = request.InputDataFilter;
-        _serverStateCache.OutputDataFilter = request.OutputDataFilter;
-        
-        _serverStateCache.EnableStorage = true;
-        _consumeState = true;
-        _serverStateCache.CachedAction = request.ActionName;
-        var consumerTasks = new List<Task>();
-        
-        if (serverState.InputOutputState is InputOutputState.OnlyInput or InputOutputState.BothInputOutput)
-            consumerTasks.Add(Task.Run(() => 
-                Consume(_serverStateCache.RetrieveFirstOrDefaultStringInput, _databaseQueueNameInput, request.TimeoutMs)));
-        
-        if (serverState.InputOutputState is InputOutputState.OnlyOutput or InputOutputState.BothInputOutput)
-            consumerTasks.Add(Task.Run(() => 
-                Consume(_serverStateCache.RetrieveFirstOrDefaultStringOutput, _databaseQueueNameOutput, request.TimeoutMs)));
-        
-        await Task.WhenAll(consumerTasks); 
-        
-        _serverStateCache.CachedAction = null;
-        _serverStateCache.EnableStorage = false;
-        _consumeState = false;
+        try
+        {
+            _serverStateCache.InputDataFilter = request.InputDataFilter;
+            _serverStateCache.OutputDataFilter = request.OutputDataFilter;
+            _serverStateCache.EnableStorage = true;
+            _serverStateCache.CachedAction = request.ActionName;
+            var consumerTasks = new List<Task>();
+
+            if (serverState.InputOutputState is InputOutputState.OnlyInput or InputOutputState.BothInputOutput)
+                consumerTasks.Add(Task.Run(() =>
+                    Consume(_serverStateCache.RetrieveFirstOrDefaultStringInput, _databaseQueueNameInput,
+                        request.TimeoutMs)));
+
+            if (serverState.InputOutputState is InputOutputState.OnlyOutput or InputOutputState.BothInputOutput)
+                consumerTasks.Add(Task.Run(() =>
+                    Consume(_serverStateCache.RetrieveFirstOrDefaultStringOutput, _databaseQueueNameOutput,
+                        request.TimeoutMs)));
+
+            await Task.WhenAll(consumerTasks);
+            logger.LogInformation("Consume lifecycle completed for server '{ServerName}' and action '{ActionName}'",
+                serverName, request.ActionName);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Consume lifecycle failed for server '{ServerName}' and action '{ActionName}'",
+                serverName, request.ActionName);
+        }
+        finally
+        {
+            _serverStateCache.CachedAction = null;
+            _serverStateCache.EnableStorage = false;
+            Interlocked.Exchange(ref _consumeState, 0);
+        }
     }
     
     private void Consume(Func<string?> retrieveFromCacheFunc, string queueName, int timeoutMs)
@@ -121,3 +146,4 @@ public class CommandHandler(IServerState serverState, IDatabase databaseClient, 
         logger.LogInformation("Stopped consuming from Server's cache to '{QueueName}'", queueName);
     }
 }
+

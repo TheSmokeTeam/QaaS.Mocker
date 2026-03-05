@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using QaaS.Framework.SDK.MockerObjects;
+using Qaas.Mocker.CommunicationObjects;
 using StackExchange.Redis;
 
 namespace QaaS.Mocker.Controller.Handlers;
@@ -8,13 +8,14 @@ namespace QaaS.Mocker.Controller.Handlers;
 public abstract class BaseHandler<TRequestMessage, TResponseMessage>(
     ISubscriber subscriberClient,
     string serverName,
+    string serverInstanceId,
     ILogger logger)
 {
     protected abstract string ContentType { get; }
     protected virtual string RequestChannel() =>
-        CommunicationMethods.CreateChannelRunnerToMocker(ContentType, serverName, Environment.MachineName);
+        CommunicationMethods.CreateChannelRunnerToMocker(ContentType, serverName, serverInstanceId);
     protected virtual string ResponseChannel() =>
-        CommunicationMethods.CreateChannelMockerToRunner(ContentType, serverName, Environment.MachineName);  
+        CommunicationMethods.CreateChannelMockerToRunner(ContentType, serverName, serverInstanceId);
     
     protected abstract TResponseMessage? HandleRequest(RedisChannel channel, TRequestMessage requestMessage);
     
@@ -25,8 +26,9 @@ public abstract class BaseHandler<TRequestMessage, TResponseMessage>(
     {
         var requestChannel = RequestChannel();
         var responseChannel = ResponseChannel();
-        logger.LogInformation("Handler: '{Handler}' started. Listening on: {RequestChannel}", 
-            GetType().Name, requestChannel);
+        logger.LogInformation(
+            "Handler '{Handler}' started. Listening on '{RequestChannel}' and publishing to '{ResponseChannel}'",
+            GetType().Name, requestChannel, responseChannel);
         subscriberClient.Subscribe(requestChannel, (channel, serializedRequestMessage) =>
         {
             try
@@ -56,3 +58,4 @@ public abstract class BaseHandler<TRequestMessage, TResponseMessage>(
         });
     }
 }
+
