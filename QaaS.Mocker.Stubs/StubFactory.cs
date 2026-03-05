@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
-using QaaS.Framework.SDK.Hooks.BaseHooks;
+using QaaS.Common.Processors;
 using QaaS.Framework.SDK.ConfigurationObjects;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Framework.SDK.DataSourceObjects;
