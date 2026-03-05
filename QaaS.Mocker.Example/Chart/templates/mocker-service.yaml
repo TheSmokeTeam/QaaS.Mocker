@@ -1,0 +1,23 @@
+{{- if .Values.mocker.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "qaas-mocker-example.fullname" . }}
+  labels:
+    {{- include "qaas-mocker-example.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mocker
+spec:
+  type: {{ .Values.mocker.service.type }}
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: mocker
+  ports:
+    - name: http
+      port: {{ .Values.mocker.service.httpPort }}
+      targetPort: http
+      protocol: TCP
+    - name: grpc
+      port: {{ .Values.mocker.service.grpcPort }}
+      targetPort: grpc
+      protocol: TCP
+{{- end }}

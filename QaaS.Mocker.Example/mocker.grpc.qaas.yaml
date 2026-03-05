@@ -1,0 +1,22 @@
+DataSources: []
+
+Stubs:
+  - Name: GrpcEchoStub
+    Processor: GrpcEchoProcessor
+
+Server:
+  Type: Grpc
+  Grpc:
+    Port: 50051
+    IsLocalhost: true
+    IsSecuredSchema: true
+    CertificatePath: Certificates/devcert.pfx
+    CertificatePassword: qaas-dev-cert
+    Services:
+      - ServiceName: EchoService
+        ProtoNamespace: QaaS.Mocker.Example.Grpc
+        AssemblyName: QaaS.Mocker.Example
+        Actions:
+          - Name: EchoAction
+            RpcName: Echo
+            TransactionStubName: GrpcEchoStub

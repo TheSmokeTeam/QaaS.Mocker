@@ -31,7 +31,7 @@ public record MockerOptions : LoggerOptions
                     List of files to overwrite the mocker configuration with, The first file overwrites the mocker
                     configuration file and then the one after it overwrite the result and so on...
                     """)]
-    public IList<string> OverwriteFiles { get; init; }
+    public IList<string> OverwriteFiles { get; init; } = [];
 
 
     [Option('r', "overwrite-arguments", Default = null,
@@ -40,7 +40,7 @@ public record MockerOptions : LoggerOptions
                    mocker configuration and then the one after it overwrites the result and so on...
                    For example: `Path:To:Variable:To:Overwrite=NewVariableValue`
                    """)]
-    public IList<string> OverwriteArguments { get; init; }
+    public IList<string> OverwriteArguments { get; init; } = [];
 
 
     [Option("no-env", Default = false,
@@ -50,13 +50,13 @@ public record MockerOptions : LoggerOptions
     public bool DontResolveWithEnvironmentVariables { get; init; } = false;
 
 
-    [ValidPath, Option('o', "output-folder", Default = null,
+    [Option('o', "output-folder", Default = null,
          HelpText = """
                     Path to a folder to write the generated templates in.
                     """)]
     public string? TemplatesOutputFolder { get; init; }
 
-    [ValidPath, Option('h', "run-locally", Default = false,
+    [Option("run-locally", Default = false,
          HelpText = """
                     Runs the project locally and enables exit by any key press.
                     """)]

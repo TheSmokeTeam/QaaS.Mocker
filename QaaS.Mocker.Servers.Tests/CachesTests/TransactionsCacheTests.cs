@@ -1,0 +1,74 @@
+using NUnit.Framework;
+using QaaS.Framework.SDK.Session.DataObjects;
+using QaaS.Framework.SDK.Session.MetaDataObjects;
+using QaaS.Mocker.Servers.Caches;
+
+namespace QaaS.Mocker.Servers.Tests.CachesTests;
+
+[TestFixture]
+public class TransactionsCacheTests
+{
+    [Test]
+    public void StoreInput_WhenStorageDisabled_DoesNotPersist()
+    {
+        var cache = new TransactionsCache { EnableStorage = false };
+
+        cache.StoreInput(CreateDetailedData("one"), "ActionA");
+
+        Assert.That(cache.RetrieveFirstOrDefaultStringInput(), Is.Null);
+    }
+
+    [Test]
+    public void StoreOutput_WhenActionFilterDoesNotMatch_DoesNotPersist()
+    {
+        var cache = new TransactionsCache
+        {
+            EnableStorage = true,
+            CachedAction = "ActionA"
+        };
+
+        cache.StoreOutput(CreateDetailedData("one"), "ActionB");
+
+        Assert.That(cache.RetrieveFirstOrDefaultStringOutput(), Is.Null);
+    }
+
+    [Test]
+    public void RetrieveFirstOrDefaultStringInput_ReturnsSerializedAndDequeues()
+    {
+        var cache = new TransactionsCache { EnableStorage = true };
+        cache.StoreInput(CreateDetailedData("first"), "ActionA");
+        cache.StoreInput(CreateDetailedData("second"), "ActionA");
+
+        var first = cache.RetrieveFirstOrDefaultStringInput();
+        var second = cache.RetrieveFirstOrDefaultStringInput();
+        var third = cache.RetrieveFirstOrDefaultStringInput();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first, Does.Contain("first"));
+            Assert.That(second, Does.Contain("second"));
+            Assert.That(third, Is.Null);
+        });
+    }
+
+    [Test]
+    public void RetrieveFirstOrDefaultStringOutput_WhenNullItemStored_ReturnsNullJsonLiteral()
+    {
+        var cache = new TransactionsCache { EnableStorage = true };
+        cache.StoreOutput(null, "ActionA");
+
+        var result = cache.RetrieveFirstOrDefaultStringOutput();
+
+        Assert.That(result, Is.EqualTo("null"));
+    }
+
+    private static DetailedData<object> CreateDetailedData(string value)
+    {
+        return new DetailedData<object>
+        {
+            Timestamp = DateTime.UtcNow,
+            Body = value,
+            MetaData = new MetaData()
+        };
+    }
+}

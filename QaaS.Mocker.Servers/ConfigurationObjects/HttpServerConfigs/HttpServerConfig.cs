@@ -17,6 +17,12 @@ public record HttpServerConfig
 
     [Description("To run the server with a secured schema. This is for mainly for local testing."), DefaultValue(false)] 
     public bool IsSecuredSchema { get; set; } = false;
+
+    [Description("Server certificate path (.pfx) used when IsSecuredSchema is true"), DefaultValue(null)]
+    public string? CertificatePath { get; set; }
+
+    [Description("Server certificate password used when IsSecuredSchema is true"), DefaultValue(null)]
+    public string? CertificatePassword { get; set; }
     
     [Description("To run the server host as localhost. This is for mainly for local testing."), DefaultValue(false)] 
     public bool IsLocalhost { get; set; } = false;
@@ -68,7 +74,11 @@ internal class ValidAndUniquePathRegexEndpointsAttribute : ValidationAttribute
             for (var otherEndpointIndex = endpointIndex + 1; otherEndpointIndex < configuration.Endpoints.Length; otherEndpointIndex++)
             {
                 var otherPath = configuration.Endpoints[otherEndpointIndex].Path;
-                if (endpointPathsToRegexMapping[otherPath].IsMatch(endpointPathsToDummyMapping[path]))
+                var pathsConflict =
+                    endpointPathsToRegexMapping[otherPath].IsMatch(endpointPathsToDummyMapping[path]) ||
+                    endpointPathsToRegexMapping[path].IsMatch(endpointPathsToDummyMapping[otherPath]);
+
+                if (pathsConflict)
                     conflictingEndpointPaths.Add(new KeyValuePair<string, string>(path, otherPath));
             }
         }

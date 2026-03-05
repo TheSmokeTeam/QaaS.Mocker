@@ -33,7 +33,8 @@ public class MockerLoader : BaseLoader<MockerOptions, Mocker>
 
     private ExecutionBuilder LoadContextToExecutionBuilder(InternalContext context)
     {
-        var runBuilder = new ExecutionBuilder(context, Options.ExecutionMode!.Value, Options.RunLocally);
+        var runBuilder = new ExecutionBuilder(context, Options.ExecutionMode!.Value, Options.RunLocally,
+            Options.TemplatesOutputFolder);
         return runBuilder;
     }
 

@@ -94,8 +94,10 @@ public class SocketServer : IServer
     public void Start()
     {
         // Bind + Listen in all ports (Unless it is in Udp - cannot listen for connections in Udp)
-        var connectionsAcceptanceSlots = _configuration.ConnectionAcceptanceValue /
-                                         _socketServers.Count(socket => socket.Value.ProtocolType != ProtocolType.Udp);
+        var nonUdpSocketsCount = _socketServers.Count(socket => socket.Value.ProtocolType != ProtocolType.Udp);
+        var connectionsAcceptanceSlots = nonUdpSocketsCount == 0
+            ? 0
+            : Math.Max(1, _configuration.ConnectionAcceptanceValue / nonUdpSocketsCount);
         foreach (var (endpoint, socket) in _socketServers)
         {
             ExposeServer(endpoint, socket.ProtocolType == ProtocolType.Udp ? 0 : connectionsAcceptanceSlots);
@@ -120,6 +122,7 @@ public class SocketServer : IServer
     {
         while (!_socketServerState.IsEndpointPortActionEnabled(endpoint.Port))
         {
+            await Task.Delay(5);
         }
     }
 
@@ -215,7 +218,10 @@ public class SocketServer : IServer
             bytes = socket.GetBytesFromChannelWithinTimeout(timeoutMs, bufferSizeBytes,
                 socket.ProtocolType == ProtocolType.Udp ? localEndpoint : null,
                 _logger);
-            yield return bytes!;
+            if (bytes == null)
+                yield break;
+
+            yield return bytes;
         } while (bytes is { Length: > 0 });
     }
 

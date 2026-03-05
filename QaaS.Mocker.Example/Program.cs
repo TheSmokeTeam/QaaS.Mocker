@@ -1,1 +1,1 @@
-﻿QaaS.Mocker.Initialization.Initialize(args);
+QaaS.Mocker.Bootstrap.New(args).Run();

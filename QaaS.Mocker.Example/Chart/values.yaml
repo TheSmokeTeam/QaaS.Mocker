@@ -1,73 +1,39 @@
-﻿conditions:
-  qaas-mocker-example: false
-  qaas-keydb: true
-  redis-insight: true
-
-global:
-  # Used to replace bitnami's original container images.
-  security:
-    allowInsecureImages: true
-
-qaas-mocker-example:
-  deployment:
-    extraLabels:
-      app.kubernetes.io/part-of: qaas
-    image:
-      repository: REDA/qaas/qaas-mocker-example
-      tag: master
-  service:
-    enabled: true
-    port: 8080
-  route:
-    enabled: true
-    timeout: 600s
-
-redis-insight:
-  route:
-    enabled: true
-    port: 8001
-    timeout: 600s
-  service:
-    enabled: true
-    type: ClusterIP
-    port: 8001
-  deployment:
-    extraLabels:
-      app.kubernetes.io/part-of: qaas
-    replicas: 1
-    resources:
-      limits:
-        cpu: 0.3
-        memory: 600Mi
-      requests:
-        cpu: 0.1
-        memory: 200Mi
-    image:
-      repository: REDA/redisinsight
-      tag: 1.9.0
-    ports:
-      - containerPort: 8001
-        protocol: TCP
-
-qaas-keydb:
-  fullnameOverride: qaas-keydb
-  architecture: standalone
-  serviceAccount: 
-    create: false
-  master:
-    persistence:
-      enabled: false
-    networkPolicy: 
-      enabled: false
-    pdb:
-      create: false
-    service:
-      type: NodePort
-      nodePorts: 
-        keydb: 32385
-  auth:
-    enabled: false
+mocker:
+  enabled: true
+  replicaCount: 1
   image:
-    registry: REDA
-    repository: REDA/keydb
-    tag: bitnami-debian-12-r7
+    repository: qaas-mocker-example
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    httpPort: 8443
+    grpcPort: 50051
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  env: []
+
+keydb:
+  enabled: true
+  image:
+    repository: eqalpha/keydb
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 6379
+  resources: {}
+
+redisInsight:
+  enabled: true
+  image:
+    repository: redis/redisinsight
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5540
+  resources: {}

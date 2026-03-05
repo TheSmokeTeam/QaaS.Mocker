@@ -17,7 +17,7 @@ public class ServerFactory(Context context, ServerConfig server)
         return server.Type switch
         {
             ServerType.Http => new HttpServer(server.Http!, context.Logger, transactionStubList),
-            ServerType.Grpc => throw new NotImplementedException(),
+            ServerType.Grpc => new GrpcServer(server.Grpc!, context.Logger, transactionStubList),
             ServerType.Socket => new SocketServer(server.Socket!, context.Logger, transactionStubList,
                 dataSourceList),
             _ => throw new ArgumentException("Server type not supported!", server.Type.ToString())

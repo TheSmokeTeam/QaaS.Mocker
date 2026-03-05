@@ -18,7 +18,17 @@ public class ActionState<TStateIndicator> : ActionToTransactionStub
     {
         Enabled = true;
         using var cts = new CancellationTokenSource(timeoutMs);
-        while (!cts.IsCancellationRequested) ;
-        Enabled = false;
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected cancellation when timeout elapsed.
+        }
+        finally
+        {
+            Enabled = false;
+        }
     }
 }
