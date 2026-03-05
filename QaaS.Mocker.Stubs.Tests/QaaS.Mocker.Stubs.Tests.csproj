@@ -21,8 +21,6 @@
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="QaaS.Framework.SDK" Version="1.0.1-alpha.3" />
-        <PackageReference Include="QaaS.Framework.Serialization" Version="1.0.1-alpha.3" />
         <PackageReference Include="Serilog.Sinks.NUnit" Version="1.0.3" />
         <PackageReference Include="System.IO.Abstractions" Version="22.1.0" />
         <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="22.1.0" />

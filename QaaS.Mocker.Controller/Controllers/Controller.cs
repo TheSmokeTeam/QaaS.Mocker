@@ -8,8 +8,8 @@ namespace QaaS.Mocker.Controller.Controllers;
 /// <summary>
 /// The main controller class that starts the ping and command handlers.
 /// </summary>
-public class Controller(IConnectionMultiplexer redisConnection, int redisDataBase, IServerState serverState, 
-    string serverName, ILogger logger) : IDisposable, IController
+public class Controller(IConnectionMultiplexer redisConnection, int redisDataBase, IServerState serverState,
+    string serverName, string serverInstanceId, ILogger logger) : IDisposable, IController
 {
 
     /// <summary>
@@ -23,8 +23,8 @@ public class Controller(IConnectionMultiplexer redisConnection, int redisDataBas
         logger.LogInformation("Controller started and connected {RedisConnectionConfiguration} " +
                               "at database {RedisDatabase}", redisConnection.Configuration, redisDataBase);
         
-        new PingHandler(serverState, subscriber, serverName, logger).Start();
-        new CommandHandler(serverState, database, subscriber, serverName, logger).Start();
+        new PingHandler(serverState, subscriber, serverName, serverInstanceId, logger).Start();
+        new CommandHandler(serverState, database, subscriber, serverName, serverInstanceId, logger).Start();
 
         Thread.Sleep(Timeout.Infinite);
     }

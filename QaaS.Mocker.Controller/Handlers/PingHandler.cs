@@ -1,13 +1,20 @@
 ﻿using Microsoft.Extensions.Logging;
-using QaaS.Framework.SDK.MockerObjects;
-using QaaS.Framework.SDK.MockerObjects.ConfigurationObjects.Ping;
+using QaaS.Framework.SDK.ConfigurationObjects;
+using Qaas.Mocker.CommunicationObjects;
+using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Ping;
 using QaaS.Mocker.Servers.ServerStates;
 using StackExchange.Redis;
+using CommunicationInputOutputState = Qaas.Mocker.CommunicationObjects.ConfigurationObjects.InputOutputState;
 
 namespace QaaS.Mocker.Controller.Handlers;
 
-public class PingHandler(IServerState serverState, ISubscriber subscriberClient, string serverName, ILogger logger) 
-    : BaseHandler<PingRequest, PingResponse>(subscriberClient, serverName, logger)
+public class PingHandler(
+    IServerState serverState,
+    ISubscriber subscriberClient,
+    string serverName,
+    string serverInstanceId,
+    ILogger logger)
+    : BaseHandler<PingRequest, PingResponse>(subscriberClient, serverName, serverInstanceId, logger)
 {
     protected override string ContentType => "ping";
     protected override string RequestChannel() => 
@@ -21,8 +28,8 @@ public class PingHandler(IServerState serverState, ISubscriber subscriberClient,
         {
             Id = request.Id,
             ServerName = serverName,
-            ServerInstanceId = Environment.MachineName,
-            ServerInputOutputState = serverState.InputOutputState
+            ServerInstanceId = serverInstanceId,
+            ServerInputOutputState = (CommunicationInputOutputState)serverState.InputOutputState
         };
     }
 }
