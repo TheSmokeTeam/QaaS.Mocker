@@ -41,7 +41,6 @@
       </PackageReference>
       <PackageReference Include="QaaS.Common.Processors" Version="1.0.0-alpha.1" />
       <PackageReference Include="QaaS.Common.Generators" Version="3.0.0-alpha.6" />
-      <PackageReference Include="QaaS.Framework.Configurations" Version="1.0.1-alpha.3" />
     </ItemGroup>
 
     <ItemGroup>

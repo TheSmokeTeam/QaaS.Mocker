@@ -12,8 +12,7 @@
       <FrameworkReference Include="Microsoft.AspNetCore.App" />
       <PackageReference Include="Google.Protobuf" Version="3.34.0" />
       <PackageReference Include="Grpc.Core" Version="2.46.6" />
-      <PackageReference Include="QaaS.Framework.SDK" Version="1.0.1-alpha.3" />
-      <PackageReference Include="QaaS.Framework.Serialization" Version="1.0.1-alpha.3" />
+      <PackageReference Include="QaaS.Framework.SDK" Version="1.1.0-alpha.3" />
     </ItemGroup>
 
     <ItemGroup>
