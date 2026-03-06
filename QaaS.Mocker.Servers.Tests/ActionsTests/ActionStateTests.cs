@@ -32,4 +32,27 @@ public class ActionStateTests
 
         Assert.That(state.Enabled, Is.False);
     }
+
+    [Test]
+    public async Task SetEnabledForTimeoutMs_WhenTriggeredAgain_KeepsLatestWindowActive()
+    {
+        var state = new ActionState<int> { State = 1 };
+
+        var firstTrigger = state.SetEnabledForTimeoutMs(40);
+        await Task.Delay(10);
+        var secondTrigger = state.SetEnabledForTimeoutMs(120);
+
+        await firstTrigger;
+        var enabledAfterFirstWindowElapsed = state.Enabled;
+        await Task.Delay(70);
+        var stillEnabledDuringSecondWindow = state.Enabled;
+        await secondTrigger;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(enabledAfterFirstWindowElapsed, Is.True);
+            Assert.That(stillEnabledDuringSecondWindow, Is.True);
+            Assert.That(state.Enabled, Is.False);
+        });
+    }
 }

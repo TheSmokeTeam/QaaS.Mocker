@@ -103,6 +103,21 @@ public class HttpServerStateTests
     }
 
     [Test]
+    public void ChangeActionStub_WhenActionNameDiffersByCase_ChangesRoutedStub()
+    {
+        var state = CreateState(
+            ("MainStub", _ => CreateResponse("main")),
+            ("AltStub", _ => CreateResponse("alt")),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => CreateResponse("internal")));
+
+        state.ChangeActionStub("getuser", "AltStub");
+        var response = state.Process("/users/42", HttpMethod.Get, CreateRequestData());
+
+        Assert.That(Encoding.UTF8.GetString((byte[])response.Body!), Is.EqualTo("alt"));
+    }
+
+    [Test]
     public void ChangeActionStub_WhenActionDoesNotExist_Throws()
     {
         var state = CreateState(

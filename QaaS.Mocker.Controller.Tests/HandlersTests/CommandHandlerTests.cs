@@ -207,7 +207,7 @@ public class CommandHandlerTests
         var allMessagesPushed = new ManualResetEventSlim(false);
         var (handler, _, database, _) = CreateHandler(cache, InputOutputState.BothInputOutput, serverName: "SERVER-A");
         database
-            .Setup(db => db.ListRightPush(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+            .Setup(db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
                 It.IsAny<CommandFlags>()))
             .Callback<RedisKey, RedisValue, When, CommandFlags>((queue, value, _, _) =>
             {
@@ -218,7 +218,7 @@ public class CommandHandlerTests
                         allMessagesPushed.Set();
                 }
             })
-            .Returns(1);
+            .ReturnsAsync(1);
 
         var response = handler.Invoke(new CommandRequest
         {
@@ -252,7 +252,7 @@ public class CommandHandlerTests
         var inputPushed = new ManualResetEventSlim(false);
         var (handler, _, database, _) = CreateHandler(cache, InputOutputState.OnlyInput, serverName: "server-b");
         database
-            .Setup(db => db.ListRightPush(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+            .Setup(db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
                 It.IsAny<CommandFlags>()))
             .Callback<RedisKey, RedisValue, When, CommandFlags>((queue, value, _, _) =>
             {
@@ -262,7 +262,7 @@ public class CommandHandlerTests
                     inputPushed.Set();
                 }
             })
-            .Returns(1);
+            .ReturnsAsync(1);
 
         var response = handler.Invoke(new CommandRequest
         {
@@ -296,7 +296,7 @@ public class CommandHandlerTests
         var outputPushed = new ManualResetEventSlim(false);
         var (handler, _, database, _) = CreateHandler(cache, InputOutputState.OnlyOutput, serverName: "server-c");
         database
-            .Setup(db => db.ListRightPush(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+            .Setup(db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
                 It.IsAny<CommandFlags>()))
             .Callback<RedisKey, RedisValue, When, CommandFlags>((queue, value, _, _) =>
             {
@@ -306,7 +306,7 @@ public class CommandHandlerTests
                     outputPushed.Set();
                 }
             })
-            .Returns(1);
+            .ReturnsAsync(1);
 
         var response = handler.Invoke(new CommandRequest
         {
@@ -352,7 +352,7 @@ public class CommandHandlerTests
         });
         Thread.Sleep(150);
         database.Verify(
-            db => db.ListRightPush(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+            db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
                 It.IsAny<CommandFlags>()),
             Times.Never);
     }

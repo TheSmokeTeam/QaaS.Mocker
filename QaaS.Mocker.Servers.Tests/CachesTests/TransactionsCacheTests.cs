@@ -62,6 +62,26 @@ public class TransactionsCacheTests
         Assert.That(result, Is.EqualTo("null"));
     }
 
+    [Test]
+    public async Task RetrieveFirstOrDefaultStringInput_WhenReadConcurrently_DequeuesEachItemOnce()
+    {
+        var cache = new TransactionsCache { EnableStorage = true };
+        cache.StoreInput(CreateDetailedData("first"), "ActionA");
+        cache.StoreInput(CreateDetailedData("second"), "ActionA");
+        cache.StoreInput(CreateDetailedData("third"), "ActionA");
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 3)
+            .Select(_ => Task.Run(cache.RetrieveFirstOrDefaultStringInput)));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(results.Count(result => result != null), Is.EqualTo(3));
+            Assert.That(results, Has.Exactly(1).Matches<string?>(result => result != null && result.Contains("first")));
+            Assert.That(results, Has.Exactly(1).Matches<string?>(result => result != null && result.Contains("second")));
+            Assert.That(results, Has.Exactly(1).Matches<string?>(result => result != null && result.Contains("third")));
+        });
+    }
+
     private static DetailedData<object> CreateDetailedData(string value)
     {
         return new DetailedData<object>

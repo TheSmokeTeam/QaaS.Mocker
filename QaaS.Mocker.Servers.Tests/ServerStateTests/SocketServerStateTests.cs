@@ -105,11 +105,31 @@ public class SocketServerStateTests
     }
 
     [Test]
-    public void ChangeActionStub_ThrowsNotImplementedException()
+    public void ChangeActionStub_WhenActionExists_ChangesRoutedStub()
     {
-        var state = CreateState([BuildEndpoint(7001, "CollectAction", SocketMethod.Collect)]);
+        var state = CreateState(
+            [BuildEndpoint(7001, "CollectAction", SocketMethod.Collect, transactionStubName: "MainStub")],
+            ("MainStub", _ => CreateRequest("main")),
+            ("AltStub", _ => CreateRequest("alt")));
 
-        Assert.Throws<NotImplementedException>(() => state.ChangeActionStub("CollectAction", "MainStub"));
+        state.ChangeActionStub("CollectAction", "AltStub");
+        var result = state.Process(7001, [CreateRequest("input")]).Single();
+
+        Assert.That(Encoding.UTF8.GetString((byte[])result.Body!), Is.EqualTo("alt"));
+    }
+
+    [Test]
+    public void ChangeActionStub_WhenActionNameDiffersByCase_ChangesRoutedStub()
+    {
+        var state = CreateState(
+            [BuildEndpoint(7001, "CollectAction", SocketMethod.Collect, transactionStubName: "MainStub")],
+            ("MainStub", _ => CreateRequest("main")),
+            ("AltStub", _ => CreateRequest("alt")));
+
+        state.ChangeActionStub("collectaction", "AltStub");
+        var result = state.Process(7001, [CreateRequest("input")]).Single();
+
+        Assert.That(Encoding.UTF8.GetString((byte[])result.Body!), Is.EqualTo("alt"));
     }
 
     [Test]
