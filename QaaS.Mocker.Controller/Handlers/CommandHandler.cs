@@ -45,6 +45,9 @@ public class CommandHandler(
     {
         bool status;
         string? exceptionMessage = null;
+        logger.LogInformation(
+            "Handling command '{Command}' for server '{ServerName}' instance '{ServerInstanceId}' (RequestId: {RequestId})",
+            request.Command, serverName, serverInstanceId, request.Id ?? "<none>");
         try
         {
             HandleCommand(request);
@@ -52,13 +55,14 @@ public class CommandHandler(
         }
         catch (Exception exception)
         {
-            logger.LogError("Couldn't handle command '{Command}': {message}", 
-                request.Command, exception.Message);
+            logger.LogError(exception,
+                "Command '{Command}' failed for server '{ServerName}' instance '{ServerInstanceId}' (RequestId: {RequestId})",
+                request.Command, serverName, serverInstanceId, request.Id ?? "<none>");
             exceptionMessage = exception.Message;
             status = false;
         }
-        
-        return new CommandResponse
+
+        var response = new CommandResponse
         {
             Id = request.Id,
             ServerInstanceId = serverInstanceId,
@@ -66,6 +70,11 @@ public class CommandHandler(
             Status = status ? Status.Succeeded : Status.Failed,
             ExceptionMessage = exceptionMessage
         };
+
+        logger.LogInformation(
+            "Completed command '{Command}' for server '{ServerName}' instance '{ServerInstanceId}' with status '{Status}' (RequestId: {RequestId})",
+            request.Command, serverName, serverInstanceId, response.Status, request.Id ?? "<none>");
+        return response;
     }
     
     /// <summary>
@@ -81,6 +90,9 @@ public class CommandHandler(
             case CommandType.ChangeActionStub:
             {
                 var changeActionStub = ResolveChangeActionStub(command);
+                logger.LogInformation(
+                    "Applying ChangeActionStub command for action '{ActionName}' -> stub '{StubName}'",
+                    changeActionStub.ActionName, changeActionStub.StubName);
                 serverState.ChangeActionStub(changeActionStub.ActionName!, changeActionStub.StubName!);
                 break;
             }
@@ -90,6 +102,9 @@ public class CommandHandler(
             case CommandType.TriggerAction:
             {
                 var triggerAction = ResolveTriggerAction(command);
+                logger.LogInformation(
+                    "Applying TriggerAction command for action '{ActionName}' with timeout {TimeoutMs} ms",
+                    triggerAction.ActionName, triggerAction.TimeoutMs);
                 serverState.TriggerAction(triggerAction.ActionName!, triggerAction.TimeoutMs);
                 break;
             }
@@ -149,13 +164,15 @@ public class CommandHandler(
     {
         if (Interlocked.CompareExchange(ref _consumeState, 1, 0) != 0)
         {
-            logger.LogDebug("Consume command already running for server '{ServerName}', ignoring duplicate request",
+            logger.LogInformation(
+                "Ignoring duplicate Consume command for server '{ServerName}' because a consume lifecycle is already active",
                 serverName);
             return;
         }
 
-        logger.LogInformation("Starting consume lifecycle for server '{ServerName}' and action '{ActionName}'",
-            serverName, request.ActionName);
+        logger.LogInformation(
+            "Starting consume lifecycle for server '{ServerName}' action '{ActionName}' with timeout {TimeoutMs} ms and input/output mode {InputOutputState}",
+            serverName, request.ActionName ?? "<all-actions>", request.TimeoutMs, serverState.InputOutputState);
         CreateAndDisposeConsumerLifecycle(request).GetAwaiter().GetResult();
     }
 
@@ -171,6 +188,12 @@ public class CommandHandler(
             _serverStateCache.OutputDataFilter = request.OutputDataFilter;
             _serverStateCache.EnableStorage = true;
             _serverStateCache.CachedAction = request.ActionName;
+            logger.LogDebug(
+                "Enabled cache capture for server '{ServerName}' action '{ActionName}'. Input filter configured: {HasInputFilter}. Output filter configured: {HasOutputFilter}",
+                serverName,
+                request.ActionName ?? "<all-actions>",
+                request.InputDataFilter != null,
+                request.OutputDataFilter != null);
             var consumerTasks = new List<Task>();
 
             if (serverState.InputOutputState is InputOutputState.OnlyInput or InputOutputState.BothInputOutput)
@@ -182,13 +205,15 @@ public class CommandHandler(
                     _databaseQueueNameOutput, request.TimeoutMs));
 
             await Task.WhenAll(consumerTasks);
-            logger.LogInformation("Consume lifecycle completed for server '{ServerName}' and action '{ActionName}'",
-                serverName, request.ActionName);
+            logger.LogInformation(
+                "Consume lifecycle completed for server '{ServerName}' action '{ActionName}'",
+                serverName, request.ActionName ?? "<all-actions>");
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Consume lifecycle failed for server '{ServerName}' and action '{ActionName}'",
-                serverName, request.ActionName);
+            logger.LogError(exception,
+                "Consume lifecycle failed for server '{ServerName}' action '{ActionName}'",
+                serverName, request.ActionName ?? "<all-actions>");
             throw;
         }
         finally
@@ -196,6 +221,8 @@ public class CommandHandler(
             _serverStateCache.CachedAction = null;
             _serverStateCache.EnableStorage = false;
             Interlocked.Exchange(ref _consumeState, 0);
+            logger.LogDebug("Disabled cache capture for server '{ServerName}' after consume lifecycle completion",
+                serverName);
         }
     }
     
@@ -207,10 +234,13 @@ public class CommandHandler(
     /// <param name="timeoutMs">Inactivity timeout in milliseconds.</param>
     private async Task ConsumeAsync(Func<string?> retrieveFromCacheFunc, string queueName, int timeoutMs)
     {
-        logger.LogInformation("Started consuming from Server's cache to '{QueueName}'", queueName);
-        var stopwatch = new Stopwatch();
-        stopwatch.Restart();
-        while (stopwatch.ElapsedMilliseconds < timeoutMs)
+        logger.LogInformation(
+            "Started draining cached messages for server '{ServerName}' into queue '{QueueName}' with inactivity timeout {TimeoutMs} ms",
+            serverName, queueName, timeoutMs);
+        var inactivityStopwatch = Stopwatch.StartNew();
+        var totalStopwatch = Stopwatch.StartNew();
+        var messagesConsumed = 0;
+        while (inactivityStopwatch.ElapsedMilliseconds < timeoutMs)
         {
             var message = retrieveFromCacheFunc.Invoke();
             if (message == null)
@@ -218,11 +248,16 @@ public class CommandHandler(
                 await Task.Delay(ConsumePollingDelayMilliseconds);
                 continue;
             }
-            logger.LogDebug("Queue: {QueueName} - consuming message: '{Message}'", queueName, message);
+            logger.LogDebug(
+                "Pushing cached message {MessageNumber} from server '{ServerName}' to queue '{QueueName}' ({MessageLength} chars)",
+                messagesConsumed + 1, serverName, queueName, message.Length);
             await databaseClient.ListRightPushAsync(queueName, message).ConfigureAwait(false);
-            stopwatch.Restart();
+            messagesConsumed++;
+            inactivityStopwatch.Restart();
         }
-        logger.LogInformation("Stopped consuming from Server's cache to '{QueueName}'", queueName);
+        logger.LogInformation(
+            "Stopped draining cached messages for server '{ServerName}' into queue '{QueueName}' after pushing {MessagesConsumed} message(s) over {ElapsedMs} ms",
+            serverName, queueName, messagesConsumed, totalStopwatch.ElapsedMilliseconds);
     }
 }
 

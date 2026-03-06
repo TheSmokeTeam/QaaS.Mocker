@@ -55,6 +55,14 @@ public class SocketServerState : IServerState
                     actionState.Enabled = actionState.DefaultEnabled;
                     if (!string.IsNullOrEmpty(config.Action.TransactionStubName))
                         actionState.Stub = GetTransactionStub(config.Action.TransactionStubName);
+                    logger.LogDebug(
+                        "Registered socket action '{ActionName}' on port {Port} with method '{SocketMethod}', default enabled: {DefaultEnabled}, stub: '{StubName}', data source: '{DataSourceName}'",
+                        actionState.ActionName,
+                        config.Port,
+                        config.Action.Method,
+                        actionState.DefaultEnabled,
+                        actionState.Stub?.Name ?? "<none>",
+                        config.Action.DataSourceName ?? "<none>");
                     return actionState;
                 }
             );
@@ -81,12 +89,16 @@ public class SocketServerState : IServerState
             Data<object> processedData;
             try
             {
+                _logger.LogDebug(
+                    "Processing socket action '{ActionName}' on port {Port} with input/output mode '{InputOutputState}' using stub '{StubName}'",
+                    actionName, port, inputOutputState, stub?.Name ?? "<pass-through>");
                 processedData = stub != null ? stub.Exercise(data) : data;
             }
             catch (Exception exception)
             {
                 _logger.LogError(exception,
-                    "Encountered exception handling stub processing on collect-to-broadcast server");
+                    "Socket action '{ActionName}' on port {Port} failed during stub processing. Returning original payload.",
+                    actionName, port);
                 processedData = data;
             }
 
@@ -102,6 +114,10 @@ public class SocketServerState : IServerState
     /// <see cref="System.Diagnostics.Process"/>
     public IEnumerable<Data<object>> Process(int port)
     {
+        _logger.LogInformation(
+            "Generating socket output for port {Port} from configured data source '{DataSourceName}'",
+            port,
+            _endpoints.FirstOrDefault(config => config.Port == port)?.Action?.DataSourceName ?? "<unknown>");
         return Process(port, ResolveDataSource(port).Retrieve());
     }
 
@@ -147,8 +163,8 @@ public class SocketServerState : IServerState
         var newAssignedTransactionStub = GetTransactionStub(stubName);
         var oldAssignedTransactionStubName = actionState.Stub?.Name;
         actionState.Stub = newAssignedTransactionStub;
-        _logger.LogInformation("Successfully changed action '{ActionName}'s transaction stub from " +
-                               "'{OldTransactionStub}' to '{NewTransactionStub}'",
+        _logger.LogInformation(
+            "Changed socket action '{ActionName}' transaction stub from '{OldTransactionStub}' to '{NewTransactionStub}'",
             actionName, oldAssignedTransactionStubName ?? "<none>", stubName);
     }
 
@@ -163,6 +179,9 @@ public class SocketServerState : IServerState
         if (actionState == null)
             throw new ActionDoesNotExistException($"Cannot trigger action '{actionName}' that doesn't exist");
 
+        _logger.LogInformation(
+            "Triggering socket action '{ActionName}' for {TimeoutMs} ms (default enabled: {DefaultEnabled})",
+            actionName, timeoutMs.GetValueOrDefault(), actionState.DefaultEnabled);
         _ = actionState.SetEnabledForTimeoutMs(timeoutMs.GetValueOrDefault());
     }
 

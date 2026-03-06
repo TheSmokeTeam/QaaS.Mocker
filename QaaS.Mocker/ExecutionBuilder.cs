@@ -357,7 +357,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     {
         _validationResults.Clear();
 
-        Context.Logger.LogInformation("Started building Mocker with execution mode {ExecutionMode}", _executionMode);
+        Context.Logger.LogInformation(
+            "Started building QaaS.Mocker with execution mode {ExecutionMode}",
+            _executionMode);
 
         LoadContextScopeDependencies();
 
@@ -373,12 +375,20 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         var stubs = BuildStubs(dataSources);
         var server = new ServerFactory(Context, Server).Build(dataSources, stubs);
         var controller = new ControllerFactory(Context, Controller).Build(server.State);
+        Context.Logger.LogInformation(
+            "Resolved runtime graph with {DataSourceCount} data source(s), {StubCount} stub(s), server type '{ServerType}', and controller enabled: {ControllerEnabled}",
+            dataSources.Count,
+            stubs.Count,
+            ResolveServerTypeName(Server),
+            controller != null);
 
         var serverLogic = new ServerLogic(server);
         var templateLogic = new TemplateLogic(Context, _templateOutputFolder);
         var controllerLogic = controller == null ? null : new ControllerLogic(controller);
 
-        Context.Logger.LogInformation("Finished building Mocker with execution mode {ExecutionMode}", _executionMode);
+        Context.Logger.LogInformation(
+            "Finished building QaaS.Mocker with execution mode {ExecutionMode}",
+            _executionMode);
 
         return new Execution(_executionMode, Context, _runLocally)
         {
@@ -404,6 +414,18 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     private static bool IsServerConfigurationEmpty(ServerConfig serverConfig)
     {
         return serverConfig.Http == null && serverConfig.Grpc == null && serverConfig.Socket == null;
+    }
+
+    private static string ResolveServerTypeName(ServerConfig serverConfig)
+    {
+        if (serverConfig.Http != null)
+            return "Http";
+        if (serverConfig.Grpc != null)
+            return "Grpc";
+        if (serverConfig.Socket != null)
+            return "Socket";
+
+        return "Unknown";
     }
 
     private InternalContext CloneContext(ILogger? logger = null, IConfiguration? rootConfiguration = null)

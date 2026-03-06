@@ -59,6 +59,15 @@ public class SocketServer : IServer
                 socketType: endpoint.SocketType,
                 protocolType: endpoint.ProtocolType!.Value);
             ConstructSocketServerFromConfiguration(ipEndpoint, endpoint);
+            _logger.LogInformation(
+                "Registered socket endpoint '{Endpoint}' with protocol '{ProtocolType}', socket type '{SocketType}', action '{ActionName}', method '{SocketMethod}', timeout {TimeoutMs} ms, and buffer size {BufferSizeBytes} bytes",
+                ipEndpoint,
+                endpoint.ProtocolType,
+                endpoint.SocketType,
+                endpoint.Action?.Name ?? "<unnamed>",
+                endpoint.Action?.Method,
+                endpoint.TimeoutMs,
+                endpoint.BufferSizeBytes);
         }
 
         _socketServerState = new SocketServerState(
@@ -104,6 +113,13 @@ public class SocketServer : IServer
             socketServer.LingerState = new LingerOption(endpointConfig.LingerTimeSeconds.HasValue,
                 endpointConfig.LingerTimeSeconds.GetValueOrDefault());
         }
+        _logger.LogDebug(
+            "Configured socket endpoint '{Endpoint}' with send/receive buffer {BufferSizeBytes} bytes, timeout {TimeoutMs} ms, Nagle disabled: {NagleDisabled}, linger seconds: {LingerTimeSeconds}",
+            endpoint,
+            endpointConfig.BufferSizeBytes,
+            endpointConfig.TimeoutMs,
+            endpointConfig.ProtocolType == ProtocolType.Tcp && !endpointConfig.NagleAlgorithm,
+            endpointConfig.LingerTimeSeconds?.ToString() ?? "<none>");
     }
 
     public void Start()
@@ -118,7 +134,10 @@ public class SocketServer : IServer
             ExposeServer(endpoint, socket.ProtocolType == ProtocolType.Udp ? 0 : connectionsAcceptanceSlots);
         }
 
-        _logger.LogInformation("Socket server started, Listening for incoming connections in {SocketServersEndpoints}",
+        _logger.LogInformation(
+            "Socket server started with {EndpointCount} endpoint(s). Max concurrent connections: {MaxConnections}. Endpoints: {SocketServersEndpoints}",
+            _socketServers.Count,
+            Environment.ProcessorCount * _configuration.ConnectionAcceptanceValue,
             string.Join(", ", _socketServers.Keys));
 
         // Accept new connections - then Broadcast + Collect task run TODO - add handling both
@@ -137,10 +156,19 @@ public class SocketServer : IServer
 
     private async Task AwaitTriggerToActivateEndpointAction(IPEndPoint endpoint)
     {
+        if (!_socketServerState.IsEndpointPortActionEnabled(endpoint.Port))
+        {
+            _logger.LogDebug(
+                "Socket endpoint '{Endpoint}' is waiting for action '{ActionName}' to be enabled",
+                endpoint, ResolveActionName(endpoint));
+        }
         while (!_socketServerState.IsEndpointPortActionEnabled(endpoint.Port))
         {
             await Task.Delay(5);
         }
+        _logger.LogDebug(
+            "Socket endpoint '{Endpoint}' action '{ActionName}' is enabled and ready to process",
+            endpoint, ResolveActionName(endpoint));
     }
 
     /// <summary>
@@ -155,6 +183,9 @@ public class SocketServer : IServer
         try
         {
             channel = await task;
+            _logger.LogInformation(
+                "Starting socket processing for endpoint '{Endpoint}' action '{ActionName}' using channel '{ChannelEndPoint}'",
+                endpoint, ResolveActionName(endpoint), DescribeChannel(channel));
             await AwaitTriggerToActivateEndpointAction(endpoint);
             switch (ResolveSocketMethod(endpoint))
             {
@@ -177,6 +208,9 @@ public class SocketServer : IServer
         {
             CompleteEndpointProcessing(endpoint);
             channel?.DisposeIfRequired(_socketServers[endpoint]);
+            _logger.LogDebug(
+                "Completed socket processing for endpoint '{Endpoint}' action '{ActionName}'",
+                endpoint, ResolveActionName(endpoint));
             _semaphore.Release();
         }
     }
@@ -195,8 +229,8 @@ public class SocketServer : IServer
                 return _socketServers[endpoint];
             var channel = await _socketServers[endpoint].AcceptAsync();
             _logger.LogInformation(
-                "Local endpoint - {LocalEndPoint} accepted connection from remote endpoint {RemoteEndPoint} to handle method {SocketMethod}",
-                endpoint, channel.RemoteEndPoint, ResolveSocketMethod(endpoint));
+                "Socket endpoint '{LocalEndPoint}' accepted connection from '{RemoteEndPoint}' for action '{ActionName}' method '{SocketMethod}'",
+                endpoint, channel.RemoteEndPoint, ResolveActionName(endpoint), ResolveSocketMethod(endpoint));
             return channel;
         });
     }
@@ -204,20 +238,32 @@ public class SocketServer : IServer
     private async Task HandleBroadcast(Socket socket, IPEndPoint localEndpoint)
     {
         var dataToBroadcast = _socketServerState.Process(localEndpoint.Port);
+        var messageCount = 0;
+        var totalBytes = 0;
 
         foreach (var data in dataToBroadcast.Select(data => data.CastObjectData<byte[]>()))
         {
             try
             {
-                await SendAllAsync(data.Body ?? [], payload => socket.SendAsync(payload, SocketFlags.None));
+                var payload = data.Body ?? [];
+                await SendAllAsync(payload, message => socket.SendAsync(message, SocketFlags.None));
+                messageCount++;
+                totalBytes += payload.Length;
+                _logger.LogDebug(
+                    "Broadcasted message {MessageNumber} for action '{ActionName}' on endpoint '{Endpoint}' to '{RemoteEndPoint}' ({PayloadLength} bytes)",
+                    messageCount, ResolveActionName(localEndpoint), localEndpoint, DescribeChannel(socket), payload.Length);
             }
             catch (Exception exception)
             {
-                _logger.LogError(
-                    "Received exception broadcasting message to channel {ChannelEndPoint}, error - {Exception}",
-                    socket.RemoteEndPoint, exception);
+                _logger.LogError(exception,
+                    "Failed to broadcast payload for action '{ActionName}' on endpoint '{Endpoint}' to channel '{ChannelEndPoint}'",
+                    ResolveActionName(localEndpoint), localEndpoint, DescribeChannel(socket));
             }
         }
+
+        _logger.LogInformation(
+            "Completed broadcast for action '{ActionName}' on endpoint '{Endpoint}'. Sent {MessageCount} message(s) totaling {TotalBytes} bytes",
+            ResolveActionName(localEndpoint), localEndpoint, messageCount, totalBytes);
     }
 
     private async Task HandleCollect(Socket socket, IPEndPoint localEndpoint)
@@ -225,10 +271,23 @@ public class SocketServer : IServer
         var endpointConfiguration = _configuration.Endpoints!.First(config => config.Port == localEndpoint.Port);
         var collectedData = Collect(socket, endpointConfiguration.TimeoutMs.GetValueOrDefault(),
             endpointConfiguration.BufferSizeBytes, localEndpoint);
+        var payloadCount = 0;
+        var totalBytes = 0;
         _socketServerState
             .Process(localEndpoint.Port, collectedData
-                .Select(bytes => new Data<object> { Body = bytes }))
+                .Select(bytes =>
+                {
+                    payloadCount++;
+                    totalBytes += bytes.Length;
+                    _logger.LogDebug(
+                        "Collected payload {PayloadNumber} for action '{ActionName}' on endpoint '{Endpoint}' from '{ChannelEndPoint}' ({PayloadLength} bytes)",
+                        payloadCount, ResolveActionName(localEndpoint), localEndpoint, DescribeChannel(socket), bytes.Length);
+                    return new Data<object> { Body = bytes };
+                }))
             .ToArray();
+        _logger.LogInformation(
+            "Completed collect for action '{ActionName}' on endpoint '{Endpoint}'. Received {PayloadCount} payload(s) totaling {TotalBytes} bytes",
+            ResolveActionName(localEndpoint), localEndpoint, payloadCount, totalBytes);
     }
 
     /// <summary>
@@ -261,14 +320,25 @@ public class SocketServer : IServer
                 $"Could not expose 'Socket' server in binding address {endpoint} - Instance of endpoint not found.");
 
         socketServer.Bind(endpoint);
+        if (socketServer.ProtocolType == ProtocolType.Udp)
+        {
+            _logger.LogInformation(
+                "Bound UDP socket endpoint '{Endpoint}' for action '{ActionName}'",
+                endpoint, ResolveActionName(endpoint));
+            return;
+        }
+
         try
         {
             socketServer.Listen(connectionsAcceptanceSlots);
+            _logger.LogInformation(
+                "Listening on TCP socket endpoint '{Endpoint}' for action '{ActionName}' with backlog {Backlog}",
+                endpoint, ResolveActionName(endpoint), connectionsAcceptanceSlots);
         }
         catch (SocketException)
         {
             _logger.LogWarning(
-                "Error while listening at {Endpoint} - configured 'Socket' in protocol {ProtocolType} can't support clients listen backlog option",
+                "Socket endpoint '{Endpoint}' could not apply listen backlog for protocol '{ProtocolType}'",
                 endpoint, _socketServers[endpoint].ProtocolType);
         }
     }
@@ -282,6 +352,11 @@ public class SocketServer : IServer
     {
         return _configuration.Endpoints!.First(config => config.Port == endpoint.Port).Action?.Method ??
                throw new ArgumentException($"Could not resolve socket method for endpoint {endpoint}");
+    }
+
+    private string ResolveActionName(IPEndPoint endpoint)
+    {
+        return _configuration.Endpoints!.First(config => config.Port == endpoint.Port).Action?.Name ?? "<unnamed>";
     }
 
     internal bool TryBeginEndpointProcessing(IPEndPoint endpoint)
@@ -307,6 +382,22 @@ public class SocketServer : IServer
                 throw new IOException("Socket channel stopped sending before the payload was fully written.");
 
             bytesSent += sent;
+        }
+    }
+
+    private static string DescribeChannel(Socket channel)
+    {
+        try
+        {
+            return channel.RemoteEndPoint?.ToString() ?? channel.LocalEndPoint?.ToString() ?? "<unresolved>";
+        }
+        catch (SocketException)
+        {
+            return channel.LocalEndPoint?.ToString() ?? "<unresolved>";
+        }
+        catch (ObjectDisposedException)
+        {
+            return "<disposed>";
         }
     }
 }

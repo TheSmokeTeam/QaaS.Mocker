@@ -74,8 +74,13 @@ public class HttpServerState : IServerState
                 methodMapping[endpointAction.Method] = actionToTransactionStub;
                 if (endpointAction.Name != null) _actionToStubList.Add(actionToTransactionStub);
                 else
-                    _logger.LogWarning("Initialized Action Regex Path '{PathRegex}' Method '{Method}' " +
-                                       "without Name", pathRegex, endpointAction.Method);
+                    _logger.LogWarning(
+                        "Configured HTTP action for path regex '{PathRegex}' and method '{Method}' without an action name",
+                        pathRegex, endpointAction.Method);
+
+                _logger.LogDebug(
+                    "Registered HTTP action '{ActionName}' for method '{Method}' path regex '{PathRegex}' with stub '{StubName}'",
+                    endpointAction.Name ?? "<unnamed>", endpointAction.Method, pathRegex, transactionStub.Name);
             }
         }
     }
@@ -120,7 +125,9 @@ public class HttpServerState : IServerState
             return mappedAction.Stub;
         }
 
-        _logger.LogWarning("Encountered unknown Method '{HttpMethod}' transaction on Path: {Path}", method, path);
+        _logger.LogWarning(
+            "No HTTP action matched request '{HttpMethod} {Path}'. Falling back to stub '{StubName}'",
+            method, path, _notFoundTransactionStub.Name);
         pathParameters = null;
         return _notFoundTransactionStub;
     }
@@ -158,16 +165,17 @@ public class HttpServerState : IServerState
             var transactionStub = ResolveTransactionStub(path, method, out var pathParameters);
             requestData.MetaData!.Http.PathParameters = pathParameters;
             _cache.StoreInput(requestData.CloneDetailed(), actionName);
-            _logger.LogDebug("Handling Method '{HttpMethod}' transaction on Path: {Path}", method, path);
+            _logger.LogDebug(
+                "Processing HTTP action '{ActionName}' for request '{HttpMethod} {Path}' using stub '{StubName}'",
+                actionName, method, path, transactionStub.Name);
             responseData = transactionStub.Exercise(requestData);
         }
         catch (Exception exception)
         {
             responseData = null;
             _logger.LogError(exception,
-                "Encountered exception handling Method '{HttpMethod}' transaction on Path: {Path}. " +
-                "Processing through internal error transaction stub: {InternalErrorTransactionStubName}.",
-                method, path, _internalErrorTransactionStub.Name);
+                "HTTP action '{ActionName}' failed for request '{HttpMethod} {Path}'. Falling back to internal error stub '{InternalErrorTransactionStubName}'",
+                actionName, method, path, _internalErrorTransactionStub.Name);
             transactionProcessedSuccessfully = false;
         }
 
@@ -204,8 +212,8 @@ public class HttpServerState : IServerState
         var newAssignedTransactionStub = GetTransactionStub(stubName);
         var oldAssignedTransactionStubName = actionToTransactionStub.Stub.Name;
         actionToTransactionStub.Stub = newAssignedTransactionStub;
-        _logger.LogInformation("Successfully changed action '{ActionName}'s transaction stub from " +
-                               "'{OldTransactionStub}' to '{NewTransactionStub}'",
+        _logger.LogInformation(
+            "Changed HTTP action '{ActionName}' transaction stub from '{OldTransactionStub}' to '{NewTransactionStub}'",
             actionName, oldAssignedTransactionStubName, stubName);
     }
 

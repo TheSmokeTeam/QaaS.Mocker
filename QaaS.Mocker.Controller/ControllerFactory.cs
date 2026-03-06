@@ -15,24 +15,35 @@ public class ControllerFactory(Context context, ControllerConfig? controller)
         var serverName = controller?.ServerName;
         if (serverName == null)
         {
-            context.Logger.LogWarning("Server Name configuration wasn't given - Not initiating Controller API");
+            context.Logger.LogWarning(
+                "Controller startup skipped because 'Controller.ServerName' is not configured.");
             return null;
         }
         
         try
         {   
             if (controller?.Redis != null)
+            {
+                context.Logger.LogInformation(
+                    "Connecting controller to Redis for server '{ServerName}' using host '{RedisHost}' and database {RedisDatabase}",
+                    serverName,
+                    controller.Redis.Host,
+                    controller.Redis.RedisDataBase);
                 redisConnection = ConnectionMultiplexer.Connect(controller.Redis.CreateRedisConfigurationOptions());
+            }
             else
             {
-                context.Logger.LogWarning("Redis API configuration wasn't given - Not initiating Controller API");
+                context.Logger.LogWarning(
+                    "Controller startup skipped for server '{ServerName}' because Redis configuration is missing.",
+                    serverName);
                 return null;
             }
         }
         catch (RedisConnectionException exception)
         {
-            context.Logger.LogError("Couldn't connect to Redis API - Not initiating Controller API. " +
-                                    "Exception: {ExceptionMessage}", exception.Message);
+            context.Logger.LogError(exception,
+                "Controller startup failed for server '{ServerName}' because Redis connection could not be established.",
+                serverName);
             return null;
         }
         catch (Exception exception)
@@ -42,8 +53,8 @@ public class ControllerFactory(Context context, ControllerConfig? controller)
 
         var serverInstanceId = $"{Environment.MachineName}-{Environment.ProcessId}-{Guid.NewGuid():N}";
         context.Logger.LogInformation(
-            "Initialized redis controller for server '{ServerName}' with instance id '{ServerInstanceId}'",
-            serverName, serverInstanceId);
+            "Initialized Redis controller for server '{ServerName}' with instance id '{ServerInstanceId}' on database {RedisDatabase}",
+            serverName, serverInstanceId, controller.Redis!.RedisDataBase);
 
         return new Controllers.Controller(
             redisConnection,

@@ -20,11 +20,15 @@ public class Controller(IConnectionMultiplexer redisConnection, int redisDataBas
         var subscriber = redisConnection.GetSubscriber();
         var database = redisConnection.GetDatabase(redisDataBase);
         
-        logger.LogInformation("Controller started and connected {RedisConnectionConfiguration} " +
-                              "at database {RedisDatabase}", redisConnection.Configuration, redisDataBase);
+        logger.LogInformation(
+            "Starting controller for server '{ServerName}' instance '{ServerInstanceId}' using Redis configuration '{RedisConfiguration}' and database {RedisDatabase}",
+            serverName, serverInstanceId, redisConnection.Configuration, redisDataBase);
         
         new PingHandler(serverState, subscriber, serverName, serverInstanceId, logger).Start();
         new CommandHandler(serverState, database, subscriber, serverName, serverInstanceId, logger).Start();
+        logger.LogInformation(
+            "Controller handlers started for server '{ServerName}' instance '{ServerInstanceId}'",
+            serverName, serverInstanceId);
 
         Thread.Sleep(Timeout.Infinite);
     }
