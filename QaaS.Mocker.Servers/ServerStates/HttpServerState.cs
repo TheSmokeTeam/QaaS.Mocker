@@ -196,7 +196,7 @@ public class HttpServerState : IServerState
     public void ChangeActionStub(string actionName, string stubName)
     {
         var actionToTransactionStub = _actionToStubList
-            .FirstOrDefault(pair => pair.ActionName == actionName);
+            .FirstOrDefault(pair => string.Equals(pair.ActionName, actionName, StringComparison.OrdinalIgnoreCase));
 
         if (actionToTransactionStub == null)
             throw new ActionDoesNotExistException($"Cannot change action '{actionName}' that doesn't exist");

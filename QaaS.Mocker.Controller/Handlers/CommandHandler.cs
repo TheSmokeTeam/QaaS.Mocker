@@ -218,7 +218,7 @@ public class CommandHandler(
                 continue;
             }
             logger.LogDebug("Queue: {QueueName} - consuming message: '{Message}'", queueName, message);
-            databaseClient.ListRightPush(queueName, message);
+            await databaseClient.ListRightPushAsync(queueName, message).ConfigureAwait(false);
             stopwatch.Restart();
         }
         logger.LogInformation("Stopped consuming from Server's cache to '{QueueName}'", queueName);

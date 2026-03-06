@@ -24,7 +24,11 @@ public static class Bootstrap
         return cliParserResult
             .WithNotParsed(_ => Console.Out.WriteLine(CommandLine.Text.HelpText.AutoBuild(cliParserResult)))
             .MapResult(
-                options => new MockerLoader(options).GetLoadedRunner(),
+                options =>
+                {
+                    using var loader = new MockerLoader(options);
+                    return loader.GetLoadedRunner();
+                },
                 HandleParseError);
     }
 

@@ -51,11 +51,11 @@ public class Execution : BaseExecution
     {
         var runTasks = new List<Task>
         {
-            Task.Run(() => ServerLogic.Run(Context.ExecutionData))
+            StartLongRunningTask(() => ServerLogic.Run(Context.ExecutionData))
         };
 
         if (ControllerLogic != null)
-            runTasks.Add(Task.Run(() => ControllerLogic.Run(Context.ExecutionData)));
+            runTasks.Add(StartLongRunningTask(() => ControllerLogic.Run(Context.ExecutionData)));
 
         if (_runLocally)
         {
@@ -74,6 +74,14 @@ public class Execution : BaseExecution
 
         Task.WaitAll(runTasks.ToArray());
         return 0;
+    }
+
+    private static Task StartLongRunningTask(Action action)
+    {
+        return Task.Factory.StartNew(action,
+            CancellationToken.None,
+            TaskCreationOptions.DenyChildAttach | TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
     }
 
     public override void Dispose()

@@ -7,7 +7,16 @@ namespace QaaS.Mocker.Servers.Actions;
 /// <typeparam name="TStateIndicator">State indicator object to rely on in the server's functionality.</typeparam>
 public class ActionState<TStateIndicator> : ActionToTransactionStub
 {
-    public bool Enabled { get; set; }
+    private readonly Lock _syncLock = new();
+    private CancellationTokenSource? _disableCancellation;
+    private long _activationVersion;
+    private int _enabledState;
+
+    public bool Enabled
+    {
+        get => Volatile.Read(ref _enabledState) == 1;
+        set => Volatile.Write(ref _enabledState, value ? 1 : 0);
+    }
 
     public TStateIndicator State { get; set; }
 
@@ -16,18 +25,48 @@ public class ActionState<TStateIndicator> : ActionToTransactionStub
     /// </summary>
     public async Task SetEnabledForTimeoutMs(int timeoutMs)
     {
-        Enabled = true;
-        using var cts = new CancellationTokenSource(timeoutMs);
+        CancellationToken cancellationToken;
+        long activationVersion;
+
+        using (_syncLock.EnterScope())
+        {
+            _disableCancellation?.Cancel();
+            _disableCancellation?.Dispose();
+            _disableCancellation = new CancellationTokenSource();
+            cancellationToken = _disableCancellation.Token;
+            activationVersion = ++_activationVersion;
+            Enabled = true;
+        }
+
+        if (timeoutMs <= 0)
+        {
+            DisableIfCurrentActivation(activationVersion, cancellationToken);
+            return;
+        }
+
         try
         {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
+            await Task.Delay(timeoutMs, cancellationToken);
         }
         catch (OperationCanceledException)
         {
-            // Expected cancellation when timeout elapsed.
+            // Expected when a newer trigger supersedes the current one.
         }
         finally
         {
+            DisableIfCurrentActivation(activationVersion, cancellationToken);
+        }
+    }
+
+    private void DisableIfCurrentActivation(long activationVersion, CancellationToken cancellationToken)
+    {
+        using (_syncLock.EnterScope())
+        {
+            if (activationVersion != _activationVersion || cancellationToken.IsCancellationRequested)
+                return;
+
+            _disableCancellation?.Dispose();
+            _disableCancellation = null;
             Enabled = false;
         }
     }

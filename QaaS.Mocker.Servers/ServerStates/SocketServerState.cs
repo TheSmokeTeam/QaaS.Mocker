@@ -133,11 +133,21 @@ public class SocketServerState : IServerState
     }
 
     /// <summary>
-    /// Implementation of ChangeActionStub command on SocketServer, not implemented yet.
+    /// Implementation of ChangeActionStub command on SocketServer.
     /// </summary>
     public void ChangeActionStub(string actionName, string stubName)
     {
-        throw new NotImplementedException("Socket Actions are not holding Stubs yet.");
+        var actionState = _socketActions.Values.FirstOrDefault(state =>
+            string.Equals(state.ActionName, actionName, StringComparison.OrdinalIgnoreCase));
+        if (actionState == null)
+            throw new ActionDoesNotExistException($"Cannot change action '{actionName}' that doesn't exist");
+
+        var newAssignedTransactionStub = GetTransactionStub(stubName);
+        var oldAssignedTransactionStubName = actionState.Stub?.Name;
+        actionState.Stub = newAssignedTransactionStub;
+        _logger.LogInformation("Successfully changed action '{ActionName}'s transaction stub from " +
+                               "'{OldTransactionStub}' to '{NewTransactionStub}'",
+            actionName, oldAssignedTransactionStubName ?? "<none>", stubName);
     }
 
     /// <summary>

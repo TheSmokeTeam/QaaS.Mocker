@@ -27,15 +27,13 @@ public class TransactionsCache : BaseCache<DetailedData<object>>
 
     public override string? RetrieveFirstOrDefaultStringInput()
     {
-        if (!_inputQueue.TryPeek(out var item)) return null;
-        _inputQueue.TryDequeue(out item);
+        if (!_inputQueue.TryDequeue(out var item)) return null;
         return JsonSerializer.Serialize(item);
     }
 
     public override string? RetrieveFirstOrDefaultStringOutput()
     {
-        if (!_outputQueue.TryPeek(out var item)) return null;
-        _outputQueue.TryDequeue(out item);
+        if (!_outputQueue.TryDequeue(out var item)) return null;
         return JsonSerializer.Serialize(item);
     }
 }

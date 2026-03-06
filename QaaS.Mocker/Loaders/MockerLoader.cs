@@ -9,7 +9,7 @@ namespace QaaS.Mocker.Loaders;
 /// <summary>
 /// Loads CLI options into an execution-ready <see cref="Mocker"/> instance.
 /// </summary>
-public class MockerLoader : BaseLoader<MockerOptions, Mocker>
+public class MockerLoader : BaseLoader<MockerOptions, Mocker>, IDisposable
 {
     private readonly ILifetimeScope _runScope;
 
@@ -78,4 +78,9 @@ public class MockerLoader : BaseLoader<MockerOptions, Mocker>
     /// </summary>
     /// <returns>A runnable <see cref="Mocker"/> instance.</returns>
     public override Mocker GetLoadedRunner() => new(LoadContextToExecutionBuilder(GetLoadedContext()));
+
+    public void Dispose()
+    {
+        _runScope.Dispose();
+    }
 }
