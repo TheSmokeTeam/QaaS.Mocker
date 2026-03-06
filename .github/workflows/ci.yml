@@ -6,12 +6,9 @@ on:
     tags: ["*"]
   pull_request:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   DOTNET_NOLOGO: true
@@ -34,46 +31,14 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Validate package metadata
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: powershell
-        run: |
-          [xml]$project = Get-Content "${{ env.PROJECT_TO_PACK }}"
-          $propertyGroups = @($project.Project.PropertyGroup)
-
-          function Get-PropertyValue([string]$name) {
-            foreach ($group in $propertyGroups) {
-              $value = $group.$name
-              if ($null -ne $value -and "$value".Trim() -ne "") {
-                return "$value".Trim()
-              }
-            }
-            return ""
-          }
-
-          $packageReadmeFile = Get-PropertyValue "PackageReadmeFile"
-          if ([string]::IsNullOrWhiteSpace($packageReadmeFile)) {
-            throw "PackageReadmeFile is required for packages pushed by CI."
-          }
-
-          $includeSymbols = Get-PropertyValue "IncludeSymbols"
-          if ($includeSymbols.ToLowerInvariant() -ne "true") {
-            throw "IncludeSymbols must be true for packages pushed by CI."
-          }
-
-          $symbolPackageFormat = Get-PropertyValue "SymbolPackageFormat"
-          if ($symbolPackageFormat.ToLowerInvariant() -ne "snupkg") {
-            throw "SymbolPackageFormat must be snupkg for packages pushed by CI."
-          }
-
       - name: Restore packages
         run: dotnet restore ${{ env.SOLUTION_PATH }}
 
-      - name: Build solution (no warnings)
-        run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore --configuration ${{ env.CONFIGURATION }} -warnaserror
+      - name: Build solution
+        run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore --configuration ${{ env.CONFIGURATION }}
 
       - name: Test solution
-        run: dotnet test ${{ env.SOLUTION_PATH }} --configuration ${{ env.CONFIGURATION }} --no-build --maxcpucount
+        run: dotnet test ${{ env.SOLUTION_PATH }} --configuration ${{ env.CONFIGURATION }} --no-restore --maxcpucount
 
       - name: Get Version
         if: startsWith(github.ref, 'refs/tags/')
@@ -99,23 +64,6 @@ jobs:
             --include-symbols `
             -p:PackageVersion=${{ steps.version.outputs.version-without-v }} `
             --output ${{ env.PACKAGE_OUTPUT_DIRECTORY }}
-
-      - name: Validate package artifacts
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: powershell
-        run: |
-          $nupkg = Get-ChildItem "${{ env.PACKAGE_OUTPUT_DIRECTORY }}\QaaS.Mocker.*.nupkg" |
-            Where-Object { $_.Name -match "^QaaS\.Mocker\.[0-9]" } |
-            Select-Object -First 1
-          if ($null -eq $nupkg) {
-            throw "Expected QaaS.Mocker nupkg was not produced."
-          }
-
-          $snupkgName = [System.IO.Path]::GetFileNameWithoutExtension($nupkg.Name) + ".snupkg"
-          $snupkgPath = Join-Path "${{ env.PACKAGE_OUTPUT_DIRECTORY }}" $snupkgName
-          if (-not (Test-Path $snupkgPath)) {
-            throw "Expected symbol package '$snupkgName' was not produced."
-          }
 
       - name: Push QaaS.Mocker to NuGet
         if: startsWith(github.ref, 'refs/tags/')

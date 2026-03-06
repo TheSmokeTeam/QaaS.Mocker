@@ -10,8 +10,9 @@ Configurable mock runtime for QaaS protocol workloads.
 - [Overview](#overview)
 - [Packages](#packages)
 - [Functionalities](#functionalities)
-- [Architecture](#architecture)
+- [Protocol Support](#protocol-support)
 - [Quick Start](#quick-start)
+- [Build and Test](#build-and-test)
 - [Documentation](#documentation)
 
 ## Overview
@@ -48,19 +49,14 @@ This repository contains one solution: [`QaaS.Mocker.sln`](./QaaS.Mocker.sln).
 ### [QaaS.Mocker.Example](./QaaS.Mocker.Example/)
 - Provides runnable HTTP and gRPC mocker configurations, sample processors, protobuf schema, and sample data assets.
 
-## Architecture
-```mermaid
-flowchart LR
-  A["CLI / YAML"] --> B["Bootstrap + MockerLoader"]
-  B --> C["ExecutionBuilder"]
-  C --> D["DataSources"]
-  C --> E["Transaction Stubs"]
-  C --> F["ServerFactory"]
-  C --> G["ControllerFactory (Optional)"]
-  F --> H["HTTP | gRPC | Socket Runtime"]
-  E --> H
-  G --> H
-```
+## Protocol Support
+Supported protocol/runtime families in `QaaS.Mocker`:
+
+| Family | Implementations |
+|---|---|
+| HTTP / RPC | HTTP, HTTPS, gRPC, gRPCs |
+| Streaming / Socket | Socket (broadcast and collect modes) |
+| Runtime Control | Redis-backed controller channels (ping and command) |
 
 ## Quick Start
 Install package:
@@ -74,6 +70,13 @@ Upgrade package:
 ```bash
 dotnet add package QaaS.Mocker --version <target-version>
 dotnet restore
+```
+
+## Build and Test
+```bash
+dotnet restore QaaS.Mocker.sln
+dotnet build QaaS.Mocker.sln -c Release --no-restore
+dotnet test QaaS.Mocker.sln -c Release --no-build
 ```
 
 ## Documentation
