@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text;
+using Google.Protobuf.WellKnownTypes;
 using Moq;
 using NUnit.Framework;
 using QaaS.Framework.SDK.DataSourceObjects;
@@ -8,6 +9,7 @@ using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Framework.Serialization.Deserializers;
 using QaaS.Framework.Serialization.Serializers;
 using QaaS.Mocker.Stubs.Stubs;
+using Type = System.Type;
 
 namespace QaaS.Mocker.Stubs.Tests;
 
@@ -69,6 +71,33 @@ public class TransactionStubTests
         };
 
         _ = stub.Exercise(new Data<object> { Body = Encoding.UTF8.GetBytes("request") });
+
+        deserializer.Verify(instance => instance.Deserialize(It.IsAny<byte[]>(), It.IsAny<Type>()), Times.Once);
+    }
+
+    [Test]
+    public void Exercise_WhenRequestDeserializerConfiguredAndBodyIsProtobuf_DeserializesSerializedPayload()
+    {
+        var processor = CreateProcessor(data =>
+        {
+            Assert.That(data.Body, Is.EqualTo("protobuf-body"));
+            return new Data<object> { Body = Encoding.UTF8.GetBytes("ok") };
+        });
+
+        var deserializer = new Mock<IDeserializer>();
+        deserializer
+            .Setup(instance => instance.Deserialize(It.IsAny<byte[]>(), It.IsAny<Type>()))
+            .Returns("protobuf-body");
+
+        var stub = new TransactionStub
+        {
+            Name = "StubA",
+            Processor = processor.Object,
+            DataSourceList = ImmutableList<DataSource>.Empty,
+            RequestBodyDeserializer = deserializer.Object
+        };
+
+        _ = stub.Exercise(new Data<object> { Body = new StringValue { Value = "request" } });
 
         deserializer.Verify(instance => instance.Deserialize(It.IsAny<byte[]>(), It.IsAny<Type>()), Times.Once);
     }

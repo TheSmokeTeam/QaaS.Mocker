@@ -32,6 +32,22 @@ public class SocketServerStateTests
     }
 
     [Test]
+    public void Constructor_WithCollectEndpoint_EnablesActionByDefault()
+    {
+        var state = CreateState([BuildEndpoint(7001, "CollectAction", SocketMethod.Collect)]);
+
+        Assert.That(state.IsEndpointPortActionEnabled(7001), Is.True);
+    }
+
+    [Test]
+    public void Constructor_WithBroadcastEndpoint_DisablesActionByDefault()
+    {
+        var state = CreateState([BuildEndpoint(7001, "BroadcastAction", SocketMethod.Broadcast, dataSourceName: "ds1")]);
+
+        Assert.That(state.IsEndpointPortActionEnabled(7001), Is.False);
+    }
+
+    [Test]
     public void Process_WithKnownCollectPort_StoresInputWhenCacheEnabled()
     {
         var state = CreateState([BuildEndpoint(7001, "CollectAction", SocketMethod.Collect)]);
@@ -61,9 +77,11 @@ public class SocketServerStateTests
     [Test]
     public async Task TriggerAction_WithExistingAction_EnablesTemporarily()
     {
-        var state = CreateState([BuildEndpoint(7001, "CollectAction", SocketMethod.Collect)]);
+        var state = CreateState([BuildEndpoint(7001, "BroadcastAction", SocketMethod.Broadcast, dataSourceName: "ds1")]);
 
-        state.TriggerAction("CollectAction", 80);
+        Assert.That(state.IsEndpointPortActionEnabled(7001), Is.False);
+
+        state.TriggerAction("BroadcastAction", 80);
 
         var becameEnabled = false;
         for (var i = 0; i < 20; i++)

@@ -55,4 +55,14 @@ public class ActionStateTests
             Assert.That(state.Enabled, Is.False);
         });
     }
+
+    [Test]
+    public async Task SetEnabledForTimeoutMs_WhenDefaultEnabled_RestoresEnabledStateAfterTimeout()
+    {
+        var state = new ActionState<int> { State = 1, DefaultEnabled = true, Enabled = true };
+
+        await state.SetEnabledForTimeoutMs(40);
+
+        Assert.That(state.Enabled, Is.True);
+    }
 }

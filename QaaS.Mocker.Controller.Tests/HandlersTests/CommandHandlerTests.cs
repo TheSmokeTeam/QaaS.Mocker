@@ -357,6 +357,46 @@ public class CommandHandlerTests
             Times.Never);
     }
 
+    [Test]
+    public void HandleRequest_WithConsumePushFailure_ReturnsFailedAndAllowsRetry()
+    {
+        var cache = new TestCache
+        {
+            InputValues = ["input-a"]
+        };
+
+        var (handler, _, database, _) = CreateHandler(cache, InputOutputState.OnlyInput, serverName: "server-e");
+        database
+            .SetupSequence(db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+                It.IsAny<CommandFlags>()))
+            .ThrowsAsync(new RedisException("push-failed"))
+            .ReturnsAsync(1);
+
+        var failedResponse = handler.Invoke(new CommandRequest
+        {
+            Id = "consume-failed",
+            Command = CommandType.Consume,
+            Consume = new Consume { TimeoutMs = 50 }
+        });
+
+        cache.ReplaceInputValues(["input-b"]);
+        var succeededResponse = handler.Invoke(new CommandRequest
+        {
+            Id = "consume-retry",
+            Command = CommandType.Consume,
+            Consume = new Consume { TimeoutMs = 50 }
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(failedResponse, Is.Not.Null);
+            Assert.That(failedResponse!.Status, Is.EqualTo(Status.Failed));
+            Assert.That(failedResponse.ExceptionMessage, Does.Contain("push-failed"));
+            Assert.That(succeededResponse, Is.Not.Null);
+            Assert.That(succeededResponse!.Status, Is.EqualTo(Status.Succeeded));
+        });
+    }
+
     private static (TestableCommandHandler Handler, Mock<IServerState> ServerState, Mock<IDatabase> Database,
         Mock<ISubscriber> Subscriber) CreateHandler(
         ICache? cache = null,
@@ -420,6 +460,26 @@ public class CommandHandlerTests
             init
             {
                 foreach (var item in value)
+                    _output.Enqueue(item);
+            }
+        }
+
+        public void ReplaceInputValues(IEnumerable<string> values)
+        {
+            lock (_lock)
+            {
+                _input.Clear();
+                foreach (var item in values)
+                    _input.Enqueue(item);
+            }
+        }
+
+        public void ReplaceOutputValues(IEnumerable<string> values)
+        {
+            lock (_lock)
+            {
+                _output.Clear();
+                foreach (var item in values)
                     _output.Enqueue(item);
             }
         }
