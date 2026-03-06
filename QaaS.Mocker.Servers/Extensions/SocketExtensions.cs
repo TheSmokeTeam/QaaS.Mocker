@@ -6,6 +6,11 @@ namespace QaaS.Mocker.Servers.Extensions;
 
 public static class SocketExtensions
 {
+    /// <summary>
+    /// Reads a single payload from a socket and returns exactly the bytes reported by the transport.
+    /// This avoids padding payloads with unused buffer capacity, which previously broke protocol
+    /// framing and request deserialization.
+    /// </summary>
     private static byte[] GetDataAsBytesFromChannel(this Socket channel, int bufferSize, EndPoint? endpoint = null,
         ILogger? logger = null)
     {
@@ -28,7 +33,9 @@ public static class SocketExtensions
     }
 
     /// <summary>
-    /// Implementation of timeout mechanism on socket stream collecting.
+    /// Implements timeout-based socket collection.
+    /// When <paramref name="endpoint"/> is provided the call is treated as datagram-based receive,
+    /// so the loop does not rely on <see cref="Socket.Available"/> before reading.
     /// </summary>
     public static byte[]? GetBytesFromChannelWithinTimeout(this Socket channel, int timeout,
         int bufferSize, EndPoint? endpoint = null, ILogger? logger = null)

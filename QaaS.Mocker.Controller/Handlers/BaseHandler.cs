@@ -17,6 +17,8 @@ public abstract class BaseHandler<TRequestMessage, TResponseMessage>(
     string serverInstanceId,
     ILogger logger)
 {
+    // Runner messages may come from non-.NET publishers, so control-plane JSON needs to
+    // tolerate common wire-format differences such as camelCase properties and string enums.
     private static readonly JsonSerializerOptions DeserializationOptions = new()
     {
         PropertyNameCaseInsensitive = true,

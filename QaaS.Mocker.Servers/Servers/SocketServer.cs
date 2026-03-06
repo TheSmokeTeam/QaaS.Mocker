@@ -21,6 +21,7 @@ public class SocketServer : IServer
 {
     private readonly ILogger _logger;
     private readonly Dictionary<IPEndPoint, Socket> _socketServers = new();
+    // UDP endpoints share the bound server socket, so only one receive/send loop may own them at a time.
     private readonly ConcurrentDictionary<IPEndPoint, byte> _activeDatagramEndpoints = new();
     private readonly SocketServerState _socketServerState;
     private readonly SocketServerConfig _configuration;
@@ -43,6 +44,8 @@ public class SocketServer : IServer
         var endpoints = socketServerConfig.Endpoints!;
         foreach (var endpoint in endpoints)
         {
+            // Validate combinations here as well so invalid configs fail fast even when configuration
+            // validation is bypassed and the server is created directly in tests or tooling.
             if (endpoint.ProtocolType == ProtocolType.Udp && endpoint.Action?.Method == SocketMethod.Broadcast)
                 throw new NotSupportedException(
                     $"Socket endpoint on port {endpoint.Port} cannot use Broadcast with UDP.");
@@ -124,7 +127,7 @@ public class SocketServer : IServer
 
     public void Start()
     {
-        // Bind + Listen in all ports (Unless it is in Udp - cannot listen for connections in Udp)
+        // TCP endpoints split the configured backlog, while UDP endpoints are bind-only and use zero here.
         var nonUdpSocketsCount = _socketServers.Count(socket => socket.Value.ProtocolType != ProtocolType.Udp);
         var connectionsAcceptanceSlots = nonUdpSocketsCount == 0
             ? 0
@@ -140,7 +143,8 @@ public class SocketServer : IServer
             Environment.ProcessorCount * _configuration.ConnectionAcceptanceValue,
             string.Join(", ", _socketServers.Keys));
 
-        // Accept new connections - then Broadcast + Collect task run TODO - add handling both
+        // Each endpoint owns its own processing loop. UDP endpoints are scheduled single-flight
+        // because they reuse the bound server socket, while TCP endpoints can accept repeatedly.
         while (!_cancellationTokenSource.IsCancellationRequested)
         {
             foreach (var endpoint in _socketServers.Keys)
@@ -207,6 +211,7 @@ public class SocketServer : IServer
         finally
         {
             CompleteEndpointProcessing(endpoint);
+            // Accepted TCP channels must be disposed, but UDP processing reuses the bound server socket.
             channel?.DisposeIfRequired(_socketServers[endpoint]);
             _logger.LogDebug(
                 "Completed socket processing for endpoint '{Endpoint}' action '{ActionName}'",
@@ -246,6 +251,7 @@ public class SocketServer : IServer
             try
             {
                 var payload = data.Body ?? [];
+                // Socket.SendAsync may complete with a partial write, so loop until the payload is exhausted.
                 await SendAllAsync(payload, message => socket.SendAsync(message, SocketFlags.None));
                 messageCount++;
                 totalBytes += payload.Length;
@@ -322,6 +328,8 @@ public class SocketServer : IServer
         socketServer.Bind(endpoint);
         if (socketServer.ProtocolType == ProtocolType.Udp)
         {
+            // UDP endpoints are ready immediately after bind; calling Listen would be both unnecessary
+            // and noisy because many platforms report it as an unsupported operation.
             _logger.LogInformation(
                 "Bound UDP socket endpoint '{Endpoint}' for action '{ActionName}'",
                 endpoint, ResolveActionName(endpoint));
@@ -359,18 +367,28 @@ public class SocketServer : IServer
         return _configuration.Endpoints!.First(config => config.Port == endpoint.Port).Action?.Name ?? "<unnamed>";
     }
 
+    /// <summary>
+    /// Reserves an endpoint for processing. UDP endpoints are single-flight because they share one
+    /// bound socket, while TCP endpoints can safely schedule overlapping accept loops.
+    /// </summary>
     internal bool TryBeginEndpointProcessing(IPEndPoint endpoint)
     {
         return _socketServers[endpoint].ProtocolType != ProtocolType.Udp ||
                _activeDatagramEndpoints.TryAdd(endpoint, 0);
     }
 
+    /// <summary>
+    /// Releases the per-endpoint processing reservation created by <see cref="TryBeginEndpointProcessing"/>.
+    /// </summary>
     internal void CompleteEndpointProcessing(IPEndPoint endpoint)
     {
         if (_socketServers[endpoint].ProtocolType == ProtocolType.Udp)
             _activeDatagramEndpoints.TryRemove(endpoint, out _);
     }
 
+    /// <summary>
+    /// Writes the full payload even when the underlying socket only accepts partial sends.
+    /// </summary>
     internal static async Task SendAllAsync(ReadOnlyMemory<byte> payload,
         Func<ReadOnlyMemory<byte>, ValueTask<int>> sendAsync)
     {
@@ -404,6 +422,9 @@ public class SocketServer : IServer
 
 internal static class SocketDisposalExtensions
 {
+    /// <summary>
+    /// Disposes accepted client sockets while leaving the bound server socket alive.
+    /// </summary>
     internal static void DisposeIfRequired(this Socket channel, Socket serverSocket)
     {
         if (!ReferenceEquals(channel, serverSocket))

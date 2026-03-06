@@ -40,6 +40,8 @@ public class SocketServerState : IServerState
         _socketActions = endpoints
             .ToDictionary(config => config.Port!.Value, config =>
                 {
+                    // Collect actions stay available by default so inbound socket traffic behaves like the
+                    // documented mock flow. Broadcast actions remain disabled until triggered.
                     ActionState<InputOutputState> actionState = new()
                     {
                         ActionName = config.Action!.Name,
@@ -78,7 +80,7 @@ public class SocketServerState : IServerState
     public IEnumerable<Data<object>> Process(int port, IEnumerable<Data<object>> dataToProcess)
     {
         var stub = ResolveTransactionStub(port);
-        // If input-output state is not defined in given port - use property's value of current instance.
+        // If a port is not explicitly mapped, fall back to the server-wide input/output behavior.
         var actionExists = _socketActions.TryGetValue(port, out var state);
         var inputOutputState = actionExists ? state!.State : InputOutputState;
         var actionName = state?.ActionName ?? "NotFoundTransactionStub";
@@ -92,6 +94,7 @@ public class SocketServerState : IServerState
                 _logger.LogDebug(
                     "Processing socket action '{ActionName}' on port {Port} with input/output mode '{InputOutputState}' using stub '{StubName}'",
                     actionName, port, inputOutputState, stub?.Name ?? "<pass-through>");
+                // Socket actions are allowed to operate as pass-through endpoints when no stub is assigned.
                 processedData = stub != null ? stub.Exercise(data) : data;
             }
             catch (Exception exception)

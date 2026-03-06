@@ -27,12 +27,14 @@ public class TransactionsCache : BaseCache<DetailedData<object>>
 
     public override string? RetrieveFirstOrDefaultStringInput()
     {
+        // A single TryDequeue keeps the consume path atomic under concurrent readers.
         if (!_inputQueue.TryDequeue(out var item)) return null;
         return JsonSerializer.Serialize(item);
     }
 
     public override string? RetrieveFirstOrDefaultStringOutput()
     {
+        // A single TryDequeue keeps the consume path atomic under concurrent readers.
         if (!_outputQueue.TryDequeue(out var item)) return null;
         return JsonSerializer.Serialize(item);
     }

@@ -316,6 +316,8 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
 
     private void LoadContextScopeDependencies()
     {
+        // Build a dedicated child scope for hook discovery and object creation so the execution can
+        // resolve runtime dependencies without leaking the temporary bootstrap scope.
         var contextScope = _scope.BeginLifetimeScope(containerBuilder =>
         {
             containerBuilder.RegisterInstance(Context).As<InternalContext>().SingleInstance();
@@ -375,6 +377,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         var stubs = BuildStubs(dataSources);
         var server = new ServerFactory(Context, Server).Build(dataSources, stubs);
         var controller = new ControllerFactory(Context, Controller).Build(server.State);
+        // Log the assembled runtime graph once the builder has resolved every major dependency.
         Context.Logger.LogInformation(
             "Resolved runtime graph with {DataSourceCount} data source(s), {StubCount} stub(s), server type '{ServerType}', and controller enabled: {ControllerEnabled}",
             dataSources.Count,

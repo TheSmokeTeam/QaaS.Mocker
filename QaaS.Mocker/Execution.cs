@@ -94,6 +94,8 @@ public class Execution : BaseExecution
 
     private static Task StartLongRunningTask(Action action)
     {
+        // Listener runtimes are intentionally long-lived, so schedule them outside the normal
+        // thread-pool heuristics to avoid starving short-lived work.
         return Task.Factory.StartNew(action,
             CancellationToken.None,
             TaskCreationOptions.DenyChildAttach | TaskCreationOptions.LongRunning,

@@ -33,6 +33,8 @@ public class CommandHandler(
 
 
     private const int ConsumePollingDelayMilliseconds = 10;
+    // Consume is treated as a single in-flight lifecycle so the command response can reflect the
+    // real outcome of one cache-drain session instead of racing multiple overlapping drains.
     private int _consumeState; 
     
     /// <summary>
@@ -157,7 +159,9 @@ public class CommandHandler(
     }
     
     /// <summary>
-    /// Starts an asynchronous consume lifecycle if one is not already running.
+    /// Starts a consume lifecycle if one is not already running.
+    /// The call is completed synchronously so the returned command response reflects the actual
+    /// success or failure of the Redis drain instead of only the scheduling outcome.
     /// </summary>
     /// <param name="request">Consume request configuration.</param>
     private void RunConsuming(Consume request)
@@ -178,6 +182,8 @@ public class CommandHandler(
 
     /// <summary>
     /// Configures cache filters and concurrently drains input/output cache streams to Redis.
+    /// Cache capture is enabled only for the requested action during this lifecycle and is always
+    /// cleaned up in the <c>finally</c> block so retries start from a known state.
     /// </summary>
     /// <param name="request">Consume request configuration.</param>
     private async Task CreateAndDisposeConsumerLifecycle(Consume request)
@@ -228,6 +234,8 @@ public class CommandHandler(
     
     /// <summary>
     /// Polls server cache for messages and pushes them to the target Redis list until timeout expires.
+    /// The inactivity timer is reset after every successful push, which lets a single consume
+    /// command drain bursty traffic without holding the channel open indefinitely.
     /// </summary>
     /// <param name="retrieveFromCacheFunc">Function that retrieves next cached message.</param>
     /// <param name="queueName">Redis list queue name.</param>

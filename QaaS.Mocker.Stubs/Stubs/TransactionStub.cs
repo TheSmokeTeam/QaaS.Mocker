@@ -42,12 +42,16 @@ public class TransactionStub
 
     /// <summary>
     /// Exercises this transaction stub's data according to given request.
+    /// Request deserialization accepts both raw transport bytes and protobuf messages so HTTP and
+    /// gRPC actions can share the same stub configuration.
     /// </summary>
     /// <returns> The response data from this stub </returns>
     public Data<object> Exercise(Data<object> requestData)
     {
         if (RequestBodyDeserializer is not null)
         {
+            // gRPC requests arrive as protobuf message instances, while HTTP/socket requests usually
+            // arrive as raw bytes. Convert both shapes to a byte[] before invoking the deserializer.
             var inputBodyByteArray = requestData.Body switch
             {
                 byte[] bytes => bytes,
@@ -74,6 +78,8 @@ public class TransactionStub
                 Body = ResponseBodySerializer.Serialize(responseData.Body)
             };
 
+        // Server transports expect the final response payload to be a byte[] that can be written
+        // directly back to the client.
         if (responseData.Body is not byte[])
             throw new ArgumentException($"Transaction Stub '{Name}' " +
                                         $"output is not byte[] for response payload");

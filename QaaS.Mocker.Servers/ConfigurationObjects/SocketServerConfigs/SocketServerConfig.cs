@@ -49,6 +49,10 @@ internal class UniqueActionNameInAllEndpointsAttribute : ValidationAttribute
     }
 }
 
+/// <summary>
+/// Rejects UDP broadcast endpoints up front because the current socket runtime has no remote
+/// destination to send to for that mode.
+/// </summary>
 internal class BroadcastOverUdpNotSupportedAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
@@ -71,6 +75,10 @@ internal class BroadcastOverUdpNotSupportedAttribute : ValidationAttribute
     }
 }
 
+/// <summary>
+/// Rejects protocol/socket-type combinations that would otherwise fail later with opaque
+/// platform socket exceptions during server construction.
+/// </summary>
 internal class SocketTypeMatchesProtocolAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)

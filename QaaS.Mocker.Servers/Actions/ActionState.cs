@@ -12,8 +12,16 @@ public class ActionState<TStateIndicator> : ActionToTransactionStub
     private long _activationVersion;
     private int _enabledState;
 
+    /// <summary>
+    /// Baseline enablement for the action when no temporary trigger window is active.
+    /// Collect endpoints use <c>true</c> so they can receive immediately, while broadcast endpoints
+    /// typically remain disabled until an explicit trigger command arrives.
+    /// </summary>
     public bool DefaultEnabled { get; init; }
 
+    /// <summary>
+    /// Thread-safe enabled flag used by the server runtime.
+    /// </summary>
     public bool Enabled
     {
         get => Volatile.Read(ref _enabledState) == 1;
@@ -23,7 +31,9 @@ public class ActionState<TStateIndicator> : ActionToTransactionStub
     public TStateIndicator State { get; set; }
 
     /// <summary>
-    /// Action will hold state of enabled for given interval in milliseconds in order to be triggered.
+    /// Temporarily enables the action for the given interval in milliseconds.
+    /// Newer trigger commands supersede older ones, so only the latest activation window is allowed
+    /// to restore the action back to <see cref="DefaultEnabled"/>.
     /// </summary>
     public async Task SetEnabledForTimeoutMs(int timeoutMs)
     {
@@ -32,6 +42,7 @@ public class ActionState<TStateIndicator> : ActionToTransactionStub
 
         using (_syncLock.EnterScope())
         {
+            // Replace the previous timeout source so an older trigger cannot disable a newer one.
             _disableCancellation?.Cancel();
             _disableCancellation?.Dispose();
             _disableCancellation = new CancellationTokenSource();
@@ -64,6 +75,7 @@ public class ActionState<TStateIndicator> : ActionToTransactionStub
     {
         using (_syncLock.EnterScope())
         {
+            // Ignore completions from superseded trigger windows.
             if (activationVersion != _activationVersion || cancellationToken.IsCancellationRequested)
                 return;
 
