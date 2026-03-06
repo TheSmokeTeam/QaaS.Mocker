@@ -43,6 +43,7 @@ public class SocketServerState : IServerState
                     ActionState<InputOutputState> actionState = new()
                     {
                         ActionName = config.Action!.Name,
+                        DefaultEnabled = config.Action!.Method == SocketMethod.Collect,
                         State = config.Action!.Method switch
                         {
                             SocketMethod.Collect => InputOutputState.OnlyInput,
@@ -51,6 +52,7 @@ public class SocketServerState : IServerState
                                 $"Encountered unknown {nameof(SocketMethod)} - {config.Action!.Method} while mapping endpoints to {nameof(InputOutputState)}")
                         }
                     };
+                    actionState.Enabled = actionState.DefaultEnabled;
                     if (!string.IsNullOrEmpty(config.Action.TransactionStubName))
                         actionState.Stub = GetTransactionStub(config.Action.TransactionStubName);
                     return actionState;

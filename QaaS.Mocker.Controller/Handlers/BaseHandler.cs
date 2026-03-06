@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Qaas.Mocker.CommunicationObjects;
 using StackExchange.Redis;
@@ -16,6 +17,15 @@ public abstract class BaseHandler<TRequestMessage, TResponseMessage>(
     string serverInstanceId,
     ILogger logger)
 {
+    private static readonly JsonSerializerOptions DeserializationOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
+    };
+
     /// <summary>
     /// Gets the semantic payload type routed by this handler (for channel naming).
     /// </summary>
@@ -62,7 +72,7 @@ public abstract class BaseHandler<TRequestMessage, TResponseMessage>(
                 }
 
                 var requestPayload = serializedRequestMessage.ToString();
-                var request = JsonSerializer.Deserialize<TRequestMessage>(requestPayload);
+                var request = JsonSerializer.Deserialize<TRequestMessage>(requestPayload, DeserializationOptions);
                 if (request == null)
                 {
                     logger.LogWarning("Ignoring invalid control request on channel '{Channel}'. Payload: {Payload}",
@@ -89,4 +99,3 @@ public abstract class BaseHandler<TRequestMessage, TResponseMessage>(
         });
     }
 }
-

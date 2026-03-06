@@ -1,4 +1,6 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Concurrent;
+using System.Collections.Immutable;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
@@ -10,7 +12,6 @@ using QaaS.Mocker.Servers.Extensions;
 using QaaS.Mocker.Servers.ServerStates;
 using QaaS.Mocker.Stubs.Stubs;
 
-
 namespace QaaS.Mocker.Servers.Servers;
 
 /// <summary>
@@ -20,6 +21,7 @@ public class SocketServer : IServer
 {
     private readonly ILogger _logger;
     private readonly Dictionary<IPEndPoint, Socket> _socketServers = new();
+    private readonly ConcurrentDictionary<IPEndPoint, byte> _activeDatagramEndpoints = new();
     private readonly SocketServerState _socketServerState;
     private readonly SocketServerConfig _configuration;
     private Semaphore _semaphore;
@@ -41,6 +43,16 @@ public class SocketServer : IServer
         var endpoints = socketServerConfig.Endpoints!;
         foreach (var endpoint in endpoints)
         {
+            if (endpoint.ProtocolType == ProtocolType.Udp && endpoint.Action?.Method == SocketMethod.Broadcast)
+                throw new NotSupportedException(
+                    $"Socket endpoint on port {endpoint.Port} cannot use Broadcast with UDP.");
+            if (endpoint.ProtocolType == ProtocolType.Udp && endpoint.SocketType != SocketType.Dgram)
+                throw new NotSupportedException(
+                    $"Socket endpoint on port {endpoint.Port} must use SocketType.Dgram with UDP.");
+            if (endpoint.ProtocolType == ProtocolType.Tcp && endpoint.SocketType != SocketType.Stream)
+                throw new NotSupportedException(
+                    $"Socket endpoint on port {endpoint.Port} must use SocketType.Stream with TCP.");
+
             var ipEndpoint =
                 new IPEndPoint(IPAddress.Parse(socketServerConfig.BindingIpAddress), endpoint.Port!.Value);
             _socketServers[ipEndpoint] = new Socket(addressFamily: endpoint.AddressFamily,
@@ -86,9 +98,12 @@ public class SocketServer : IServer
         socketServer.ReceiveBufferSize = endpointConfig.BufferSizeBytes;
         socketServer.SendTimeout = endpointConfig.TimeoutMs.GetValueOrDefault();
         socketServer.ReceiveTimeout = endpointConfig.TimeoutMs.GetValueOrDefault();
-        socketServer.NoDelay = endpointConfig.NagleAlgorithm;
-        socketServer.LingerState = new LingerOption(endpointConfig.LingerTimeSeconds.HasValue,
-            endpointConfig.LingerTimeSeconds.GetValueOrDefault());
+        if (endpointConfig.ProtocolType == ProtocolType.Tcp)
+        {
+            socketServer.NoDelay = endpointConfig.NagleAlgorithm;
+            socketServer.LingerState = new LingerOption(endpointConfig.LingerTimeSeconds.HasValue,
+                endpointConfig.LingerTimeSeconds.GetValueOrDefault());
+        }
     }
 
     public void Start()
@@ -106,14 +121,16 @@ public class SocketServer : IServer
         _logger.LogInformation("Socket server started, Listening for incoming connections in {SocketServersEndpoints}",
             string.Join(", ", _socketServers.Keys));
 
-        // Accept new connections - then Broadcast + Collect task run TODO - add handling both 
+        // Accept new connections - then Broadcast + Collect task run TODO - add handling both
         while (!_cancellationTokenSource.IsCancellationRequested)
         {
-            foreach (var (endpoint, server) in _socketServers)
+            foreach (var endpoint in _socketServers.Keys)
             {
+                if (!TryBeginEndpointProcessing(endpoint))
+                    continue;
+
                 _semaphore.WaitOne();
-                Task.Run(() => GetAcceptedClientChannelAsync(endpoint)
-                    .ContinueWith(channel => ProcessChannel(channel, endpoint)));
+                _ = Task.Run(() => ProcessChannel(GetAcceptedClientChannelAsync(endpoint), endpoint));
             }
         }
     }
@@ -134,14 +151,19 @@ public class SocketServer : IServer
     /// <exception cref="ArgumentException">Raised when no method is resolved to perform for the endpoint.</exception>
     private async Task ProcessChannel(Task<Socket> task, IPEndPoint endpoint)
     {
-        var channel = await task;
-        await AwaitTriggerToActivateEndpointAction(endpoint);
+        Socket? channel = null;
         try
         {
+            channel = await task;
+            await AwaitTriggerToActivateEndpointAction(endpoint);
             switch (ResolveSocketMethod(endpoint))
             {
-                case SocketMethod.Broadcast: await HandleBroadcast(channel, endpoint); break;
-                case SocketMethod.Collect: await HandleCollect(channel, endpoint); break;
+                case SocketMethod.Broadcast:
+                    await HandleBroadcast(channel, endpoint);
+                    break;
+                case SocketMethod.Collect:
+                    await HandleCollect(channel, endpoint);
+                    break;
             }
         }
         catch (Exception exception)
@@ -153,6 +175,8 @@ public class SocketServer : IServer
         }
         finally
         {
+            CompleteEndpointProcessing(endpoint);
+            channel?.DisposeIfRequired(_socketServers[endpoint]);
             _semaphore.Release();
         }
     }
@@ -185,7 +209,7 @@ public class SocketServer : IServer
         {
             try
             {
-                socket.Send(data.Body ?? Span<byte>.Empty);
+                await SendAllAsync(data.Body ?? [], payload => socket.SendAsync(payload, SocketFlags.None));
             }
             catch (Exception exception)
             {
@@ -203,12 +227,12 @@ public class SocketServer : IServer
             endpointConfiguration.BufferSizeBytes, localEndpoint);
         _socketServerState
             .Process(localEndpoint.Port, collectedData
-                .Select(spans => new Data<object> { Body = spans }))
+                .Select(bytes => new Data<object> { Body = bytes }))
             .ToArray();
     }
 
     /// <summary>
-    /// Collects buffers received from Socket channel while buffer received has body 
+    /// Collects buffers received from Socket channel while buffer received has body
     /// </summary>
     private IEnumerable<byte[]> Collect(Socket socket, int timeoutMs, int bufferSizeBytes, IPEndPoint localEndpoint)
     {
@@ -241,7 +265,7 @@ public class SocketServer : IServer
         {
             socketServer.Listen(connectionsAcceptanceSlots);
         }
-        catch (SocketException e)
+        catch (SocketException)
         {
             _logger.LogWarning(
                 "Error while listening at {Endpoint} - configured 'Socket' in protocol {ProtocolType} can't support clients listen backlog option",
@@ -258,5 +282,40 @@ public class SocketServer : IServer
     {
         return _configuration.Endpoints!.First(config => config.Port == endpoint.Port).Action?.Method ??
                throw new ArgumentException($"Could not resolve socket method for endpoint {endpoint}");
+    }
+
+    internal bool TryBeginEndpointProcessing(IPEndPoint endpoint)
+    {
+        return _socketServers[endpoint].ProtocolType != ProtocolType.Udp ||
+               _activeDatagramEndpoints.TryAdd(endpoint, 0);
+    }
+
+    internal void CompleteEndpointProcessing(IPEndPoint endpoint)
+    {
+        if (_socketServers[endpoint].ProtocolType == ProtocolType.Udp)
+            _activeDatagramEndpoints.TryRemove(endpoint, out _);
+    }
+
+    internal static async Task SendAllAsync(ReadOnlyMemory<byte> payload,
+        Func<ReadOnlyMemory<byte>, ValueTask<int>> sendAsync)
+    {
+        var bytesSent = 0;
+        while (bytesSent < payload.Length)
+        {
+            var sent = await sendAsync(payload[bytesSent..]);
+            if (sent <= 0)
+                throw new IOException("Socket channel stopped sending before the payload was fully written.");
+
+            bytesSent += sent;
+        }
+    }
+}
+
+internal static class SocketDisposalExtensions
+{
+    internal static void DisposeIfRequired(this Socket channel, Socket serverSocket)
+    {
+        if (!ReferenceEquals(channel, serverSocket))
+            channel.Dispose();
     }
 }

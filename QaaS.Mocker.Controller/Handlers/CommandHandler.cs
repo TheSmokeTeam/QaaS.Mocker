@@ -85,7 +85,7 @@ public class CommandHandler(
                 break;
             }
             case CommandType.Consume:
-                StartConsuming(ResolveConsume(command));
+                RunConsuming(ResolveConsume(command));
                 break;
             case CommandType.TriggerAction:
             {
@@ -145,7 +145,7 @@ public class CommandHandler(
     /// Starts an asynchronous consume lifecycle if one is not already running.
     /// </summary>
     /// <param name="request">Consume request configuration.</param>
-    private void StartConsuming(Consume request)
+    private void RunConsuming(Consume request)
     {
         if (Interlocked.CompareExchange(ref _consumeState, 1, 0) != 0)
         {
@@ -156,7 +156,7 @@ public class CommandHandler(
 
         logger.LogInformation("Starting consume lifecycle for server '{ServerName}' and action '{ActionName}'",
             serverName, request.ActionName);
-        Task.Run(() => CreateAndDisposeConsumerLifecycle(request));
+        CreateAndDisposeConsumerLifecycle(request).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -189,6 +189,7 @@ public class CommandHandler(
         {
             logger.LogError(exception, "Consume lifecycle failed for server '{ServerName}' and action '{ActionName}'",
                 serverName, request.ActionName);
+            throw;
         }
         finally
         {

@@ -12,6 +12,8 @@ public class ActionState<TStateIndicator> : ActionToTransactionStub
     private long _activationVersion;
     private int _enabledState;
 
+    public bool DefaultEnabled { get; init; }
+
     public bool Enabled
     {
         get => Volatile.Read(ref _enabledState) == 1;
@@ -67,7 +69,7 @@ public class ActionState<TStateIndicator> : ActionToTransactionStub
 
             _disableCancellation?.Dispose();
             _disableCancellation = null;
-            Enabled = false;
+            Enabled = DefaultEnabled;
         }
     }
 }
