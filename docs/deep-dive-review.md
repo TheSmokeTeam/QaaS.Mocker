@@ -63,6 +63,34 @@
 - Impact: controller commands could fail unexpectedly when action name casing differed from configuration casing.
 - Fix: `HttpServerState.ChangeActionStub` now uses case-insensitive matching, aligned with gRPC and socket logic.
 
+8. Socket collect endpoints started disabled and never self-activated.
+- Impact: socket collect mocks could hang indefinitely unless an external trigger command arrived first, which contradicts the documented request/response usage flow.
+- Fix: socket collect actions now default to enabled, while trigger timeouts restore each action to its configured baseline state instead of always forcing `false`.
+
+9. Socket collect buffered the configured capacity, not the received payload length.
+- Impact: TCP and UDP payloads were padded with trailing zero bytes, corrupting text protocols, binary framing, and request deserialization.
+- Fix: socket reads now honor the actual byte count returned by `Receive`/`ReceiveFrom`.
+
+10. UDP broadcast was configured but not actually transmittable.
+- Impact: broadcast actions on UDP endpoints had no remote destination and would fail at runtime.
+- Fix: UDP broadcast is now rejected during validation and guarded again in `SocketServer` construction.
+
+11. Controller and stub deserialization were too narrow for real runner traffic.
+- Impact: camelCase request payloads, string enum values, and gRPC protobuf request bodies could fail to deserialize even though they are valid transport representations.
+- Fix: controller handlers now deserialize case-insensitively and accept string enums, and transaction stubs now support protobuf/message-backed request bodies.
+
+12. Consume acknowledged success before the drain actually succeeded.
+- Impact: Runner could receive `Succeeded` even when Redis queue pushes later failed, masking lost consume data and making retries unreliable.
+- Fix: `CommandHandler` now completes the consume lifecycle before returning success and surfaces push failures in the command response.
+
+13. Socket runtime scheduling and teardown had protocol-specific defects.
+- Impact: accepted TCP channels leaked, TCP broadcasts could truncate on partial sends, UDP endpoints could overlap processing on the same socket, and UDP startup applied TCP-only socket options (`NoDelay`, `LingerState`) that crash on Windows.
+- Fix: accepted client channels are now disposed, broadcast writes loop until the full payload is sent, UDP endpoint scheduling is single-flight, and TCP-only socket options are applied only to TCP sockets.
+
+14. Socket protocol/type mismatches failed late with opaque platform exceptions.
+- Impact: a UDP endpoint left on the default `SocketType.Stream` would crash inside `System.Net.Sockets` instead of failing validation with a clear message.
+- Fix: socket endpoint validation now enforces protocol/socket-type compatibility, and `SocketServer` has matching constructor guards.
+
 ## Added Regression Coverage
 
 - Overlapping socket trigger commands keep the latest enablement window active.
@@ -70,3 +98,7 @@
 - HTTP and socket action-to-stub switching works case-insensitively.
 - Socket action-to-stub switching now exercises the swapped stub instead of throwing.
 - Controller consume tests validate async Redis push behavior for input-only, output-only, and mixed modes.
+- Controller handler tests cover camelCase payloads and string enum request values.
+- Transaction stubs cover protobuf request-body deserialization.
+- Socket extensions cover exact-length TCP and UDP reads.
+- Socket server tests cover UDP broadcast rejection, protocol/socket-type validation, partial-send retries, zero-send failures, and single-flight UDP scheduling.
