@@ -55,7 +55,6 @@ public class ActionStateTests
             Assert.That(state.Enabled, Is.False);
         });
     }
-
     [Test]
     public async Task SetEnabledForTimeoutMs_WhenDefaultEnabled_RestoresEnabledStateAfterTimeout()
     {
