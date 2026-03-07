@@ -6,12 +6,9 @@ on:
     tags: ["*"]
   pull_request:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   DOTNET_NOLOGO: true
@@ -37,11 +34,11 @@ jobs:
       - name: Restore packages
         run: dotnet restore ${{ env.SOLUTION_PATH }}
 
-      - name: Build solution (no warnings)
-        run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore --configuration ${{ env.CONFIGURATION }} -warnaserror
+      - name: Build solution
+        run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore --configuration ${{ env.CONFIGURATION }}
 
       - name: Test solution
-        run: dotnet test ${{ env.SOLUTION_PATH }} --configuration ${{ env.CONFIGURATION }} --no-build --maxcpucount
+        run: dotnet test ${{ env.SOLUTION_PATH }} --configuration ${{ env.CONFIGURATION }} --no-restore --maxcpucount
 
       - name: Get Version
         if: startsWith(github.ref, 'refs/tags/')

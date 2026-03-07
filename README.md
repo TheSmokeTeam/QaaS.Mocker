@@ -1,121 +1,85 @@
 # QaaS.Mocker
 
-`QaaS.Mocker` runs configurable mock servers for QaaS workloads.
+Configurable mock runtime for QaaS protocol workloads.
 
-Supported protocols:
-- `Http` / `Https`
-- `Grpc` / `Grpcs`
-- `Socket`
-- Optional Redis controller API (ping + runtime commands)
+[![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF)](./.github/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-qaas--docs-blue)](https://thesmoketeam.github.io/qaas-docs/)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 
-## Project Flow
+## Contents
+- [Overview](#overview)
+- [Packages](#packages)
+- [Functionalities](#functionalities)
+- [Protocol Support](#protocol-support)
+- [Quick Start](#quick-start)
+- [Build and Test](#build-and-test)
+- [Documentation](#documentation)
 
-1. `Bootstrap.New(args)` parses CLI options into `MockerOptions`.
-2. `MockerLoader` builds `InternalContext` from YAML + overwrite files/arguments + env variables.
-3. `ExecutionBuilder` validates config, loads hooks, builds:
-   - Data sources
-   - Transaction stubs
-   - Server implementation (`HttpServer`, `GrpcServer`, or `SocketServer`)
-   - Optional controller
-4. `Execution.Start()` runs one mode:
-   - `Run`: starts server (and controller when configured)
-   - `Lint`: validates configuration/build path
-   - `Template`: prints or writes a generated template YAML
-5. Server state objects route incoming actions/RPCs/messages to transaction stubs and cache input/output for controller consume commands.
+## Overview
+This repository contains one solution: [`QaaS.Mocker.sln`](./QaaS.Mocker.sln).
 
-Hook loading uses QaaS provider modules (`HooksLoaderModule<T>`) and resolves hooks from loaded assemblies.
-This keeps processor integrations pluggable: you can add processors from YAML or by code configuration as long as
-the assembly containing those `ITransactionProcessor` implementations is available at runtime.
+`QaaS.Mocker` is published as a single NuGet package and composes internal runtime modules for stubs, protocol servers, and optional Redis controller operations.
 
-## Solution Layout
+## Packages
+| Package | Latest Version | Total Downloads |
+|---|---|---|
+| [QaaS.Mocker](https://www.nuget.org/packages/QaaS.Mocker/) | [![NuGet](https://img.shields.io/nuget/v/QaaS.Mocker?logo=nuget)](https://www.nuget.org/packages/QaaS.Mocker/) | [![Downloads](https://img.shields.io/nuget/dt/QaaS.Mocker?logo=nuget)](https://www.nuget.org/packages/QaaS.Mocker/) |
 
-- `QaaS.Mocker`: CLI, bootstrap, execution orchestration
-- `QaaS.Mocker.Stubs`: stub factory + transaction stub execution
-- `QaaS.Mocker.Servers`: HTTP/gRPC/socket servers and state routing
-- `QaaS.Mocker.Controller`: Redis control handlers
-- `QaaS.Mocker.Example`: runnable example configs/processors
-- `QaaS.Mocker.*.Tests`: NUnit unit tests
+## Functionalities
+### [QaaS.Mocker](./QaaS.Mocker/)
+- Parses CLI options and loads YAML configuration with overwrite files/arguments and optional environment resolution.
+- Builds and validates execution context, data sources, stubs, server runtime, and optional controller runtime.
+- Supports execution modes: `Run`, `Lint`, and `Template`.
 
-## Code Configuration
+### [QaaS.Mocker.Stubs](./QaaS.Mocker.Stubs/)
+- Builds transaction stubs from configured processors and data source bindings.
+- Executes request/response transformation through configurable serializer/deserializer pairs.
+- Includes default status-code stubs for not-found and internal-error flows.
 
-`ExecutionBuilder` supports code-first CRUD operations:
-- Data sources: `CreateDataSource`, `ReadDataSource`, `UpdateDataSource`, `DeleteDataSource`
-- Stubs: `CreateStub`, `ReadStub`, `UpdateStub`, `DeleteStub`
-- Server/controller: `Read*`, `Update*`, `Replace*`, `DeleteController`
+### [QaaS.Mocker.Servers](./QaaS.Mocker.Servers/)
+- Hosts protocol runtimes for `HTTP/HTTPS`, `gRPC/gRPCs`, and `Socket`.
+- Routes actions/RPC methods to transaction stubs through state objects.
+- Caches input/output payloads for controller consume operations.
 
-`TransactionStubBuilder` supports configuring processor hook names and configuration objects in code (`Configure(object)`).
+### [QaaS.Mocker.Controller](./QaaS.Mocker.Controller/)
+- Initializes optional Redis-backed runtime controller when configured.
+- Handles `Ping` and `Command` channels.
+- Supports runtime commands such as action-to-stub switch, trigger, and consume.
 
-## Prerequisites
+### [QaaS.Mocker.Example](./QaaS.Mocker.Example/)
+- Provides runnable HTTP and gRPC mocker configurations, sample processors, protobuf schema, and sample data assets.
 
-- .NET SDK `10.0.x`
-- Docker Desktop (optional, for image build/run)
-- `dotnet dev-certs` (included with .NET SDK) for local TLS example
+## Protocol Support
+Supported protocol/runtime families in `QaaS.Mocker`:
 
-## Build And Test
+| Family | Implementations |
+|---|---|
+| HTTP / RPC | HTTP, HTTPS, gRPC, gRPCs |
+| Streaming / Socket | Socket (broadcast and collect modes) |
+| Runtime Control | Redis-backed controller channels (ping and command) |
+
+## Quick Start
+Install package:
 
 ```bash
+dotnet add package QaaS.Mocker
+```
+
+Upgrade package:
+
+```bash
+dotnet add package QaaS.Mocker --version <target-version>
+dotnet restore
+```
+
+## Build and Test
+```bash
 dotnet restore QaaS.Mocker.sln
-dotnet build QaaS.Mocker.sln -c Release -warnaserror
+dotnet build QaaS.Mocker.sln -c Release --no-restore
 dotnet test QaaS.Mocker.sln -c Release --no-build
 ```
 
-## Run Example Without Any Script
-
-No script is required.
-
-1. Generate a dev certificate file expected by example YAML:
-
-```bash
-dotnet dev-certs https -ep QaaS.Mocker.Example/Certificates/devcert.pfx -p qaas-dev-cert
-```
-
-2. Trust the certificate (local machine):
-
-```bash
-dotnet dev-certs https --trust
-```
-
-3. Run HTTPS example:
-
-```bash
-cd QaaS.Mocker.Example
-dotnet run --project . -- mocker.qaas.yaml
-```
-
-4. Verify endpoint:
-
-```bash
-curl -k https://localhost:8443/health
-```
-
-## Run gRPC Example
-
-```bash
-cd QaaS.Mocker.Example
-dotnet run --project . -- mocker.grpc.qaas.yaml
-```
-
-The gRPC service listens on `localhost:50051` with TLS and exposes `EchoService/Echo`.
-
-## Build And Run Docker Image
-
-1. Ensure `QaaS.Mocker.Example/Certificates/devcert.pfx` exists (see cert generation command above).
-2. Build image:
-
-```bash
-docker build -t qaas-mocker-example .
-```
-
-3. Run image (default entrypoint uses `mocker.qaas.yaml`):
-
-```bash
-docker run --rm -p 8443:8443 qaas-mocker-example
-```
-
-## CI / Publish
-
-Workflow: `.github/workflows/ci.yml`
-
-- Restores, builds with `-warnaserror`, and runs tests
-- Uses workflow concurrency to cancel duplicate branch/PR runs in progress
-- On tags: validates SemVer, packs `QaaS.Mocker`, pushes NuGet package
+## Documentation
+- Official docs: [thesmoketeam.github.io/qaas-docs](https://thesmoketeam.github.io/qaas-docs/)
+- CI workflow: [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
+- NuGet package: [QaaS.Mocker on NuGet](https://www.nuget.org/packages/QaaS.Mocker/)
