@@ -5,6 +5,7 @@ on:
     branches: ["**"]
     tags: ["*"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,6 +18,7 @@ env:
   SOLUTION_PATH: QaaS.Mocker.sln
   PROJECT_TO_PACK: QaaS.Mocker/QaaS.Mocker.csproj
   PACKAGE_OUTPUT_DIRECTORY: ${{ github.workspace }}\BuildOutput
+  RESTORED_PACKAGES_PATH: ${{ github.workspace }}\RestoredPackages
 
 jobs:
   build-test-deploy:
@@ -31,8 +33,19 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Detect mirror tag
+        id: mirror_tag
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" =~ ^refs/tags/([0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?)$ ]]; then
+            echo "is_mirror_tag=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_mirror_tag=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Restore packages
-        run: dotnet restore ${{ env.SOLUTION_PATH }}
+        run: dotnet restore ${{ env.SOLUTION_PATH }} --packages ${{ env.RESTORED_PACKAGES_PATH }}
 
       - name: Build solution
         run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore --configuration ${{ env.CONFIGURATION }}
@@ -75,3 +88,26 @@ jobs:
               dotnet nuget push $package.FullName -k ${{ secrets.NUGET_AUTH_TOKEN }} -s https://api.nuget.org/v3/index.json
             }
           }
+
+      - name: Write restored packages metadata
+        if: steps.mirror_tag.outputs.is_mirror_tag == 'true'
+        shell: pwsh
+        run: |
+          $metadata = @{
+            repository = "${{ github.repository }}"
+            tag = "${{ steps.mirror_tag.outputs.tag }}"
+            runId = "${{ github.run_id }}"
+            createdAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+          } | ConvertTo-Json
+
+          $metadataPath = Join-Path "${{ env.RESTORED_PACKAGES_PATH }}" "restore-artifact-metadata.json"
+          $metadata | Set-Content -Path $metadataPath
+
+      - name: Upload restored packages artifact
+        if: steps.mirror_tag.outputs.is_mirror_tag == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: restored-packages
+          path: ${{ env.RESTORED_PACKAGES_PATH }}
+          if-no-files-found: error
+          retention-days: 7
