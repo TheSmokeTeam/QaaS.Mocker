@@ -4,7 +4,6 @@ using Qaas.Mocker.CommunicationObjects;
 using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Ping;
 using QaaS.Mocker.Servers.ServerStates;
 using StackExchange.Redis;
-using CommunicationInputOutputState = Qaas.Mocker.CommunicationObjects.ConfigurationObjects.InputOutputState;
 
 namespace QaaS.Mocker.Controller.Handlers;
 
@@ -29,7 +28,7 @@ public class PingHandler(
             Id = request.Id,
             ServerName = serverName,
             ServerInstanceId = serverInstanceId,
-            ServerInputOutputState = (CommunicationInputOutputState)serverState.InputOutputState
+            ServerInputOutputState = serverState.InputOutputState
         };
     }
 }
