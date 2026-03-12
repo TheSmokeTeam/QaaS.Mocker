@@ -15,7 +15,7 @@ public class ControllerFactory(Context context, ControllerConfig? controller)
         var serverName = controller?.ServerName;
         if (serverName == null)
         {
-            context.Logger.LogWarning(
+            context.Logger.LogInformation(
                 "Controller startup skipped because 'Controller.ServerName' is not configured.");
             return null;
         }
