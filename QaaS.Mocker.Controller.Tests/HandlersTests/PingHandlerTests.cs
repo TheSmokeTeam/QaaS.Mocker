@@ -6,7 +6,7 @@ using QaaS.Mocker.Controller.Handlers;
 using QaaS.Mocker.Servers.Caches;
 using QaaS.Mocker.Servers.ServerStates;
 using StackExchange.Redis;
-using CommunicationInputOutputState = Qaas.Mocker.CommunicationObjects.ConfigurationObjects.InputOutputState;
+using ResponseInputOutputState = Qaas.Mocker.CommunicationObjects.ConfigurationObjects.InputOutputState;
 using ServerInputOutputState = QaaS.Framework.SDK.ConfigurationObjects.InputOutputState;
 
 namespace QaaS.Mocker.Controller.Tests.HandlersTests;
@@ -26,13 +26,13 @@ public class PingHandlerTests
         });
     }
 
-    [TestCase(ServerInputOutputState.NoInputOutput, CommunicationInputOutputState.NoInputOutput)]
-    [TestCase(ServerInputOutputState.OnlyInput, CommunicationInputOutputState.OnlyInput)]
-    [TestCase(ServerInputOutputState.OnlyOutput, CommunicationInputOutputState.OnlyOutput)]
-    [TestCase(ServerInputOutputState.BothInputOutput, CommunicationInputOutputState.BothInputOutput)]
+    [TestCase(ServerInputOutputState.NoInputOutput, ResponseInputOutputState.NoInputOutput)]
+    [TestCase(ServerInputOutputState.OnlyInput, ResponseInputOutputState.OnlyInput)]
+    [TestCase(ServerInputOutputState.OnlyOutput, ResponseInputOutputState.OnlyOutput)]
+    [TestCase(ServerInputOutputState.BothInputOutput, ResponseInputOutputState.BothInputOutput)]
     public void HandleRequest_ReturnsServerIdentityAndInputOutputState(
         ServerInputOutputState inputOutputState,
-        CommunicationInputOutputState expectedResponseState)
+        ResponseInputOutputState expectedResponseState)
     {
         var handler = CreateHandler("server-a", "instance-42", inputOutputState);
 

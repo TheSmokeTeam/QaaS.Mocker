@@ -1,10 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
 using QaaS.Framework.SDK.ConfigurationObjects;
 using Qaas.Mocker.CommunicationObjects;
+using ResponseInputOutputState = Qaas.Mocker.CommunicationObjects.ConfigurationObjects.InputOutputState;
 using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Ping;
 using QaaS.Mocker.Servers.ServerStates;
 using StackExchange.Redis;
-using CommunicationInputOutputState = Qaas.Mocker.CommunicationObjects.ConfigurationObjects.InputOutputState;
 
 namespace QaaS.Mocker.Controller.Handlers;
 
@@ -29,7 +29,17 @@ public class PingHandler(
             Id = request.Id,
             ServerName = serverName,
             ServerInstanceId = serverInstanceId,
-            ServerInputOutputState = (CommunicationInputOutputState)serverState.InputOutputState
+            ServerInputOutputState = MapInputOutputState(serverState.InputOutputState)
         };
     }
+
+    private static ResponseInputOutputState MapInputOutputState(InputOutputState inputOutputState) =>
+        inputOutputState switch
+        {
+            InputOutputState.NoInputOutput => ResponseInputOutputState.NoInputOutput,
+            InputOutputState.OnlyInput => ResponseInputOutputState.OnlyInput,
+            InputOutputState.OnlyOutput => ResponseInputOutputState.OnlyOutput,
+            InputOutputState.BothInputOutput => ResponseInputOutputState.BothInputOutput,
+            _ => throw new ArgumentOutOfRangeException(nameof(inputOutputState), inputOutputState, null)
+        };
 }
