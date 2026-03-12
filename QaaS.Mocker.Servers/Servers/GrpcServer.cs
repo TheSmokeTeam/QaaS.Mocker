@@ -123,10 +123,29 @@ public class GrpcServer : IServer
         string serviceName,
         string rpcName) where TRequest : class where TResponse : class
     {
-        return (request, _) =>
+        return (request, context) =>
         {
-            var responseData = _grpcServerState.Process(serviceName, rpcName, new Data<object> { Body = request });
-            return Task.FromResult(ConvertResponseBody<TResponse>(responseData.Body));
+            var remotePeer = string.IsNullOrWhiteSpace(context.Peer) ? "<unknown>" : context.Peer;
+            _logger.LogInformation(
+                "Handling gRPC request for service '{ServiceName}' rpc '{RpcName}' from '{RemotePeer}' with request type '{RequestType}'",
+                serviceName, rpcName, remotePeer, typeof(TRequest).Name);
+
+            try
+            {
+                var responseData = _grpcServerState.Process(serviceName, rpcName, new Data<object> { Body = request });
+                var response = ConvertResponseBody<TResponse>(responseData.Body);
+                _logger.LogInformation(
+                    "Completed gRPC request for service '{ServiceName}' rpc '{RpcName}' with response type '{ResponseType}'",
+                    serviceName, rpcName, typeof(TResponse).Name);
+                return Task.FromResult(response);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception,
+                    "gRPC request failed for service '{ServiceName}' rpc '{RpcName}' from '{RemotePeer}'",
+                    serviceName, rpcName, remotePeer);
+                throw;
+            }
         };
     }
 
