@@ -49,7 +49,7 @@ public class GrpcServer : IServer
             _grpcServer.Services.Add(BuildServiceDefinition(service));
 
         var host = configuration.IsLocalhost ? "127.0.0.1" : "0.0.0.0";
-        _grpcServer.Ports.Add(new ServerPort(host, configuration.Port, ResolveServerCredentials(configuration)));
+        _grpcServer.Ports.Add(new ServerPort(host, configuration.Port, ResolveServerCredentials(configuration, logger)));
     }
 
     public void Start()
@@ -176,7 +176,7 @@ public class GrpcServer : IServer
                ?? throw new InvalidOperationException("Could not resolve grpc service name.");
     }
 
-    private static ServerCredentials ResolveServerCredentials(GrpcServerConfig configuration)
+    private static ServerCredentials ResolveServerCredentials(GrpcServerConfig configuration, ILogger logger)
     {
         if (!configuration.IsSecuredSchema)
             return ServerCredentials.Insecure;
@@ -186,6 +186,11 @@ public class GrpcServer : IServer
                 "CertificatePath is required when gRPC IsSecuredSchema is true.");
 
         var certificatePath = ResolvePath(configuration.CertificatePath);
+        if (!File.Exists(certificatePath))
+            throw new InvalidOperationException(
+                $"Configured gRPC certificate '{certificatePath}' was not found. Current working directory: '{Environment.CurrentDirectory}'.");
+
+        logger.LogInformation("Configuring gRPC TLS certificate from '{CertificatePath}'", certificatePath);
         var pfxCertificate = new X509Certificate2(certificatePath, configuration.CertificatePassword,
             X509KeyStorageFlags.Exportable);
         var certificate = pfxCertificate.ExportCertificatePem();

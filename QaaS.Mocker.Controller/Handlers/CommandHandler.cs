@@ -66,7 +66,7 @@ public class CommandHandler(
 
         var response = new CommandResponse
         {
-            Id = request.Id,
+            Id = request.Id ?? string.Empty,
             ServerInstanceId = serverInstanceId,
             Command = request.Command,
             Status = status ? Status.Succeeded : Status.Failed,
