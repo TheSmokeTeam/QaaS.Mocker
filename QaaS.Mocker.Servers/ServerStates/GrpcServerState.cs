@@ -112,6 +112,12 @@ public class GrpcServerState : IServerState
         return responseData!;
     }
 
+    public bool HasAction(string actionName)
+    {
+        return _actionToStubList.Any(pair =>
+            string.Equals(pair.ActionName, actionName, StringComparison.OrdinalIgnoreCase));
+    }
+
     public void ChangeActionStub(string actionName, string stubName)
     {
         var actionToTransactionStub = _actionToStubList

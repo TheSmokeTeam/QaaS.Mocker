@@ -6,6 +6,7 @@ using QaaS.Framework.SDK.DataSourceObjects;
 using QaaS.Framework.SDK.Hooks.Processor;
 using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Mocker.Options;
+using QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 using QaaS.Mocker.Servers.ConfigurationObjects;
 using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 using QaaS.Mocker.Stubs.ConfigurationObjects;
@@ -122,6 +123,111 @@ public class ExecutionBuilderCrudTests
             });
 
         Assert.DoesNotThrow(() => builder.Build());
+    }
+
+    [Test]
+    public void Build_WithMultipleServers_ResolvesAndBuilds()
+    {
+        var context = new InternalContext
+        {
+            Logger = Globals.Logger,
+            RootConfiguration = new ConfigurationBuilder().Build()
+        };
+
+        var builder = new ExecutionBuilder()
+            .WithContext(context)
+            .WithExecutionMode(ExecutionMode.Lint)
+            .CreateStub(new TransactionStubBuilder()
+                .Named("StubA")
+                .HookNamed(nameof(CodeFirstProcessor)))
+            .ReplaceServers(
+                BuildHttpServer("HealthAction"),
+                BuildSocketServer("CollectAction"));
+
+        Assert.DoesNotThrow(() => builder.Build());
+    }
+
+    [Test]
+    public void Build_WithDuplicateActionNamesAcrossServers_ThrowsInvalidConfigurationsException()
+    {
+        var context = new InternalContext
+        {
+            Logger = Globals.Logger,
+            RootConfiguration = new ConfigurationBuilder().Build()
+        };
+
+        var builder = new ExecutionBuilder()
+            .WithContext(context)
+            .WithExecutionMode(ExecutionMode.Lint)
+            .CreateStub(new TransactionStubBuilder()
+                .Named("StubA")
+                .HookNamed(nameof(CodeFirstProcessor)))
+            .ReplaceServers(
+                BuildHttpServer("SharedAction"),
+                BuildSocketServer("SharedAction"));
+
+        var exception = Assert.Throws<QaaS.Framework.Configurations.CustomExceptions.InvalidConfigurationsException>(
+            () => builder.Build());
+
+        Assert.That(exception!.Message, Is.EqualTo("Configurations are not valid"));
+    }
+
+    private static ServerConfig BuildHttpServer(string actionName)
+    {
+        return new ServerConfig
+        {
+            Type = ServerType.Http,
+            Http = new HttpServerConfig
+            {
+                Port = 18081,
+                IsLocalhost = true,
+                Endpoints =
+                [
+                    new HttpEndpointConfig
+                    {
+                        Path = "/health",
+                        Actions =
+                        [
+                            new HttpEndpointActionConfig
+                            {
+                                Name = actionName,
+                                Method = HttpMethod.Get,
+                                TransactionStubName = "StubA"
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+    }
+
+    private static ServerConfig BuildSocketServer(string actionName)
+    {
+        return new ServerConfig
+        {
+            Type = ServerType.Socket,
+            Socket = new SocketServerConfig
+            {
+                BindingIpAddress = "127.0.0.1",
+                Endpoints =
+                [
+                    new SocketEndpointConfig
+                    {
+                        Port = 19090,
+                        ProtocolType = System.Net.Sockets.ProtocolType.Tcp,
+                        SocketType = System.Net.Sockets.SocketType.Stream,
+                        TimeoutMs = 1000,
+                        BufferSizeBytes = 2048,
+                        Action = new SocketActionConfig
+                        {
+                            Name = actionName,
+                            Method = SocketMethod.Collect,
+                            TransactionStubName = "StubA"
+                        }
+                    }
+                ]
+            }
+        };
     }
 
     public sealed class CodeFirstProcessor : BaseTransactionProcessor<CodeFirstProcessorConfig>

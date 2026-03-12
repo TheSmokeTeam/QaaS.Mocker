@@ -62,6 +62,28 @@ public class ServerFactoryTests
     }
 
     [Test]
+    public void Build_WithMultipleServerConfigurations_ReturnsCompositeServer()
+    {
+        var factory = new ServerFactory(Globals.Context,
+        [
+            new ServerConfig
+            {
+                Type = ServerType.Http,
+                Http = new HttpServerConfig { Port = 8080, Endpoints = [] }
+            },
+            new ServerConfig
+            {
+                Type = ServerType.Grpc,
+                Grpc = new GrpcServerConfig { Port = 50051, Services = [] }
+            }
+        ]);
+
+        var server = factory.Build(ImmutableList<DataSource>.Empty, CreateRequiredStubs());
+
+        Assert.That(server, Is.TypeOf<CompositeServer>());
+    }
+
+    [Test]
     public void Build_WithUnsupportedServerType_ThrowsArgumentException()
     {
         var factory = new ServerFactory(Globals.Context, new ServerConfig

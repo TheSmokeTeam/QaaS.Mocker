@@ -124,6 +124,12 @@ public class SocketServerState : IServerState
         return Process(port, ResolveDataSource(port).Retrieve());
     }
 
+    public bool HasAction(string actionName)
+    {
+        return _socketActions.Values.Any(state =>
+            string.Equals(state.ActionName, actionName, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>
     /// Resolves stub by port
     /// </summary>

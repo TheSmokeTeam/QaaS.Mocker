@@ -3,18 +3,50 @@ DataSources: []
 Stubs:
   - Name: ExampleStub
     Processor: ExampleProcessor
+  - Name: GrpcEchoStub
+    Processor: GrpcEchoProcessor
 
-Server:
-  Type: Http
-  Http:
-    Port: 8443
-    IsLocalhost: true
-    IsSecuredSchema: true
-    CertificatePath: Certificates/devcert.pfx
-    CertificatePassword: qaas-dev-cert
-    Endpoints:
-      - Path: /health
-        Actions:
-          - Name: HealthAction
-            Method: Get
+Servers:
+  - Type: Http
+    Http:
+      Port: 8443
+      IsLocalhost: true
+      IsSecuredSchema: true
+      CertificatePath: Certificates/devcert.pfx
+      CertificatePassword: qaas-dev-cert
+      Endpoints:
+        - Path: /health
+          Actions:
+            - Name: HealthAction
+              Method: Get
+              TransactionStubName: ExampleStub
+
+  - Type: Grpc
+    Grpc:
+      Port: 50051
+      IsLocalhost: true
+      IsSecuredSchema: true
+      CertificatePath: Certificates/devcert.pfx
+      CertificatePassword: qaas-dev-cert
+      Services:
+        - ServiceName: EchoService
+          ProtoNamespace: QaaS.Mocker.Example.Grpc
+          AssemblyName: QaaS.Mocker.Example
+          Actions:
+            - Name: EchoAction
+              RpcName: Echo
+              TransactionStubName: GrpcEchoStub
+
+  - Type: Socket
+    Socket:
+      BindingIpAddress: 127.0.0.1
+      Endpoints:
+        - Port: 7001
+          ProtocolType: Tcp
+          SocketType: Stream
+          TimeoutMs: 1000
+          BufferSizeBytes: 2048
+          Action:
+            Name: SocketCollectAction
+            Method: Collect
             TransactionStubName: ExampleStub

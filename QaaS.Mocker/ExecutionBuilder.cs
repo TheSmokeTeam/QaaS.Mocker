@@ -30,7 +30,7 @@ using QaaS.Mocker.Stubs.Stubs;
 
 namespace QaaS.Mocker;
 
-public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionData>
+public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionData>, IValidatableObject
 {
     private static readonly PropertyInfo? DataSourceGeneratorProperty =
         typeof(DataSourceBuilder).GetProperty("Generator", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -43,8 +43,11 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
                  "They provide processing functionality to exercise transaction data.")]
     public TransactionStubConfig[] Stubs { get; set; } = [];
 
-    [Description("The server mocker instance to run.")]
-    public ServerConfig Server { get; set; } = new();
+    [Description("The legacy single server mocker instance to run.")]
+    public ServerConfig? Server { get; set; }
+
+    [Description("List of server mocker instances to run concurrently.")]
+    public ServerConfig[] Servers { get; set; } = [];
 
     [Description("The server mocker controller configuration")]
     public ControllerConfig? Controller { get; set; }
@@ -82,6 +85,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
             new BinderOptions { BindNonPublicProperties = true });
         DataSources = configuredBuilder.DataSources;
         Server = configuredBuilder.Server;
+        Servers = configuredBuilder.Servers;
         Controller = configuredBuilder.Controller;
         Stubs = configuredBuilder.Stubs;
     }
@@ -257,11 +261,15 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
-    public ServerConfig ReadServer() => Server;
+    public ServerConfig? ReadServer() => Server;
+
+    public IReadOnlyList<ServerConfig> ReadServers() => ResolveConfiguredServers().ToArray();
 
     public ExecutionBuilder CreateServer(ServerConfig serverConfig)
     {
-        if (!IsServerConfigurationEmpty(Server))
+        ArgumentNullException.ThrowIfNull(serverConfig);
+
+        if (Server != null || Servers.Length > 0)
             throw new InvalidOperationException("Server is already configured.");
 
         Server = serverConfig;
@@ -270,13 +278,37 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
 
     public ExecutionBuilder ReplaceServer(ServerConfig serverConfig)
     {
+        ArgumentNullException.ThrowIfNull(serverConfig);
+
         Server = serverConfig;
+        Servers = [];
+        return this;
+    }
+
+    public ExecutionBuilder AddServer(ServerConfig serverConfig)
+    {
+        ArgumentNullException.ThrowIfNull(serverConfig);
+
+        Servers = ResolveConfiguredServers().Append(serverConfig).ToArray();
+        Server = null;
+        return this;
+    }
+
+    public ExecutionBuilder ReplaceServers(params ServerConfig[] serverConfigs)
+    {
+        ArgumentNullException.ThrowIfNull(serverConfigs);
+
+        Servers = serverConfigs.ToArray();
+        Server = null;
         return this;
     }
 
     public ExecutionBuilder UpdateServer(Action<ServerConfig> configureAction)
     {
         ArgumentNullException.ThrowIfNull(configureAction);
+        if (Server == null)
+            throw new InvalidOperationException("Single server configuration is not configured.");
+
         configureAction(Server);
         return this;
     }
@@ -366,6 +398,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         LoadContextScopeDependencies();
 
         _ = ValidationUtils.TryValidateObjectRecursive(this, _validationResults);
+        _validationResults.AddRange(Validate(new ValidationContext(this)));
         if (_validationResults.Any())
         {
             Context.Logger.LogCritical("Configurations are not valid. The validation results are: \n- " +
@@ -375,14 +408,16 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
 
         var dataSources = BuildDataSources().ToImmutableList();
         var stubs = BuildStubs(dataSources);
-        var server = new ServerFactory(Context, Server).Build(dataSources, stubs);
+        var configuredServers = ResolveConfiguredServers();
+        var server = new ServerFactory(Context, configuredServers).Build(dataSources, stubs);
         var controller = new ControllerFactory(Context, Controller).Build(server.State);
         // Log the assembled runtime graph once the builder has resolved every major dependency.
         Context.Logger.LogInformation(
-            "Resolved runtime graph with {DataSourceCount} data source(s), {StubCount} stub(s), server type '{ServerType}', and controller enabled: {ControllerEnabled}",
+            "Resolved runtime graph with {DataSourceCount} data source(s), {StubCount} stub(s), {ServerCount} server(s) [{ServerTypes}], and controller enabled: {ControllerEnabled}",
             dataSources.Count,
             stubs.Count,
-            ResolveServerTypeName(Server),
+            configuredServers.Count,
+            ResolveServerTypesSummary(configuredServers),
             controller != null);
 
         var serverLogic = new ServerLogic(server);
@@ -414,21 +449,92 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
                new ConfigurationBuilder().Build();
     }
 
-    private static bool IsServerConfigurationEmpty(ServerConfig serverConfig)
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        return serverConfig.Http == null && serverConfig.Grpc == null && serverConfig.Socket == null;
+        var hasSingleServer = Server != null;
+        var hasMultipleServers = Servers.Length > 0;
+
+        if (!hasSingleServer && !hasMultipleServers)
+        {
+            yield return new ValidationResult(
+                "Either 'Server' or 'Servers' must be configured.",
+                [nameof(Server), nameof(Servers)]);
+            yield break;
+        }
+
+        if (hasSingleServer && hasMultipleServers)
+        {
+            yield return new ValidationResult(
+                "Configure either 'Server' or 'Servers', not both.",
+                [nameof(Server), nameof(Servers)]);
+            yield break;
+        }
+
+        if (!hasMultipleServers)
+            yield break;
+
+        var duplicateActionNames = ResolveActionNames(Servers)
+            .GroupBy(actionName => actionName, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .OrderBy(actionName => actionName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (duplicateActionNames.Length > 0)
+        {
+            yield return new ValidationResult(
+                "Action names must be unique across 'Servers'. Duplicates: " +
+                string.Join(", ", duplicateActionNames),
+                [nameof(Servers)]);
+        }
     }
 
-    private static string ResolveServerTypeName(ServerConfig serverConfig)
+    private IReadOnlyList<ServerConfig> ResolveConfiguredServers()
     {
-        if (serverConfig.Http != null)
-            return "Http";
-        if (serverConfig.Grpc != null)
-            return "Grpc";
-        if (serverConfig.Socket != null)
-            return "Socket";
+        if (Servers.Length > 0)
+            return Servers;
+        return Server == null ? [] : [Server];
+    }
 
-        return "Unknown";
+    private static IEnumerable<string> ResolveActionNames(IEnumerable<ServerConfig> serverConfigs)
+    {
+        foreach (var serverConfig in serverConfigs)
+        {
+            if (serverConfig.Http?.Endpoints != null)
+            {
+                foreach (var actionName in serverConfig.Http.Endpoints
+                             .SelectMany(endpoint => endpoint.Actions)
+                             .Select(action => action.Name)
+                             .Where(actionName => !string.IsNullOrWhiteSpace(actionName)))
+                {
+                    yield return actionName!;
+                }
+            }
+
+            if (serverConfig.Grpc?.Services != null)
+            {
+                foreach (var actionName in serverConfig.Grpc.Services
+                             .SelectMany(service => service.Actions.Select(action => action.Name ?? $"{service.ServiceName}.{action.RpcName}")))
+                {
+                    yield return actionName;
+                }
+            }
+
+            if (serverConfig.Socket?.Endpoints != null)
+            {
+                foreach (var actionName in serverConfig.Socket.Endpoints
+                             .Select(endpoint => endpoint.Action?.Name)
+                             .Where(actionName => !string.IsNullOrWhiteSpace(actionName)))
+                {
+                    yield return actionName!;
+                }
+            }
+        }
+    }
+
+    private static string ResolveServerTypesSummary(IEnumerable<ServerConfig> serverConfigs)
+    {
+        return string.Join(", ", serverConfigs.Select(serverConfig => serverConfig.Type));
     }
 
     private InternalContext CloneContext(ILogger? logger = null, IConfiguration? rootConfiguration = null)

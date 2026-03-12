@@ -12,5 +12,6 @@ public static class Constants
         "Stubs",
         "Controller",
         "Server",
+        "Servers",
     ];
 }

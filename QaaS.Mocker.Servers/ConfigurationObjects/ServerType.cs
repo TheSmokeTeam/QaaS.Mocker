@@ -2,7 +2,8 @@ namespace QaaS.Mocker.Servers.ConfigurationObjects;
 
 public enum ServerType
 {
-    Http,
-    Grpc,
-    Socket
+    Unknown = 0,
+    Http = 1,
+    Grpc = 2,
+    Socket = 3
 }

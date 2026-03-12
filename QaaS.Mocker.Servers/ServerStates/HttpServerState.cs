@@ -14,8 +14,7 @@ using HttpMethod = QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs.Ht
 namespace QaaS.Mocker.Servers.ServerStates;
 
 /// <summary>
-/// TODO change docs
-/// Resolves transaction stubs and processes request data.
+/// Resolves HTTP actions to transaction stubs and processes request data.
 /// </summary>
 public class HttpServerState : IServerState
 {
@@ -199,6 +198,12 @@ public class HttpServerState : IServerState
         }
 
         return responseData;
+    }
+
+    public bool HasAction(string actionName)
+    {
+        return _actionToStubList.Any(pair =>
+            string.Equals(pair.ActionName, actionName, StringComparison.OrdinalIgnoreCase));
     }
 
     public void ChangeActionStub(string actionName, string stubName)

@@ -176,6 +176,37 @@ public class MockerLoaderTests
         }
     }
 
+    [Test]
+    public void GetLoadedContext_WithMultiServerEnvironmentOverride_AppliesEnvironmentVariable()
+    {
+        const string environmentVariableName = "Servers__0__Type";
+        var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, "Grpc");
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Servers:
+                  - Type: Http
+                    Http:
+                      Port: 8443
+                """);
+            var loader = new MockerLoader(new MockerOptions
+            {
+                ConfigurationFile = configFile
+            });
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.That(context.RootConfiguration["Servers:0:Type"], Is.EqualTo("Grpc"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, originalValue);
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     private static InternalContext InvokeGetLoadedContext(MockerLoader loader)
     {
         var getLoadedContextMethod = typeof(MockerLoader)
