@@ -111,6 +111,71 @@ public class MockerLoaderTests
         }
     }
 
+    [Test]
+    public void GetLoadedContext_WithScopedEnvironmentOverride_AppliesEnvironmentVariable()
+    {
+        const string environmentVariableName = "Server__Type";
+        var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, "Grpc");
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Type: Http
+                """);
+            var loader = new MockerLoader(new MockerOptions
+            {
+                ConfigurationFile = configFile
+            });
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Grpc"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, originalValue);
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void GetLoadedContext_WithUnrelatedEnvironmentVariable_IgnoresIt()
+    {
+        const string environmentVariableName = "JETBRAINS_INTELLIJ_ASK_PSREADLINE_UPDATE";
+        var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, "1");
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Type: Http
+                  Http:
+                    Port: 8443
+                """);
+            var loader = new MockerLoader(new MockerOptions
+            {
+                ConfigurationFile = configFile
+            });
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(context.RootConfiguration["JETBRAINS_INTELLIJ_ASK_PSREADLINE_UPDATE"], Is.Null);
+                Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Http"));
+                Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
+            });
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, originalValue);
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     private static InternalContext InvokeGetLoadedContext(MockerLoader loader)
     {
         var getLoadedContextMethod = typeof(MockerLoader)

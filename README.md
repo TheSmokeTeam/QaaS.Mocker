@@ -74,7 +74,7 @@ dotnet restore
 ```
 
 ## Run the Example
-The example uses relative paths for certificates, sample data, and socket payloads, so run it from [`QaaS.Mocker.Example`](./QaaS.Mocker.Example/).
+The example uses relative paths for certificates, sample data, and socket payloads, so run it from [`QaaS.Mocker.Example`](./QaaS.Mocker.Example/). The example entry point also disables environment-variable overrides by default so IDE terminal variables do not rewrite the sample configuration.
 
 1. Open a terminal in the example directory.
 
@@ -88,29 +88,28 @@ Set-Location .\QaaS.Mocker.Example
 dotnet dev-certs https -ep .\Certificates\devcert.pfx -p qaas-dev-cert
 ```
 
-3. Lint the HTTP sample before starting it.
+3. Start the HTTP sample.
 
 ```powershell
-dotnet run -- --mode Lint mocker.qaas.yaml
+dotnet run -- run mocker.qaas.yaml
 ```
 
-4. Start the HTTP sample.
-
-```powershell
-dotnet run -- mocker.qaas.yaml
-```
-
-5. In a second terminal, call the sample endpoint.
+4. In a second terminal, call the sample endpoint.
 
 ```powershell
 curl.exe -k https://127.0.0.1:8443/health
 ```
 
-6. Lint and start the gRPC sample in the same way when you want to test the gRPC configuration.
+5. Generate the effective HTTP configuration without using `--mode`.
 
 ```powershell
-dotnet run -- --mode Lint mocker.grpc.qaas.yaml
-dotnet run -- mocker.grpc.qaas.yaml
+dotnet run -- template mocker.qaas.yaml
+```
+
+6. Start the gRPC sample the same way.
+
+```powershell
+dotnet run -- run mocker.grpc.qaas.yaml
 ```
 
 7. If you have [`grpcurl`](https://github.com/fullstorydev/grpcurl) installed, you can call the gRPC sample from Git Bash, WSL, or another POSIX-style shell with:

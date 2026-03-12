@@ -1,5 +1,7 @@
+using System.Collections;
 using Autofac;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using QaaS.Framework.Executions.Loaders;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Mocker.Options;
@@ -12,6 +14,7 @@ namespace QaaS.Mocker.Loaders;
 public class MockerLoader : BaseLoader<MockerOptions, Mocker>, IDisposable
 {
     private readonly ILifetimeScope _runScope;
+    private static readonly string[] SupportedEnvironmentSeparators = [":", "__"];
 
     /// <summary>
     /// Initializes a new loader instance from parsed CLI options.
@@ -41,7 +44,7 @@ public class MockerLoader : BaseLoader<MockerOptions, Mocker>, IDisposable
         foreach (var overwriteArgument in Options.OverwriteArguments ?? [])
             contextBuilder.WithOverwriteArgument(overwriteArgument);
         if (!Options.DontResolveWithEnvironmentVariables)
-            contextBuilder.WithEnvironmentVariableResolution();
+            ApplyEnvironmentOverrides(contextBuilder);
         return contextBuilder.BuildInternal();
     }
 
@@ -82,5 +85,55 @@ public class MockerLoader : BaseLoader<MockerOptions, Mocker>, IDisposable
     public void Dispose()
     {
         _runScope.Dispose();
+    }
+
+    /// <summary>
+    /// Applies only explicit configuration-like environment variables so unrelated IDE/runtime
+    /// variables do not pollute the execution builder.
+    /// </summary>
+    private void ApplyEnvironmentOverrides(ContextBuilder contextBuilder)
+    {
+        var appliedOverrides = 0;
+        foreach (DictionaryEntry environmentVariable in Environment.GetEnvironmentVariables())
+        {
+            var environmentVariableName = environmentVariable.Key?.ToString();
+            var environmentVariableValue = environmentVariable.Value?.ToString();
+            if (string.IsNullOrWhiteSpace(environmentVariableName) || environmentVariableValue == null)
+                continue;
+
+            if (!TryMapEnvironmentVariableToConfigurationPath(environmentVariableName, out var configurationPath))
+                continue;
+
+            contextBuilder.WithOverwriteArgument($"{configurationPath}={environmentVariableValue}");
+            appliedOverrides++;
+        }
+
+        if (appliedOverrides > 0)
+            Logger.LogInformation("Applied {EnvironmentOverrideCount} environment override(s)", appliedOverrides);
+    }
+
+    private static bool TryMapEnvironmentVariableToConfigurationPath(
+        string environmentVariableName,
+        out string configurationPath)
+    {
+        foreach (var separator in SupportedEnvironmentSeparators)
+        {
+            var pathSegments = environmentVariableName
+                .Split([separator], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (pathSegments.Length == 0)
+                continue;
+
+            if (!Constants.ConfigurationSectionNames.Any(sectionName =>
+                    string.Equals(sectionName, pathSegments[0], StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            configurationPath = string.Join(':', pathSegments);
+            return true;
+        }
+
+        configurationPath = string.Empty;
+        return false;
     }
 }
