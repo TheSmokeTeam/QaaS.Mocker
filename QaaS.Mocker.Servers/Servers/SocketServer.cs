@@ -21,12 +21,15 @@ public class SocketServer : IServer
 {
     private readonly ILogger _logger;
     private readonly Dictionary<IPEndPoint, Socket> _socketServers = new();
+    private readonly ConcurrentDictionary<Task, byte> _activeProcessingTasks = new();
     // UDP endpoints share the bound server socket, so only one receive/send loop may own them at a time.
     private readonly ConcurrentDictionary<IPEndPoint, byte> _activeDatagramEndpoints = new();
     private readonly SocketServerState _socketServerState;
     private readonly SocketServerConfig _configuration;
-    private Semaphore _semaphore;
+    private SemaphoreSlim _semaphore;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
+    private readonly Lock _fatalExceptionLock = new();
+    private Exception? _fatalException;
     public IServerState State { get; init; }
 
     /// <summary>
@@ -90,7 +93,7 @@ public class SocketServer : IServer
     private void InitializeSemaphore(int connectionAcceptanceValue)
     {
         var maxConnections = Environment.ProcessorCount * connectionAcceptanceValue;
-        _semaphore = new Semaphore(maxConnections, maxConnections);
+        _semaphore = new SemaphoreSlim(maxConnections, maxConnections);
         _logger.LogDebug("Connection Acceptance Semaphore initialized with max connections of {MaxConnections}",
             maxConnections);
     }
@@ -112,7 +115,7 @@ public class SocketServer : IServer
         socketServer.ReceiveTimeout = endpointConfig.TimeoutMs.GetValueOrDefault();
         if (endpointConfig.ProtocolType == ProtocolType.Tcp)
         {
-            socketServer.NoDelay = endpointConfig.NagleAlgorithm;
+            socketServer.NoDelay = !endpointConfig.NagleAlgorithm;
             socketServer.LingerState = new LingerOption(endpointConfig.LingerTimeSeconds.HasValue,
                 endpointConfig.LingerTimeSeconds.GetValueOrDefault());
         }
@@ -143,17 +146,59 @@ public class SocketServer : IServer
             Environment.ProcessorCount * _configuration.ConnectionAcceptanceValue,
             string.Join(", ", _socketServers.Keys));
 
-        // Each endpoint owns its own processing loop. UDP endpoints are scheduled single-flight
-        // because they reuse the bound server socket, while TCP endpoints can accept repeatedly.
+        var endpointTasks = _socketServers.Keys.Select(RunEndpointLoopAsync).ToArray();
+        try
+        {
+            Task.WhenAll(endpointTasks).GetAwaiter().GetResult();
+            Task.WhenAll(_activeProcessingTasks.Keys).GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException) when (_cancellationTokenSource.IsCancellationRequested && _fatalException == null)
+        {
+            _logger.LogInformation("Socket server processing loop was canceled.");
+        }
+
+        if (_fatalException != null)
+        {
+            throw new IOException("Socket server stopped because a fatal processing error was encountered.",
+                _fatalException);
+        }
+    }
+
+    private Task RunEndpointLoopAsync(IPEndPoint endpoint)
+    {
+        return _socketServers[endpoint].ProtocolType == ProtocolType.Udp
+            ? RunDatagramEndpointLoopAsync(endpoint)
+            : RunTcpEndpointLoopAsync(endpoint);
+    }
+
+    private async Task RunDatagramEndpointLoopAsync(IPEndPoint endpoint)
+    {
         while (!_cancellationTokenSource.IsCancellationRequested)
         {
-            foreach (var endpoint in _socketServers.Keys)
-            {
-                if (!TryBeginEndpointProcessing(endpoint))
-                    continue;
+            await _semaphore.WaitAsync(_cancellationTokenSource.Token);
+            await ProcessChannel(_socketServers[endpoint], endpoint);
+        }
+    }
 
-                _semaphore.WaitOne();
-                _ = Task.Run(() => ProcessChannel(GetAcceptedClientChannelAsync(endpoint), endpoint));
+    private async Task RunTcpEndpointLoopAsync(IPEndPoint endpoint)
+    {
+        while (!_cancellationTokenSource.IsCancellationRequested)
+        {
+            await _semaphore.WaitAsync(_cancellationTokenSource.Token);
+            try
+            {
+                var channel = await GetAcceptedClientChannelAsync(endpoint, _cancellationTokenSource.Token);
+                TrackProcessingTask(ProcessChannel(channel, endpoint));
+            }
+            catch (OperationCanceledException) when (_cancellationTokenSource.IsCancellationRequested)
+            {
+                _semaphore.Release();
+                break;
+            }
+            catch
+            {
+                _semaphore.Release();
+                throw;
             }
         }
     }
@@ -168,7 +213,7 @@ public class SocketServer : IServer
         }
         while (!_socketServerState.IsEndpointPortActionEnabled(endpoint.Port))
         {
-            await Task.Delay(5);
+            await Task.Delay(5, _cancellationTokenSource.Token);
         }
         _logger.LogDebug(
             "Socket endpoint '{Endpoint}' action '{ActionName}' is enabled and ready to process",
@@ -178,15 +223,13 @@ public class SocketServer : IServer
     /// <summary>
     /// Processes the Socket channel communications each asynchronously.
     /// </summary>
-    /// <param name="task">Task representing Socket channel.</param>
+    /// <param name="channel">Accepted socket channel or shared datagram socket.</param>
     /// <param name="endpoint">The endpoint to perform methods by.</param>
     /// <exception cref="ArgumentException">Raised when no method is resolved to perform for the endpoint.</exception>
-    private async Task ProcessChannel(Task<Socket> task, IPEndPoint endpoint)
+    private async Task ProcessChannel(Socket channel, IPEndPoint endpoint)
     {
-        Socket? channel = null;
         try
         {
-            channel = await task;
             _logger.LogInformation(
                 "Starting socket processing for endpoint '{Endpoint}' action '{ActionName}' using channel '{ChannelEndPoint}'",
                 endpoint, ResolveActionName(endpoint), DescribeChannel(channel));
@@ -203,10 +246,11 @@ public class SocketServer : IServer
         }
         catch (Exception exception)
         {
+            RecordFatalException(exception);
             await _cancellationTokenSource.CancelAsync();
+            DisposeServerSockets();
             _logger.LogCritical(exception,
                 "Encountered critical Socket server communication error, shutting down server.");
-            Environment.Exit(1);
         }
         finally
         {
@@ -225,19 +269,18 @@ public class SocketServer : IServer
     /// socket - connection channel is based on the socket's bound-channel.
     /// </summary>
     /// <param name="endpoint">The ipv4 endpoint to accept clients connections to.</param>
+    /// <param name="cancellationToken">Token used to stop pending accepts during shutdown.</param>
     /// <returns>Task representing Socket channel to communicate on.</returns>
-    private Task<Socket> GetAcceptedClientChannelAsync(IPEndPoint endpoint)
+    private async Task<Socket> GetAcceptedClientChannelAsync(IPEndPoint endpoint, CancellationToken cancellationToken)
     {
-        return Task.Run(async () =>
-        {
-            if (_socketServers[endpoint].ProtocolType == ProtocolType.Udp)
-                return _socketServers[endpoint];
-            var channel = await _socketServers[endpoint].AcceptAsync();
-            _logger.LogInformation(
-                "Socket endpoint '{LocalEndPoint}' accepted connection from '{RemoteEndPoint}' for action '{ActionName}' method '{SocketMethod}'",
-                endpoint, channel.RemoteEndPoint, ResolveActionName(endpoint), ResolveSocketMethod(endpoint));
-            return channel;
-        });
+        if (_socketServers[endpoint].ProtocolType == ProtocolType.Udp)
+            return _socketServers[endpoint];
+
+        var channel = await _socketServers[endpoint].AcceptAsync(cancellationToken);
+        _logger.LogInformation(
+            "Socket endpoint '{LocalEndPoint}' accepted connection from '{RemoteEndPoint}' for action '{ActionName}' method '{SocketMethod}'",
+            endpoint, channel.RemoteEndPoint, ResolveActionName(endpoint), ResolveSocketMethod(endpoint));
+        return channel;
     }
 
     private async Task HandleBroadcast(Socket socket, IPEndPoint localEndpoint)
@@ -360,6 +403,35 @@ public class SocketServer : IServer
     {
         return _configuration.Endpoints!.First(config => config.Port == endpoint.Port).Action?.Method ??
                throw new ArgumentException($"Could not resolve socket method for endpoint {endpoint}");
+    }
+
+    private void TrackProcessingTask(Task task)
+    {
+        _activeProcessingTasks[task] = 0;
+        _ = task.ContinueWith(completedTask => _activeProcessingTasks.TryRemove(completedTask, out _),
+            TaskScheduler.Default);
+    }
+
+    private void RecordFatalException(Exception exception)
+    {
+        using (_fatalExceptionLock.EnterScope())
+        {
+            _fatalException ??= exception;
+        }
+    }
+
+    private void DisposeServerSockets()
+    {
+        foreach (var socket in _socketServers.Values)
+        {
+            try
+            {
+                socket.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
     }
 
     private string ResolveActionName(IPEndPoint endpoint)

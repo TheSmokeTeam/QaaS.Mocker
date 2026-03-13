@@ -45,4 +45,20 @@ public class SocketExtensionsTests
 
         Assert.That(Encoding.UTF8.GetString(bytes!), Is.EqualTo("udp"));
     }
+
+    [Test]
+    public async Task GetBytesFromChannelWithinTimeout_WithNoTcpPayload_ReturnsNullAfterTimeout()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+
+        using var client = new TcpClient();
+        var connectTask = client.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port);
+        using var serverSocket = await listener.AcceptSocketAsync();
+        await connectTask;
+
+        var bytes = serverSocket.GetBytesFromChannelWithinTimeout(50, 1024, logger: Globals.Logger);
+
+        Assert.That(bytes, Is.Null);
+    }
 }

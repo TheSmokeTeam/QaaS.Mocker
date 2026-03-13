@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace QaaS.Mocker.Servers.Extensions;
@@ -40,13 +41,31 @@ public static class SocketExtensions
     public static byte[]? GetBytesFromChannelWithinTimeout(this Socket channel, int timeout,
         int bufferSize, EndPoint? endpoint = null, ILogger? logger = null)
     {
-        using var cts = new CancellationTokenSource(timeout);
-        while (!cts.IsCancellationRequested)
+        var timeoutStopwatch = Stopwatch.StartNew();
+        while (timeoutStopwatch.ElapsedMilliseconds < timeout)
         {
-            // Getting the message buffer from Socket communication.
-            if (channel is { Available: 0, IsBound: true } && endpoint == null) continue;
+            var remainingTimeoutMs = Math.Max(1, timeout - (int)timeoutStopwatch.ElapsedMilliseconds);
+            var pollTimeoutMicroseconds = Math.Min(remainingTimeoutMs, 50) * 1000;
+            try
+            {
+                if (!channel.Poll(pollTimeoutMicroseconds, SelectMode.SelectRead))
+                    continue;
+            }
+            catch (SocketException socketException)
+            {
+                logger?.LogDebug(socketException,
+                    "Socket poll failed on local endpoint '{LocalEndPoint}' and remote endpoint '{RemoteEndPoint}'",
+                    DescribeEndPoint(channel.LocalEndPoint), DescribeEndPoint(endpoint ?? TryGetRemoteEndPoint(channel)));
+                return null;
+            }
+            catch (ObjectDisposedException)
+            {
+                return null;
+            }
+
             var message = channel.GetDataAsBytesFromChannel(bufferSize, endpoint, logger);
-            if (message.Length <= 0) continue;
+            if (message.Length <= 0)
+                continue;
             logger?.LogDebug(
                 "Received {NumberOfReceivedBytes} bytes on local endpoint '{LocalEndPoint}' from remote endpoint '{RemoteEndPoint}'",
                 message.Length,

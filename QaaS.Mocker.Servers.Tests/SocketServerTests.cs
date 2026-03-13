@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using NUnit.Framework;
 using QaaS.Framework.SDK.DataSourceObjects;
@@ -93,6 +94,40 @@ public class SocketServerTests
             Assert.That(server.TryBeginEndpointProcessing(endpoint), Is.True);
             Assert.That(server.TryBeginEndpointProcessing(endpoint), Is.True);
         });
+    }
+
+    [Test]
+    public void Constructor_WithTcpNagleEnabled_ConfiguresSocketNoDelayToFalse()
+    {
+        var server = new SocketServer(
+            new SocketServerConfig
+            {
+                Endpoints =
+                [
+                    new SocketEndpointConfig
+                    {
+                        Port = 7001,
+                        ProtocolType = ProtocolType.Tcp,
+                        SocketType = SocketType.Stream,
+                        TimeoutMs = 100,
+                        NagleAlgorithm = true,
+                        Action = new SocketActionConfig
+                        {
+                            Name = "CollectA",
+                            Method = SocketMethod.Collect
+                        }
+                    }
+                ]
+            },
+            Globals.Logger,
+            ImmutableList<TransactionStub>.Empty,
+            ImmutableList<DataSource>.Empty);
+
+        var socketServers = (Dictionary<IPEndPoint, Socket>)typeof(SocketServer)
+            .GetField("_socketServers", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(server)!;
+
+        Assert.That(socketServers.Single().Value.NoDelay, Is.False);
     }
 
     [Test]
