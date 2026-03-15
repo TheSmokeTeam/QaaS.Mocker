@@ -1,5 +1,11 @@
 <Project>
   <PropertyGroup>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <DeterministicSourcePaths>true</DeterministicSourcePaths>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <NoWarn>$(NoWarn);1591;CS0168;CS0618;CS8602;CS8603;CS8604;CS8618;CS9107;SYSLIB0057;NU5104</NoWarn>
   </PropertyGroup>
 </Project>
