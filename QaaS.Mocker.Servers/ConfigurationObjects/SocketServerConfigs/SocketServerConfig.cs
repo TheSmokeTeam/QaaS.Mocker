@@ -4,6 +4,7 @@ using QaaS.Framework.Configurations.CustomValidationAttributes;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record SocketServerConfig
 {
     [DefaultValue("0.0.0.0"), Description("Subnet ipv4 mask to bind socket client's connection to")]
@@ -15,11 +16,13 @@ public record SocketServerConfig
     public int ConnectionAcceptanceValue { get; set; } = 8;
 
     [Required, UniquePropertyInEnumerable(nameof(SocketEndpointConfig.Port)), MinLength(1),
-     UniqueActionNameInAllEndpoints, // TODO - merge attribute and maybe endpoint typed records
+     UniqueActionNameInAllEndpoints, BroadcastOverUdpNotSupported, SocketTypeMatchesProtocol,
+     // TODO - merge attribute and maybe endpoint typed records
      Description("All socket endpoint-implementation which handled by the socket server")]
     public SocketEndpointConfig[]? Endpoints { get; set; }
 }
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class UniqueActionNameInAllEndpointsAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
@@ -44,6 +47,61 @@ internal class UniqueActionNameInAllEndpointsAttribute : ValidationAttribute
         return actionNamesDuplicates.Length > 0
             ? new ValidationResult($"Duplication in the following Action Names: " +
                                    $"{string.Join(", ", actionNamesDuplicates)}")
+            : ValidationResult.Success;
+    }
+}
+
+/// <summary>
+/// Rejects UDP broadcast endpoints up front because the current socket runtime has no remote
+/// destination to send to for that mode.
+/// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
+internal class BroadcastOverUdpNotSupportedAttribute : ValidationAttribute
+{
+    protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
+    {
+        if (value is not IEnumerable<SocketEndpointConfig> endpoints)
+            return ValidationResult.Success;
+
+        var invalidPorts = endpoints
+            .Where(endpoint => endpoint.ProtocolType == System.Net.Sockets.ProtocolType.Udp &&
+                               endpoint.Action?.Method == SocketMethod.Broadcast)
+            .Select(endpoint => endpoint.Port)
+            .Where(port => port.HasValue)
+            .Select(port => port!.Value)
+            .ToArray();
+
+        return invalidPorts.Length > 0
+            ? new ValidationResult("Broadcast socket endpoints do not support UDP. Invalid ports: " +
+                                   string.Join(", ", invalidPorts))
+            : ValidationResult.Success;
+    }
+}
+
+/// <summary>
+/// Rejects protocol/socket-type combinations that would otherwise fail later with opaque
+/// platform socket exceptions during server construction.
+/// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
+internal class SocketTypeMatchesProtocolAttribute : ValidationAttribute
+{
+    protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
+    {
+        if (value is not IEnumerable<SocketEndpointConfig> endpoints)
+            return ValidationResult.Success;
+
+        var invalidPorts = endpoints
+            .Where(endpoint =>
+                endpoint.ProtocolType == System.Net.Sockets.ProtocolType.Udp && endpoint.SocketType != System.Net.Sockets.SocketType.Dgram ||
+                endpoint.ProtocolType == System.Net.Sockets.ProtocolType.Tcp && endpoint.SocketType != System.Net.Sockets.SocketType.Stream)
+            .Select(endpoint => endpoint.Port)
+            .Where(port => port.HasValue)
+            .Select(port => port!.Value)
+            .ToArray();
+
+        return invalidPorts.Length > 0
+            ? new ValidationResult("Socket endpoint protocol and socket type must match. Invalid ports: " +
+                                   string.Join(", ", invalidPorts))
             : ValidationResult.Success;
     }
 }

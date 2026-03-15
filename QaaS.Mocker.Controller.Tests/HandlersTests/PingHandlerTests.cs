@@ -1,13 +1,12 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
+using QaaS.Framework.SDK.ConfigurationObjects;
 using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Ping;
 using QaaS.Mocker.Controller.Handlers;
 using QaaS.Mocker.Servers.Caches;
 using QaaS.Mocker.Servers.ServerStates;
 using StackExchange.Redis;
-using ResponseInputOutputState = Qaas.Mocker.CommunicationObjects.ConfigurationObjects.InputOutputState;
-using ServerInputOutputState = QaaS.Framework.SDK.ConfigurationObjects.InputOutputState;
 
 namespace QaaS.Mocker.Controller.Tests.HandlersTests;
 
@@ -26,13 +25,13 @@ public class PingHandlerTests
         });
     }
 
-    [TestCase(ServerInputOutputState.NoInputOutput, ResponseInputOutputState.NoInputOutput)]
-    [TestCase(ServerInputOutputState.OnlyInput, ResponseInputOutputState.OnlyInput)]
-    [TestCase(ServerInputOutputState.OnlyOutput, ResponseInputOutputState.OnlyOutput)]
-    [TestCase(ServerInputOutputState.BothInputOutput, ResponseInputOutputState.BothInputOutput)]
+    [TestCase(InputOutputState.NoInputOutput, InputOutputState.NoInputOutput)]
+    [TestCase(InputOutputState.OnlyInput, InputOutputState.OnlyInput)]
+    [TestCase(InputOutputState.OnlyOutput, InputOutputState.OnlyOutput)]
+    [TestCase(InputOutputState.BothInputOutput, InputOutputState.BothInputOutput)]
     public void HandleRequest_ReturnsServerIdentityAndInputOutputState(
-        ServerInputOutputState inputOutputState,
-        ResponseInputOutputState expectedResponseState)
+        InputOutputState inputOutputState,
+        InputOutputState expectedResponseState)
     {
         var handler = CreateHandler("server-a", "instance-42", inputOutputState);
 
@@ -51,7 +50,7 @@ public class PingHandlerTests
     private static TestablePingHandler CreateHandler(
         string serverName,
         string serverInstanceId,
-        ServerInputOutputState inputOutputState = ServerInputOutputState.BothInputOutput)
+        InputOutputState inputOutputState = InputOutputState.BothInputOutput)
     {
         var cache = new Mock<ICache>();
         var serverState = new Mock<IServerState>();

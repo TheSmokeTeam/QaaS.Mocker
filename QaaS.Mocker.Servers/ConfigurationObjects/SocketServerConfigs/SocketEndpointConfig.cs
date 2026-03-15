@@ -4,6 +4,7 @@ using System.Net.Sockets;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record SocketEndpointConfig
 {
     [Required, Range(0, 65535), Description("Port that socket listenes and binds connection to")]

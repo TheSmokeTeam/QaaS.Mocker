@@ -6,6 +6,7 @@ using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Command;
 using QaaS.Mocker.Controller.Handlers;
 using QaaS.Mocker.Servers.Caches;
 using QaaS.Mocker.Servers.ServerStates;
+using System.Reflection;
 using StackExchange.Redis;
 
 namespace QaaS.Mocker.Controller.Tests.HandlersTests;
@@ -126,6 +127,26 @@ public class CommandHandlerTests
     }
 
     [Test]
+    public void HandleRequest_WithMissingTriggerActionPayload_ReturnsFailed()
+    {
+        var (handler, serverState, _, _) = CreateHandler();
+
+        var response = handler.Invoke(new CommandRequest
+        {
+            Id = "req-2a",
+            Command = CommandType.TriggerAction
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response, Is.Not.Null);
+            Assert.That(response!.Status, Is.EqualTo(Status.Failed));
+            Assert.That(response.ExceptionMessage, Does.Contain("TriggerAction payload is required"));
+        });
+        serverState.Verify(state => state.TriggerAction(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
+    }
+
+    [Test]
     public void HandleRequest_WithValidChangeActionStub_CallsServerStateAndReturnsSucceeded()
     {
         var (handler, serverState, _, _) = CreateHandler();
@@ -207,7 +228,7 @@ public class CommandHandlerTests
         var allMessagesPushed = new ManualResetEventSlim(false);
         var (handler, _, database, _) = CreateHandler(cache, InputOutputState.BothInputOutput, serverName: "SERVER-A");
         database
-            .Setup(db => db.ListRightPush(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+            .Setup(db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
                 It.IsAny<CommandFlags>()))
             .Callback<RedisKey, RedisValue, When, CommandFlags>((queue, value, _, _) =>
             {
@@ -218,7 +239,7 @@ public class CommandHandlerTests
                         allMessagesPushed.Set();
                 }
             })
-            .Returns(1);
+            .ReturnsAsync(1);
 
         var response = handler.Invoke(new CommandRequest
         {
@@ -252,7 +273,7 @@ public class CommandHandlerTests
         var inputPushed = new ManualResetEventSlim(false);
         var (handler, _, database, _) = CreateHandler(cache, InputOutputState.OnlyInput, serverName: "server-b");
         database
-            .Setup(db => db.ListRightPush(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+            .Setup(db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
                 It.IsAny<CommandFlags>()))
             .Callback<RedisKey, RedisValue, When, CommandFlags>((queue, value, _, _) =>
             {
@@ -262,7 +283,7 @@ public class CommandHandlerTests
                     inputPushed.Set();
                 }
             })
-            .Returns(1);
+            .ReturnsAsync(1);
 
         var response = handler.Invoke(new CommandRequest
         {
@@ -296,7 +317,7 @@ public class CommandHandlerTests
         var outputPushed = new ManualResetEventSlim(false);
         var (handler, _, database, _) = CreateHandler(cache, InputOutputState.OnlyOutput, serverName: "server-c");
         database
-            .Setup(db => db.ListRightPush(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+            .Setup(db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
                 It.IsAny<CommandFlags>()))
             .Callback<RedisKey, RedisValue, When, CommandFlags>((queue, value, _, _) =>
             {
@@ -306,7 +327,7 @@ public class CommandHandlerTests
                     outputPushed.Set();
                 }
             })
-            .Returns(1);
+            .ReturnsAsync(1);
 
         var response = handler.Invoke(new CommandRequest
         {
@@ -352,7 +373,74 @@ public class CommandHandlerTests
         });
         Thread.Sleep(150);
         database.Verify(
-            db => db.ListRightPush(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+            db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+                It.IsAny<CommandFlags>()),
+            Times.Never);
+    }
+
+    [Test]
+    public void HandleRequest_WithConsumePushFailure_ReturnsFailedAndAllowsRetry()
+    {
+        var cache = new TestCache
+        {
+            InputValues = ["input-a"]
+        };
+
+        var (handler, _, database, _) = CreateHandler(cache, InputOutputState.OnlyInput, serverName: "server-e");
+        database
+            .SetupSequence(db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+                It.IsAny<CommandFlags>()))
+            .ThrowsAsync(new RedisException("push-failed"))
+            .ReturnsAsync(1);
+
+        var failedResponse = handler.Invoke(new CommandRequest
+        {
+            Id = "consume-failed",
+            Command = CommandType.Consume,
+            Consume = new Consume { TimeoutMs = 50 }
+        });
+
+        cache.ReplaceInputValues(["input-b"]);
+        var succeededResponse = handler.Invoke(new CommandRequest
+        {
+            Id = "consume-retry",
+            Command = CommandType.Consume,
+            Consume = new Consume { TimeoutMs = 50 }
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(failedResponse, Is.Not.Null);
+            Assert.That(failedResponse!.Status, Is.EqualTo(Status.Failed));
+            Assert.That(failedResponse.ExceptionMessage, Does.Contain("push-failed"));
+            Assert.That(succeededResponse, Is.Not.Null);
+            Assert.That(succeededResponse!.Status, Is.EqualTo(Status.Succeeded));
+        });
+    }
+
+    [Test]
+    public void HandleRequest_WithDuplicateConsumeWhileActive_ReturnsSucceededWithoutPushingMessages()
+    {
+        var (handler, _, database, _) = CreateHandler(new TestCache { InputValues = ["input-a"] },
+            InputOutputState.OnlyInput, "server-f");
+        typeof(CommandHandler)
+            .GetField("_consumeState", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(handler, 1);
+
+        var response = handler.Invoke(new CommandRequest
+        {
+            Id = "consume-duplicate",
+            Command = CommandType.Consume,
+            Consume = new Consume { TimeoutMs = 120 }
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response, Is.Not.Null);
+            Assert.That(response!.Status, Is.EqualTo(Status.Succeeded));
+        });
+        database.Verify(
+            db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
                 It.IsAny<CommandFlags>()),
             Times.Never);
     }
@@ -420,6 +508,26 @@ public class CommandHandlerTests
             init
             {
                 foreach (var item in value)
+                    _output.Enqueue(item);
+            }
+        }
+
+        public void ReplaceInputValues(IEnumerable<string> values)
+        {
+            lock (_lock)
+            {
+                _input.Clear();
+                foreach (var item in values)
+                    _input.Enqueue(item);
+            }
+        }
+
+        public void ReplaceOutputValues(IEnumerable<string> values)
+        {
+            lock (_lock)
+            {
+                _output.Clear();
+                foreach (var item in values)
                     _output.Enqueue(item);
             }
         }

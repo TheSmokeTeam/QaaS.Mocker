@@ -7,28 +7,81 @@ namespace QaaS.Mocker.Servers.Actions;
 /// <typeparam name="TStateIndicator">State indicator object to rely on in the server's functionality.</typeparam>
 public class ActionState<TStateIndicator> : ActionToTransactionStub
 {
-    public bool Enabled { get; set; }
+    private readonly Lock _syncLock = new();
+    private CancellationTokenSource? _disableCancellation;
+    private long _activationVersion;
+    private int _enabledState;
+
+    /// <summary>
+    /// Baseline enablement for the action when no temporary trigger window is active.
+    /// Collect endpoints use <c>true</c> so they can receive immediately, while broadcast endpoints
+    /// typically remain disabled until an explicit trigger command arrives.
+    /// </summary>
+    public bool DefaultEnabled { get; init; }
+
+    /// <summary>
+    /// Thread-safe enabled flag used by the server runtime.
+    /// </summary>
+    public bool Enabled
+    {
+        get => Volatile.Read(ref _enabledState) == 1;
+        set => Volatile.Write(ref _enabledState, value ? 1 : 0);
+    }
 
     public TStateIndicator State { get; set; }
 
     /// <summary>
-    /// Action will hold state of enabled for given interval in milliseconds in order to be triggered.
+    /// Temporarily enables the action for the given interval in milliseconds.
+    /// Newer trigger commands supersede older ones, so only the latest activation window is allowed
+    /// to restore the action back to <see cref="DefaultEnabled"/>.
     /// </summary>
     public async Task SetEnabledForTimeoutMs(int timeoutMs)
     {
-        Enabled = true;
-        using var cts = new CancellationTokenSource(timeoutMs);
+        CancellationToken cancellationToken;
+        long activationVersion;
+
+        using (_syncLock.EnterScope())
+        {
+            // Replace the previous timeout source so an older trigger cannot disable a newer one.
+            _disableCancellation?.Cancel();
+            _disableCancellation?.Dispose();
+            _disableCancellation = new CancellationTokenSource();
+            cancellationToken = _disableCancellation.Token;
+            activationVersion = ++_activationVersion;
+            Enabled = true;
+        }
+
+        if (timeoutMs <= 0)
+        {
+            DisableIfCurrentActivation(activationVersion, cancellationToken);
+            return;
+        }
+
         try
         {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
+            await Task.Delay(timeoutMs, cancellationToken);
         }
         catch (OperationCanceledException)
         {
-            // Expected cancellation when timeout elapsed.
+            // Expected when a newer trigger supersedes the current one.
         }
         finally
         {
-            Enabled = false;
+            DisableIfCurrentActivation(activationVersion, cancellationToken);
+        }
+    }
+
+    private void DisableIfCurrentActivation(long activationVersion, CancellationToken cancellationToken)
+    {
+        using (_syncLock.EnterScope())
+        {
+            // Ignore completions from superseded trigger windows.
+            if (activationVersion != _activationVersion || cancellationToken.IsCancellationRequested)
+                return;
+
+            _disableCancellation?.Dispose();
+            _disableCancellation = null;
+            Enabled = DefaultEnabled;
         }
     }
 }

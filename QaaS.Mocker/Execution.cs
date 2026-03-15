@@ -27,7 +27,9 @@ public class Execution : BaseExecution
 
     public override int Start()
     {
-        Context.Logger.LogInformation("Running Mocker in {ExecutionMode} mode", _executionMode);
+        Context.Logger.LogInformation(
+            "Starting QaaS.Mocker in {ExecutionMode} mode (RunLocally: {RunLocally})",
+            _executionMode, _runLocally);
 
         return _executionMode switch
         {
@@ -39,10 +41,15 @@ public class Execution : BaseExecution
         };
     }
 
-    private int Lint() => 0;
+    private int Lint()
+    {
+        Context.Logger.LogInformation("Lint mode completed successfully");
+        return 0;
+    }
 
     private int Template()
     {
+        Context.Logger.LogInformation("Generating template output");
         TemplateLogic.Run(Context.ExecutionData);
         return 0;
     }
@@ -51,11 +58,19 @@ public class Execution : BaseExecution
     {
         var runTasks = new List<Task>
         {
-            Task.Run(() => ServerLogic.Run(Context.ExecutionData))
+            StartLongRunningTask(() => ServerLogic.Run(Context.ExecutionData))
         };
+        Context.Logger.LogInformation("Started server runtime task");
 
         if (ControllerLogic != null)
-            runTasks.Add(Task.Run(() => ControllerLogic.Run(Context.ExecutionData)));
+        {
+            runTasks.Add(StartLongRunningTask(() => ControllerLogic.Run(Context.ExecutionData)));
+            Context.Logger.LogInformation("Started controller runtime task");
+        }
+        else
+        {
+            Context.Logger.LogInformation("Controller runtime is disabled for this execution");
+        }
 
         if (_runLocally)
         {
@@ -73,7 +88,18 @@ public class Execution : BaseExecution
         }
 
         Task.WaitAll(runTasks.ToArray());
+        Context.Logger.LogInformation("Runtime tasks completed");
         return 0;
+    }
+
+    private static Task StartLongRunningTask(Action action)
+    {
+        // Listener runtimes are intentionally long-lived, so schedule them outside the normal
+        // thread-pool heuristics to avoid starving short-lived work.
+        return Task.Factory.StartNew(action,
+            CancellationToken.None,
+            TaskCreationOptions.DenyChildAttach | TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
     }
 
     public override void Dispose()

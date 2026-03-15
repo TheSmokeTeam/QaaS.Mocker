@@ -43,6 +43,63 @@ public class SocketServerConfigValidationTests
                                           result.ErrorMessage.Contains("Duplication")), Is.True);
     }
 
+    [Test]
+    public void Validate_WithUdpBroadcastEndpoint_ReturnsValidationError()
+    {
+        var config = new SocketServerConfig
+        {
+            Endpoints =
+            [
+                new SocketEndpointConfig
+                {
+                    Port = 7001,
+                    ProtocolType = ProtocolType.Udp,
+                    SocketType = SocketType.Dgram,
+                    TimeoutMs = 100,
+                    Action = new SocketActionConfig
+                    {
+                        Name = "BroadcastA",
+                        Method = SocketMethod.Broadcast,
+                        DataSourceName = "ds1"
+                    }
+                }
+            ]
+        };
+
+        var results = Validate(config);
+
+        Assert.That(results.Any(result => result.ErrorMessage != null &&
+                                          result.ErrorMessage.Contains("do not support UDP")), Is.True);
+    }
+
+    [Test]
+    public void Validate_WithUdpStreamSocket_ReturnsValidationError()
+    {
+        var config = new SocketServerConfig
+        {
+            Endpoints =
+            [
+                new SocketEndpointConfig
+                {
+                    Port = 7001,
+                    ProtocolType = ProtocolType.Udp,
+                    SocketType = SocketType.Stream,
+                    TimeoutMs = 100,
+                    Action = new SocketActionConfig
+                    {
+                        Name = "CollectA",
+                        Method = SocketMethod.Collect
+                    }
+                }
+            ]
+        };
+
+        var results = Validate(config);
+
+        Assert.That(results.Any(result => result.ErrorMessage != null &&
+                                          result.ErrorMessage.Contains("protocol and socket type must match")), Is.True);
+    }
+
     private static SocketEndpointConfig CreateEndpoint(int port, string actionName)
     {
         return new SocketEndpointConfig

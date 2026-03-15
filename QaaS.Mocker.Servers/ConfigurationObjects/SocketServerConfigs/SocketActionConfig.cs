@@ -7,6 +7,7 @@ namespace QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 /// <summary>
 /// Specifies the actual method and action to perform with configured Stub and DataSources
 /// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record SocketActionConfig
 {
     [Description("The socket server action name identifier")]

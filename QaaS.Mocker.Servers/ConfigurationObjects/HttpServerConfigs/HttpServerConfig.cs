@@ -5,7 +5,8 @@ using QaaS.Framework.Configurations.CustomValidationAttributes;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 
-public record HttpServerConfig
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
+public record HttpServerConfig : IValidatableObject
 {
     [Required, Range(0, 65535), Description("The port to expose on the http server")]
     public int Port { get; set; }
@@ -36,8 +37,41 @@ public record HttpServerConfig
     [Description("The http connection acceptance value used for the semaphore (Multiplied with local processor count)"),
      DefaultValue(128)]
     public int ConnectionAcceptanceValue { get; set; } = 128;
+
+    /// <summary>
+    /// Validates HTTPS-specific settings so lint mode can fail before server startup.
+    /// </summary>
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (!IsSecuredSchema)
+            yield break;
+
+        if (string.IsNullOrWhiteSpace(CertificatePath))
+        {
+            yield return new ValidationResult(
+                "Server.Http.CertificatePath is required when Server.Http.IsSecuredSchema is true.",
+                [nameof(CertificatePath)]);
+            yield break;
+        }
+
+        var resolvedCertificatePath = ResolveCertificatePath(CertificatePath);
+        if (!File.Exists(resolvedCertificatePath))
+        {
+            yield return new ValidationResult(
+                $"Server.Http.CertificatePath '{CertificatePath}' was not found. Relative paths are resolved from the current working directory '{Environment.CurrentDirectory}'.",
+                [nameof(CertificatePath)]);
+        }
+    }
+
+    private static string ResolveCertificatePath(string certificatePath)
+    {
+        return Path.IsPathRooted(certificatePath)
+            ? certificatePath
+            : Path.Combine(Environment.CurrentDirectory, certificatePath);
+    }
 }
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class ValidAndUniquePathRegexEndpointsAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
@@ -94,6 +128,7 @@ internal class ValidAndUniquePathRegexEndpointsAttribute : ValidationAttribute
 }
 
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class UniqueActionNameEndpointsAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)

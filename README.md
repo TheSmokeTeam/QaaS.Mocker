@@ -12,6 +12,7 @@ Configurable mock runtime for QaaS protocol workloads.
 - [Functionalities](#functionalities)
 - [Protocol Support](#protocol-support)
 - [Quick Start](#quick-start)
+- [Run the Example](#run-the-example)
 - [Build and Test](#build-and-test)
 - [Documentation](#documentation)
 
@@ -28,7 +29,7 @@ This repository contains one solution: [`QaaS.Mocker.sln`](./QaaS.Mocker.sln).
 ## Functionalities
 ### [QaaS.Mocker](./QaaS.Mocker/)
 - Parses CLI options and loads YAML configuration with overwrite files/arguments and optional environment resolution.
-- Builds and validates execution context, data sources, stubs, server runtime, and optional controller runtime.
+- Builds and validates execution context, data sources, stubs, one or more server runtimes, and optional controller runtime.
 - Supports execution modes: `Run`, `Lint`, and `Template`.
 
 ### [QaaS.Mocker.Stubs](./QaaS.Mocker.Stubs/)
@@ -47,7 +48,7 @@ This repository contains one solution: [`QaaS.Mocker.sln`](./QaaS.Mocker.sln).
 - Supports runtime commands such as action-to-stub switch, trigger, and consume.
 
 ### [QaaS.Mocker.Example](./QaaS.Mocker.Example/)
-- Provides runnable HTTP and gRPC mocker configurations, sample processors, protobuf schema, and sample data assets.
+- Provides runnable multi-server and transport-specific mocker configurations, sample processors, protobuf schema, and sample data assets.
 
 ## Protocol Support
 Supported protocol/runtime families in `QaaS.Mocker`:
@@ -70,6 +71,64 @@ Upgrade package:
 ```bash
 dotnet add package QaaS.Mocker --version <target-version>
 dotnet restore
+```
+
+## Run the Example
+The example uses relative paths for certificates, sample data, and socket payloads, so run it from [`QaaS.Mocker.Example`](./QaaS.Mocker.Example/). The example entry point also disables environment-variable overrides by default so IDE terminal variables do not rewrite the sample configuration.
+
+1. Open a terminal in the example directory.
+
+```powershell
+Set-Location .\QaaS.Mocker.Example
+```
+
+2. Create the development certificate expected by the sample HTTPS and gRPC configs.
+
+```powershell
+dotnet dev-certs https -ep .\Certificates\devcert.pfx -p qaas-dev-cert
+```
+
+3. Start the combined example. It boots HTTPS, gRPC with TLS, and a TCP socket collect endpoint from the same process.
+
+```powershell
+dotnet run -- run mocker.qaas.yaml
+```
+
+4. In a second terminal, call the HTTPS health endpoint.
+
+```powershell
+curl.exe -k https://127.0.0.1:8443/health
+```
+
+5. Call the gRPC endpoint from Git Bash, WSL, or another POSIX-style shell if you have [`grpcurl`](https://github.com/fullstorydev/grpcurl) installed.
+
+```bash
+grpcurl -insecure -import-path Protos -proto echo.proto -d '{"message":"hello"}' 127.0.0.1:50051 qaas.mocker.example.EchoService/Echo
+```
+
+6. Send a payload to the socket collect endpoint. The socket endpoint does not reply; success is a clean connect and write plus a collect log entry in the server terminal.
+
+```powershell
+$client = [System.Net.Sockets.TcpClient]::new()
+$client.Connect('127.0.0.1', 7001)
+$stream = $client.GetStream()
+$payload = [System.Text.Encoding]::UTF8.GetBytes('socket-check')
+$stream.Write($payload, 0, $payload.Length)
+$stream.Flush()
+$stream.Dispose()
+$client.Dispose()
+```
+
+7. Generate the effective combined configuration without using `--mode`.
+
+```powershell
+dotnet run -- template mocker.qaas.yaml
+```
+
+8. If you still want the dedicated gRPC-only sample, it remains available.
+
+```powershell
+dotnet run -- run mocker.grpc.qaas.yaml
 ```
 
 ## Build and Test

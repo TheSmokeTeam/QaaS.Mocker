@@ -90,6 +90,38 @@ public class BaseHandlerTests
             Times.Once);
     }
 
+    [Test]
+    public void Start_WhenMessageUsesCamelCase_HandlesRequest()
+    {
+        var subscriberClient = CreateSubscriberClient(out var probe);
+        var handler = new TestHandler(subscriberClient.Object, Globals.Logger);
+        handler.Start();
+
+        probe.SubscribedHandler!.Invoke("runner:mocker:test", "{\"value\":\"hello\"}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.HandledRequestsCount, Is.EqualTo(1));
+            Assert.That(handler.LastRequest?.Value, Is.EqualTo("hello"));
+        });
+    }
+
+    [Test]
+    public void Start_WhenMessageUsesStringEnum_HandlesRequest()
+    {
+        var subscriberClient = CreateSubscriberClient(out var probe);
+        var handler = new TestHandler(subscriberClient.Object, Globals.Logger);
+        handler.Start();
+
+        probe.SubscribedHandler!.Invoke("runner:mocker:test", "{\"value\":\"hello\",\"mode\":\"Alpha\"}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.HandledRequestsCount, Is.EqualTo(1));
+            Assert.That(handler.LastRequest?.Mode, Is.EqualTo(TestMode.Alpha));
+        });
+    }
+
     private static Mock<ISubscriber> CreateSubscriberClient(
         out SubscriberProbe probe)
     {
@@ -139,10 +171,16 @@ public class BaseHandlerTests
     private sealed record TestRequest
     {
         public string? Value { get; init; }
+        public TestMode? Mode { get; init; }
     }
 
     private sealed record TestResponse
     {
         public string? Echo { get; init; }
+    }
+
+    private enum TestMode
+    {
+        Alpha
     }
 }

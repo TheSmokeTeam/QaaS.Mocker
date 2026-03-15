@@ -2,6 +2,7 @@
 
 namespace QaaS.Mocker.Controller.ConfigurationObjects;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record ControllerConfig
 {
     [Description("The Server name")]

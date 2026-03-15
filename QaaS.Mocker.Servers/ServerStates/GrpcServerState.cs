@@ -59,6 +59,9 @@ public class GrpcServerState : IServerState
 
                 _rpcToAction[BuildRpcKey(service.ServiceName, action.RpcName)] = actionToStub;
                 _actionToStubList.Add(actionToStub);
+                _logger.LogDebug(
+                    "Registered gRPC action '{ActionName}' for service '{ServiceName}' rpc '{RpcName}' with stub '{StubName}'",
+                    actionToStub.ActionName, service.ServiceName, action.RpcName, transactionStub.Name);
             }
         }
     }
@@ -73,15 +76,16 @@ public class GrpcServerState : IServerState
         {
             var transactionStub = ResolveTransactionStub(serviceName, rpcName);
             _cache.StoreInput(requestData.CloneDetailed(), actionName);
-            _logger.LogDebug("Handling grpc request Service '{ServiceName}' Rpc '{RpcName}'", serviceName, rpcName);
+            _logger.LogDebug(
+                "Processing gRPC action '{ActionName}' for service '{ServiceName}' rpc '{RpcName}' using stub '{StubName}'",
+                actionName, serviceName, rpcName, transactionStub.Name);
             responseData = transactionStub.Exercise(requestData);
         }
         catch (Exception exception)
         {
             _logger.LogError(exception,
-                "Encountered exception handling grpc request Service '{ServiceName}' Rpc '{RpcName}'. " +
-                "Processing through internal error transaction stub: {InternalErrorTransactionStubName}.",
-                serviceName, rpcName, _internalErrorTransactionStub.Name);
+                "gRPC action '{ActionName}' failed for service '{ServiceName}' rpc '{RpcName}'. Falling back to internal error stub '{InternalErrorTransactionStubName}'",
+                actionName, serviceName, rpcName, _internalErrorTransactionStub.Name);
             processedSuccessfully = false;
             responseData = null;
         }
@@ -108,6 +112,12 @@ public class GrpcServerState : IServerState
         return responseData!;
     }
 
+    public bool HasAction(string actionName)
+    {
+        return _actionToStubList.Any(pair =>
+            string.Equals(pair.ActionName, actionName, StringComparison.OrdinalIgnoreCase));
+    }
+
     public void ChangeActionStub(string actionName, string stubName)
     {
         var actionToTransactionStub = _actionToStubList
@@ -119,8 +129,8 @@ public class GrpcServerState : IServerState
         var newAssignedTransactionStub = GetTransactionStub(stubName);
         var oldAssignedTransactionStubName = actionToTransactionStub.Stub.Name;
         actionToTransactionStub.Stub = newAssignedTransactionStub;
-        _logger.LogInformation("Successfully changed action '{ActionName}'s transaction stub from " +
-                               "'{OldTransactionStub}' to '{NewTransactionStub}'",
+        _logger.LogInformation(
+            "Changed gRPC action '{ActionName}' transaction stub from '{OldTransactionStub}' to '{NewTransactionStub}'",
             actionName, oldAssignedTransactionStubName, stubName);
     }
 
@@ -136,8 +146,9 @@ public class GrpcServerState : IServerState
         if (_rpcToAction.TryGetValue(BuildRpcKey(serviceName, rpcName), out var actionToStub))
             return actionToStub.Stub;
 
-        _logger.LogWarning("Encountered unknown grpc request Service '{ServiceName}' Rpc '{RpcName}'", serviceName,
-            rpcName);
+        _logger.LogWarning(
+            "No gRPC action matched service '{ServiceName}' rpc '{RpcName}'. Falling back to stub '{StubName}'",
+            serviceName, rpcName, _notFoundTransactionStub.Name);
         return _notFoundTransactionStub;
     }
 

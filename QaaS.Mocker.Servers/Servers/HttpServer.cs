@@ -66,7 +66,13 @@ public class HttpServer : IServer
                     throw new InvalidOperationException(
                         "Http CertificatePath is required when Server.Http.IsSecuredSchema is true.");
 
-                listenOptions.UseHttps(ResolvePath(_configuration.CertificatePath), _configuration.CertificatePassword);
+                var certificatePath = ResolvePath(_configuration.CertificatePath);
+                if (!File.Exists(certificatePath))
+                    throw new InvalidOperationException(
+                        $"Configured HTTPS certificate '{certificatePath}' was not found. Current working directory: '{Environment.CurrentDirectory}'.");
+
+                _logger.LogInformation("Configuring HTTPS certificate from '{CertificatePath}'", certificatePath);
+                listenOptions.UseHttps(certificatePath, _configuration.CertificatePassword);
             });
 
             // Keep parity with previous behavior: allow many concurrent accept loops.

@@ -1,50 +1,100 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace QaaS.Mocker.Servers.Extensions;
 
 public static class SocketExtensions
 {
-    private static Span<byte> GetDataAsSpanOfBytesFromChannel(this Socket channel, long bufferSize, EndPoint? endpoint = null,
+    /// <summary>
+    /// Reads a single payload from a socket and returns exactly the bytes reported by the transport.
+    /// This avoids padding payloads with unused buffer capacity, which previously broke protocol
+    /// framing and request deserialization.
+    /// </summary>
+    private static byte[] GetDataAsBytesFromChannel(this Socket channel, int bufferSize, EndPoint? endpoint = null,
         ILogger? logger = null)
     {
-        var buffer = new byte[bufferSize].AsSpan();
+        var buffer = new byte[bufferSize];
         try
         {
-            if (endpoint != null)
-                channel.ReceiveFrom(buffer, ref endpoint);
-            else
-                channel.Receive(buffer);
+            var receivedBytes = endpoint != null
+                ? channel.ReceiveFrom(buffer, ref endpoint)
+                : channel.Receive(buffer);
+
+            return receivedBytes <= 0 ? [] : buffer[..receivedBytes];
         }
         catch (SocketException socketException)
         {
-            logger?.LogDebug(
-                "Received error while trying to read data from client on endpoint - {ChannelEndPoint} - {SocketException}",
-                endpoint ?? channel.RemoteEndPoint, socketException);
-            return Span<byte>.Empty;
+            logger?.LogDebug(socketException,
+                "Socket receive failed on local endpoint '{LocalEndPoint}' and remote endpoint '{RemoteEndPoint}'",
+                DescribeEndPoint(channel.LocalEndPoint), DescribeEndPoint(endpoint ?? TryGetRemoteEndPoint(channel)));
+            return [];
         }
-
-        return buffer;
     }
 
     /// <summary>
-    /// Implementation of timeout mechanism on socket stream collecting.
+    /// Implements timeout-based socket collection.
+    /// When <paramref name="endpoint"/> is provided the call is treated as datagram-based receive,
+    /// so the loop does not rely on <see cref="Socket.Available"/> before reading.
     /// </summary>
     public static byte[]? GetBytesFromChannelWithinTimeout(this Socket channel, int timeout,
-        long bufferSize, EndPoint? endpoint = null, ILogger? logger = null)
+        int bufferSize, EndPoint? endpoint = null, ILogger? logger = null)
     {
-        using var cts = new CancellationTokenSource(timeout);
-        while (!cts.IsCancellationRequested)
+        var timeoutStopwatch = Stopwatch.StartNew();
+        while (timeoutStopwatch.ElapsedMilliseconds < timeout)
         {
-            // Getting the message buffer from Socket communication.
-            if (channel is { Available: 0, IsBound: true }) continue;
-            var message = channel.GetDataAsSpanOfBytesFromChannel(bufferSize, endpoint, logger);
-            if (message.Length <= 0) continue;
-            logger?.LogDebug("Received {NumberOfReceivedBytes} bytes from socket", message.Length);
-            return message.ToArray();
+            var remainingTimeoutMs = Math.Max(1, timeout - (int)timeoutStopwatch.ElapsedMilliseconds);
+            var pollTimeoutMicroseconds = Math.Min(remainingTimeoutMs, 50) * 1000;
+            try
+            {
+                if (!channel.Poll(pollTimeoutMicroseconds, SelectMode.SelectRead))
+                    continue;
+            }
+            catch (SocketException socketException)
+            {
+                logger?.LogDebug(socketException,
+                    "Socket poll failed on local endpoint '{LocalEndPoint}' and remote endpoint '{RemoteEndPoint}'",
+                    DescribeEndPoint(channel.LocalEndPoint), DescribeEndPoint(endpoint ?? TryGetRemoteEndPoint(channel)));
+                return null;
+            }
+            catch (ObjectDisposedException)
+            {
+                return null;
+            }
+
+            var message = channel.GetDataAsBytesFromChannel(bufferSize, endpoint, logger);
+            if (message.Length <= 0)
+                continue;
+            logger?.LogDebug(
+                "Received {NumberOfReceivedBytes} bytes on local endpoint '{LocalEndPoint}' from remote endpoint '{RemoteEndPoint}'",
+                message.Length,
+                DescribeEndPoint(channel.LocalEndPoint),
+                DescribeEndPoint(endpoint ?? TryGetRemoteEndPoint(channel)));
+            return message;
         }
 
+        logger?.LogDebug(
+            "Timed out waiting {TimeoutMs} ms for socket data on local endpoint '{LocalEndPoint}'",
+            timeout, DescribeEndPoint(channel.LocalEndPoint));
         return null;
     }
+
+    private static EndPoint? TryGetRemoteEndPoint(Socket channel)
+    {
+        try
+        {
+            return channel.RemoteEndPoint;
+        }
+        catch (SocketException)
+        {
+            return null;
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
+    }
+
+    private static string DescribeEndPoint(EndPoint? endpoint) => endpoint?.ToString() ?? "<unresolved>";
 }

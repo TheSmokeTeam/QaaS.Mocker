@@ -14,6 +14,11 @@ public interface IServerState
     public InputOutputState InputOutputState { get; init; }
 
     /// <summary>
+    /// Determines whether the runtime exposes the given action name for controller commands.
+    /// </summary>
+    public bool HasAction(string actionName);
+
+    /// <summary>
     /// Rebinds an action to a different transaction stub at runtime.
     /// </summary>
     public void ChangeActionStub(string actionName, string stubName);

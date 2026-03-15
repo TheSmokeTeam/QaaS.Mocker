@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.GrpcServerConfigs;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record GrpcEndpointActionConfig
 {
     [Description("The grpc action name identifier")]

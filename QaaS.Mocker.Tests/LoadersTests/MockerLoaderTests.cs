@@ -111,6 +111,206 @@ public class MockerLoaderTests
         }
     }
 
+    [Test]
+    public void GetLoadedContext_WithScopedEnvironmentOverride_AppliesEnvironmentVariable()
+    {
+        const string environmentVariableName = "Server__Type";
+        var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, "Grpc");
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Type: Http
+                """);
+            var loader = new MockerLoader(new MockerOptions
+            {
+                ConfigurationFile = configFile
+            });
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Grpc"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, originalValue);
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void GetLoadedContext_WithUnrelatedEnvironmentVariable_IgnoresIt()
+    {
+        const string environmentVariableName = "JETBRAINS_INTELLIJ_ASK_PSREADLINE_UPDATE";
+        var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, "1");
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Type: Http
+                  Http:
+                    Port: 8443
+                """);
+            var loader = new MockerLoader(new MockerOptions
+            {
+                ConfigurationFile = configFile
+            });
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(context.RootConfiguration["JETBRAINS_INTELLIJ_ASK_PSREADLINE_UPDATE"], Is.Null);
+                Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Http"));
+                Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
+            });
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, originalValue);
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void GetLoadedContext_WithMultiServerEnvironmentOverride_AppliesEnvironmentVariable()
+    {
+        const string environmentVariableName = "Servers__0__Type";
+        var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, "Grpc");
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Servers:
+                  - Type: Http
+                    Http:
+                      Port: 8443
+                """);
+            var loader = new MockerLoader(new MockerOptions
+            {
+                ConfigurationFile = configFile
+            });
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.That(context.RootConfiguration["Servers:0:Type"], Is.EqualTo("Grpc"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, originalValue);
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void GetLoadedContext_WithDontResolveWithEnvironmentVariables_DoesNotApplyEnvironmentVariable()
+    {
+        const string environmentVariableName = "Server__Type";
+        var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, "Grpc");
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Type: Http
+                """);
+            var loader = new MockerLoader(new MockerOptions
+            {
+                ConfigurationFile = configFile,
+                DontResolveWithEnvironmentVariables = true
+            });
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Http"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, originalValue);
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [TestCase("Server__Http__Port", true, "Server:Http:Port")]
+    [TestCase("Server:Type", true, "Server:Type")]
+    [TestCase("__", false, "")]
+    [TestCase("PATH", false, "")]
+    public void TryMapEnvironmentVariableToConfigurationPath_MapsOnlySupportedRoots(
+        string variableName,
+        bool expectedMapped,
+        string expectedPath)
+    {
+        var tryMapMethod = typeof(MockerLoader)
+            .GetMethod("TryMapEnvironmentVariableToConfigurationPath", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new MissingMethodException(typeof(MockerLoader).FullName,
+                "TryMapEnvironmentVariableToConfigurationPath");
+        var arguments = new object?[] { variableName, null };
+
+        var mapped = (bool)tryMapMethod.Invoke(null, arguments)!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mapped, Is.EqualTo(expectedMapped));
+            Assert.That(arguments[1], Is.EqualTo(expectedPath));
+        });
+    }
+
+    [Test]
+    public void GetLoadedContext_WithNullOverwriteCollections_LoadsContext()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Type: Http
+                """);
+            var loader = new MockerLoader(new MockerOptions
+            {
+                ConfigurationFile = configFile,
+                OverwriteFiles = null!,
+                OverwriteArguments = null!
+            });
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Http"));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void Dispose_ReleasesLoaderScopeWithoutThrowing()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Type: Http
+                """);
+            var loader = new MockerLoader(new MockerOptions
+            {
+                ConfigurationFile = configFile
+            });
+
+            Assert.DoesNotThrow(() => loader.Dispose());
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     private static InternalContext InvokeGetLoadedContext(MockerLoader loader)
     {
         var getLoadedContextMethod = typeof(MockerLoader)

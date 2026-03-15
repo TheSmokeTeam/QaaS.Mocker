@@ -25,8 +25,9 @@ public class StubFactory(Context context, TransactionStubConfig[] stubs,
                                             $" processor {transactionStubConfig.Processor} was not found in provided " +
                                             $"processors.");
         
-            context.Logger.LogInformation("Building transaction stub {TransactionStubName} with provided Transaction" +
-                                          " Processor {TransactionStubProcessor}", transactionStubConfig.Name, transactionStubConfig.Processor);
+            context.Logger.LogInformation(
+                "Building transaction stub '{TransactionStubName}' with processor '{TransactionStubProcessor}'",
+                transactionStubConfig.Name, transactionStubConfig.Processor);
             
             var transactionStubDataSources = transactionStubConfig.DataSourceNames.Select(dataSourceName =>
                     dataSourceList.FirstOrDefault(dataSource => dataSource.Name == dataSourceName) ??
@@ -35,9 +36,12 @@ public class StubFactory(Context context, TransactionStubConfig[] stubs,
                 .ToImmutableList();
             
             
-            context.Logger.LogDebug("Passing {DataSourcesPassedCount} data sources to transaction stub " +
-                                    "{TransactionStubName}", transactionStubDataSources.Count, 
-                transactionStubConfig.Name);
+            context.Logger.LogDebug(
+                "Transaction stub '{TransactionStubName}' is configured with {DataSourcesPassedCount} data source(s), request deserializer '{RequestDeserializer}', and response serializer '{ResponseSerializer}'",
+                transactionStubConfig.Name,
+                transactionStubDataSources.Count,
+                transactionStubConfig.RequestBodyDeserialization?.Deserializer?.ToString() ?? "<none>",
+                transactionStubConfig.ResponseBodySerialization?.Serializer?.ToString() ?? "<none>");
             
             transactionStubs.Add(new TransactionStub
             {
@@ -73,6 +77,10 @@ public class StubFactory(Context context, TransactionStubConfig[] stubs,
                 }
             },        
         });
+
+        context.Logger.LogInformation(
+            "Built {TransactionStubCount} transaction stub(s) including default not-found and internal-error stubs",
+            transactionStubs.Count);
         
         return transactionStubs.ToImmutableList();
     }

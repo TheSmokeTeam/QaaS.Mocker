@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Qaas.Mocker.CommunicationObjects;
 using StackExchange.Redis;
@@ -16,6 +17,17 @@ public abstract class BaseHandler<TRequestMessage, TResponseMessage>(
     string serverInstanceId,
     ILogger logger)
 {
+    // Runner messages may come from non-.NET publishers, so control-plane JSON needs to
+    // tolerate common wire-format differences such as camelCase properties and string enums.
+    private static readonly JsonSerializerOptions DeserializationOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
+    };
+
     /// <summary>
     /// Gets the semantic payload type routed by this handler (for channel naming).
     /// </summary>
@@ -49,44 +61,62 @@ public abstract class BaseHandler<TRequestMessage, TResponseMessage>(
         var requestChannel = RequestChannel();
         var responseChannel = ResponseChannel();
         logger.LogInformation(
-            "Handler '{Handler}' started. Listening on '{RequestChannel}' and publishing to '{ResponseChannel}'",
-            GetType().Name, requestChannel, responseChannel);
+            "Started control handler '{Handler}' for content type '{ContentType}'. Request channel '{RequestChannel}', response channel '{ResponseChannel}'",
+            GetType().Name, ContentType, requestChannel, responseChannel);
         subscriberClient.Subscribe(requestChannel, (channel, serializedRequestMessage) =>
         {
             try
             {
                 if (serializedRequestMessage.IsNullOrEmpty)
                 {
-                    logger.LogWarning("Ignoring empty control request on channel '{Channel}'", channel);
+                    logger.LogWarning(
+                        "Ignoring empty '{ContentType}' control request on channel '{Channel}'",
+                        ContentType, channel);
                     return;
                 }
 
                 var requestPayload = serializedRequestMessage.ToString();
-                var request = JsonSerializer.Deserialize<TRequestMessage>(requestPayload);
+                var request = JsonSerializer.Deserialize<TRequestMessage>(requestPayload, DeserializationOptions);
                 if (request == null)
                 {
-                    logger.LogWarning("Ignoring invalid control request on channel '{Channel}'. Payload: {Payload}",
-                        channel, requestPayload);
+                    logger.LogWarning(
+                        "Ignoring invalid '{ContentType}' control request on channel '{Channel}' ({PayloadLength} chars)",
+                        ContentType, channel, requestPayload.Length);
+                    logger.LogDebug(
+                        "Invalid '{ContentType}' control payload on channel '{Channel}': {Payload}",
+                        ContentType, channel, requestPayload);
                     return;
                 }
 
-                logger.LogInformation("Received control request on channel '{Channel}'. " +
-                                      "Message: {RequestMessage}", channel, request);
+                logger.LogInformation(
+                    "Received '{ContentType}' control request on channel '{Channel}' ({PayloadLength} chars)",
+                    ContentType, channel, requestPayload.Length);
+                logger.LogDebug(
+                    "Deserialized '{ContentType}' request from channel '{Channel}': {RequestMessage}",
+                    ContentType, channel, request);
                 var responseMessage = HandleRequest(channel, request);
                 if (responseMessage == null)
                 {
-                    logger.LogInformation("Empty response for the last control request");
+                    logger.LogInformation(
+                        "Handled '{ContentType}' control request on channel '{Channel}' without publishing a response",
+                        ContentType, channel);
                     return;
                 }
-                logger.LogInformation("Response for the last control request: {ResponseMessage}", responseMessage);
-                subscriberClient.Publish(responseChannel, JsonSerializer.Serialize(responseMessage));
+                var responsePayload = JsonSerializer.Serialize(responseMessage);
+                logger.LogInformation(
+                    "Publishing '{ContentType}' control response to channel '{ResponseChannel}' ({PayloadLength} chars)",
+                    ContentType, responseChannel, responsePayload.Length);
+                logger.LogDebug(
+                    "Serialized '{ContentType}' response for channel '{ResponseChannel}': {ResponseMessage}",
+                    ContentType, responseChannel, responseMessage);
+                subscriberClient.Publish(responseChannel, responsePayload);
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Exception handling control request on channel '{Channel}'. " +
-                                           "Message: {RequestMessage}", channel, serializedRequestMessage);
+                logger.LogError(exception,
+                    "Failed to handle '{ContentType}' control request on channel '{Channel}'. Raw payload: {RequestMessage}",
+                    ContentType, channel, serializedRequestMessage);
             }
         });
     }
 }
-

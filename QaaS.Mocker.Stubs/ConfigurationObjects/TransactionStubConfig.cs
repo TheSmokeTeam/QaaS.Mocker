@@ -9,6 +9,7 @@ using YamlDotNet.Serialization;
 
 namespace QaaS.Mocker.Stubs.ConfigurationObjects;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record TransactionStubConfig : IYamlConvertible
 {
     [Required, Description("Name of data source to reference it by (must be unique)")]

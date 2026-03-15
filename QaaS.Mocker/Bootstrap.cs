@@ -18,14 +18,37 @@ public static class Bootstrap
         if (args == null)
             return new Mocker(null);
 
+        var normalizedArguments = NormalizeArguments(args);
         using var cliParser = CommandLineBuilders.ParserBuilder.BuildParser();
-        var cliParserResult = cliParser.ParseArguments<MockerOptions>(args);
+        var cliParserResult = cliParser.ParseArguments<MockerOptions>(normalizedArguments);
 
         return cliParserResult
             .WithNotParsed(_ => Console.Out.WriteLine(CommandLine.Text.HelpText.AutoBuild(cliParserResult)))
             .MapResult(
-                options => new MockerLoader(options).GetLoadedRunner(),
+                options =>
+                {
+                    using var loader = new MockerLoader(options);
+                    return loader.GetLoadedRunner();
+                },
                 HandleParseError);
+    }
+
+    /// <summary>
+    /// Supports verb-style aliases such as <c>run</c>, <c>lint</c>, and <c>template</c> in addition
+    /// to the explicit <c>--mode</c> flag.
+    /// </summary>
+    internal static string[] NormalizeArguments(IEnumerable<string> args)
+    {
+        var arguments = args.ToArray();
+        if (arguments.Length == 0)
+            return arguments;
+
+        if (arguments[0].StartsWith('-'))
+            return arguments;
+
+        return Enum.TryParse<ExecutionMode>(arguments[0], ignoreCase: true, out _)
+            ? ["--mode", arguments[0], .. arguments[1..]]
+            : arguments;
     }
 
     private static Mocker HandleParseError(IEnumerable<Error> errors)

@@ -66,6 +66,27 @@ public class ControllerFactoryTests
         Assert.That(result, Is.Null);
     }
 
+    [Test]
+    public void Build_WithUnexpectedRedisConfiguration_ThrowsControllerInitializationException()
+    {
+        var factory = new ControllerFactory(Globals.Context, new ControllerConfig
+        {
+            ServerName = "mocker-a",
+            Redis = new RedisConfig
+            {
+                Host = null!
+            }
+        });
+
+        var exception = Assert.Throws<ControllerInitializationException>(() => factory.Build(CreateServerStateMock().Object));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception!.Message, Is.EqualTo("Unexpected error while creating redis controller"));
+            Assert.That(exception.InnerException, Is.Not.Null);
+        });
+    }
+
     private static Mock<IServerState> CreateServerStateMock()
     {
         var serverState = new Mock<IServerState>();
