@@ -157,6 +157,8 @@ jobs:
             --no-restore `
             --configuration ${{ env.CONFIGURATION }} `
             --include-symbols `
+            -p:DebugType=portable `
+            -p:SymbolPackageFormat=snupkg `
             -p:PackageVersion=${{ steps.stable_tag.outputs.tag }} `
             --output ${{ env.PACKAGE_OUTPUT_DIRECTORY }}
 
@@ -193,6 +195,15 @@ jobs:
             if ($package.Name -match "^QaaS\.Mocker\.[0-9]") {
               dotnet nuget push $package.FullName -k ${{ secrets.NUGET_AUTH_TOKEN }} -s https://api.nuget.org/v3/index.json
             }
+          }
+
+      - name: Push QaaS.Mocker symbols to NuGet
+        if: steps.stable_tag.outputs.is_stable_tag == 'true'
+        shell: pwsh
+        run: |
+          $symbolPackages = Get-ChildItem "${{ env.PACKAGE_OUTPUT_DIRECTORY }}" -Filter "*.snupkg" -File
+          foreach ($package in $symbolPackages) {
+            dotnet nuget push $package.FullName -k ${{ secrets.NUGET_AUTH_TOKEN }} -s https://api.nuget.org/v3/index.json --skip-duplicate
           }
 
       - name: Write restored packages metadata
