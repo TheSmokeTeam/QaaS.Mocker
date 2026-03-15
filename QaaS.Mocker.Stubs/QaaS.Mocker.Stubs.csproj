@@ -9,8 +9,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Autofac" Version="9.0.0" />
-      <PackageReference Include="QaaS.Common.Processors" Version="1.0.1-alpha.6" />
+      <PackageReference Include="Autofac" Version="9.1.0" />
+      <PackageReference Include="QaaS.Common.Processors" Version="1.0.1-alpha.9" />
     </ItemGroup>
 
 </Project>
