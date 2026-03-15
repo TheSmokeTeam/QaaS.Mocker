@@ -48,6 +48,21 @@ public class SocketServerStateTests
     }
 
     [Test]
+    public void Constructor_WithOnlyBroadcastEndpoint_SetsOnlyOutputState()
+    {
+        var state = CreateState([BuildEndpoint(7001, "BroadcastAction", SocketMethod.Broadcast, dataSourceName: "ds1")]);
+
+        Assert.That(state.InputOutputState, Is.EqualTo(QaaS.Framework.SDK.ConfigurationObjects.InputOutputState.OnlyOutput));
+    }
+
+    [Test]
+    public void Constructor_WithUnknownSocketMethod_ThrowsArgumentOutOfRangeException()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            CreateState([BuildEndpoint(7001, "UnknownAction", (SocketMethod)999)]));
+    }
+
+    [Test]
     public void Process_WithKnownCollectPort_StoresInputWhenCacheEnabled()
     {
         var state = CreateState([BuildEndpoint(7001, "CollectAction", SocketMethod.Collect)]);
@@ -72,6 +87,29 @@ public class SocketServerStateTests
         var result = state.Process(9999, [input]).Single();
 
         Assert.That(Encoding.UTF8.GetString((byte[])result.Body!), Is.EqualTo("payload"));
+    }
+
+    [Test]
+    public void Process_WhenStubThrows_ReturnsOriginalPayload()
+    {
+        var state = CreateState(
+            [BuildEndpoint(7001, "CollectAction", SocketMethod.Collect, transactionStubName: "BrokenStub")],
+            ("BrokenStub", _ => throw new InvalidOperationException("boom")));
+
+        var input = CreateRequest("payload");
+        var result = state.Process(7001, [input]).Single();
+
+        Assert.That(result, Is.SameAs(input));
+    }
+
+    [Test]
+    public void ProcessBroadcast_WithMissingDataSource_ThrowsException()
+    {
+        var state = CreateState([BuildEndpoint(7001, "BroadcastAction", SocketMethod.Broadcast, dataSourceName: "missing")]);
+
+        var exception = Assert.Throws<Exception>(() => state.Process(7001).ToArray());
+
+        Assert.That(exception!.Message, Does.Contain("DataSource"));
     }
 
     [Test]
@@ -151,6 +189,29 @@ public class SocketServerStateTests
     }
 
     [Test]
+    public void ChangeActionStub_WhenStubDoesNotExist_ThrowsStubNotLoadedException()
+    {
+        var state = CreateState(
+            [BuildEndpoint(7001, "CollectAction", SocketMethod.Collect, transactionStubName: "MainStub")],
+            ("MainStub", _ => CreateRequest("main")));
+
+        Assert.Throws<StubNotLoadedException>(() => state.ChangeActionStub("CollectAction", "MissingStub"));
+    }
+
+    [Test]
+    public void ChangeActionStub_WhenActionHasNoExistingStub_AssignsStubSuccessfully()
+    {
+        var state = CreateState(
+            [BuildEndpoint(7001, "CollectAction", SocketMethod.Collect)],
+            ("MainStub", _ => CreateRequest("main")));
+
+        state.ChangeActionStub("CollectAction", "MainStub");
+        var result = state.Process(7001, [CreateRequest("input")]).Single();
+
+        Assert.That(Encoding.UTF8.GetString((byte[])result.Body!), Is.EqualTo("main"));
+    }
+
+    [Test]
     public void Constructor_WithCaseInsensitiveStubName_ResolvesStub()
     {
         var endpoint = BuildEndpoint(7001, "CollectAction", SocketMethod.Collect, transactionStubName: "MAINSTUB");
@@ -159,6 +220,24 @@ public class SocketServerStateTests
         var result = state.Process(7001, [CreateRequest("input")]).Single();
 
         Assert.That(Encoding.UTF8.GetString((byte[])result.Body!), Is.EqualTo("processed"));
+    }
+
+    [Test]
+    public void HasAction_WithCaseInsensitiveName_ReturnsTrue()
+    {
+        var state = CreateState([BuildEndpoint(7001, "CollectAction", SocketMethod.Collect)]);
+
+        Assert.That(state.HasAction("collectaction"), Is.True);
+    }
+
+    [Test]
+    public void ProcessBroadcast_WithUnknownPort_ThrowsMissingDataSourceException()
+    {
+        var state = CreateState([BuildEndpoint(7001, "BroadcastAction", SocketMethod.Broadcast, dataSourceName: "ds1")]);
+
+        var exception = Assert.Throws<Exception>(() => state.Process(9999).ToArray());
+
+        Assert.That(exception!.Message, Does.Contain("9999"));
     }
 
     private static SocketServerState CreateState(

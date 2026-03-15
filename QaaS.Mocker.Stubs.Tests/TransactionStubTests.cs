@@ -103,6 +103,33 @@ public class TransactionStubTests
     }
 
     [Test]
+    public void Exercise_WhenRequestDeserializerConfiguredAndBodyIsReadOnlyMemory_DeserializesSerializedPayload()
+    {
+        var processor = CreateProcessor(data =>
+        {
+            Assert.That(data.Body, Is.EqualTo("memory-body"));
+            return new Data<object> { Body = Encoding.UTF8.GetBytes("ok") };
+        });
+
+        var deserializer = new Mock<IDeserializer>();
+        deserializer
+            .Setup(instance => instance.Deserialize(It.IsAny<byte[]>(), It.IsAny<Type>()))
+            .Returns("memory-body");
+
+        var stub = new TransactionStub
+        {
+            Name = "StubA",
+            Processor = processor.Object,
+            DataSourceList = ImmutableList<DataSource>.Empty,
+            RequestBodyDeserializer = deserializer.Object
+        };
+
+        _ = stub.Exercise(new Data<object> { Body = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("request")) });
+
+        deserializer.Verify(instance => instance.Deserialize(It.IsAny<byte[]>(), It.IsAny<Type>()), Times.Once);
+    }
+
+    [Test]
     public void Exercise_WhenResponseSerializerConfigured_SerializesProcessorBody()
     {
         var processor = CreateProcessor(_ => new Data<object> { Body = new { Value = 1 } });

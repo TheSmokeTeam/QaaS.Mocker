@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using NUnit.Framework;
 using QaaS.Mocker.Servers.Extensions;
@@ -60,5 +61,46 @@ public class SocketExtensionsTests
         var bytes = serverSocket.GetBytesFromChannelWithinTimeout(50, 1024, logger: Globals.Logger);
 
         Assert.That(bytes, Is.Null);
+    }
+
+    [Test]
+    public void GetBytesFromChannelWithinTimeout_WithDisposedSocket_ReturnsNull()
+    {
+        var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        socket.Dispose();
+
+        var bytes = socket.GetBytesFromChannelWithinTimeout(50, 1024, logger: Globals.Logger);
+
+        Assert.That(bytes, Is.Null);
+    }
+
+    [Test]
+    public void GetDataAsBytesFromChannel_WithUnconnectedTcpSocket_ReturnsEmptyBuffer()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+        var bytes = InvokeGetDataAsBytesFromChannel(socket, 32);
+
+        Assert.That(bytes, Is.Empty);
+    }
+
+    [Test]
+    public void TryGetRemoteEndPoint_WithDisposedSocket_ReturnsNull()
+    {
+        var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        socket.Dispose();
+
+        var endpoint = typeof(SocketExtensions)
+            .GetMethod("TryGetRemoteEndPoint", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [socket]);
+
+        Assert.That(endpoint, Is.Null);
+    }
+
+    private static byte[] InvokeGetDataAsBytesFromChannel(Socket channel, int bufferSize, EndPoint? endpoint = null)
+    {
+        return (byte[])typeof(SocketExtensions)
+            .GetMethod("GetDataAsBytesFromChannel", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [channel, bufferSize, endpoint, Globals.Logger])!;
     }
 }

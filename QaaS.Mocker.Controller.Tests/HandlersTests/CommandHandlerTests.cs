@@ -6,6 +6,7 @@ using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Command;
 using QaaS.Mocker.Controller.Handlers;
 using QaaS.Mocker.Servers.Caches;
 using QaaS.Mocker.Servers.ServerStates;
+using System.Reflection;
 using StackExchange.Redis;
 
 namespace QaaS.Mocker.Controller.Tests.HandlersTests;
@@ -121,6 +122,26 @@ public class CommandHandlerTests
             Assert.That(response, Is.Not.Null);
             Assert.That(response!.Status, Is.EqualTo(Status.Failed));
             Assert.That(response.ExceptionMessage, Does.Contain("TriggerAction.ActionName is required"));
+        });
+        serverState.Verify(state => state.TriggerAction(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
+    }
+
+    [Test]
+    public void HandleRequest_WithMissingTriggerActionPayload_ReturnsFailed()
+    {
+        var (handler, serverState, _, _) = CreateHandler();
+
+        var response = handler.Invoke(new CommandRequest
+        {
+            Id = "req-2a",
+            Command = CommandType.TriggerAction
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response, Is.Not.Null);
+            Assert.That(response!.Status, Is.EqualTo(Status.Failed));
+            Assert.That(response.ExceptionMessage, Does.Contain("TriggerAction payload is required"));
         });
         serverState.Verify(state => state.TriggerAction(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
     }
@@ -395,6 +416,33 @@ public class CommandHandlerTests
             Assert.That(succeededResponse, Is.Not.Null);
             Assert.That(succeededResponse!.Status, Is.EqualTo(Status.Succeeded));
         });
+    }
+
+    [Test]
+    public void HandleRequest_WithDuplicateConsumeWhileActive_ReturnsSucceededWithoutPushingMessages()
+    {
+        var (handler, _, database, _) = CreateHandler(new TestCache { InputValues = ["input-a"] },
+            InputOutputState.OnlyInput, "server-f");
+        typeof(CommandHandler)
+            .GetField("_consumeState", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(handler, 1);
+
+        var response = handler.Invoke(new CommandRequest
+        {
+            Id = "consume-duplicate",
+            Command = CommandType.Consume,
+            Consume = new Consume { TimeoutMs = 120 }
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response, Is.Not.Null);
+            Assert.That(response!.Status, Is.EqualTo(Status.Succeeded));
+        });
+        database.Verify(
+            db => db.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+                It.IsAny<CommandFlags>()),
+            Times.Never);
     }
 
     private static (TestableCommandHandler Handler, Mock<IServerState> ServerState, Mock<IDatabase> Database,

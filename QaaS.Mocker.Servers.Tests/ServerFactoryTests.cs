@@ -95,6 +95,15 @@ public class ServerFactoryTests
             factory.Build(ImmutableList<DataSource>.Empty, ImmutableList<TransactionStub>.Empty));
     }
 
+    [Test]
+    public void Build_WithNoServerConfigurations_ThrowsArgumentException()
+    {
+        var factory = new ServerFactory(Globals.Context, Array.Empty<ServerConfig>());
+
+        Assert.Throws<ArgumentException>(() =>
+            factory.Build(ImmutableList<DataSource>.Empty, ImmutableList<TransactionStub>.Empty));
+    }
+
     private static IImmutableList<TransactionStub> CreateRequiredStubs()
     {
         return

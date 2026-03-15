@@ -86,6 +86,33 @@ public class ExecutionBranchTests
     }
 
     [Test]
+    public void Start_WithRunMode_AndRunLocallyUnderRedirectedInput_ReturnsZeroWithoutBlocking()
+    {
+        Assume.That(Console.IsInputRedirected, Is.True);
+
+        var server = new Mock<IServer>();
+        server.Setup(s => s.Start());
+
+        var context = CreateContext();
+        var execution = CreateExecution(
+            ExecutionMode.Run,
+            context,
+            serverLogic: new ServerLogic(server.Object),
+            controllerLogic: null);
+        var redirectedExecution = new Execution(ExecutionMode.Run, context, runLocally: true)
+        {
+            ServerLogic = execution.ServerLogic,
+            ControllerLogic = execution.ControllerLogic,
+            TemplateLogic = execution.TemplateLogic
+        };
+
+        var result = redirectedExecution.Start();
+
+        Assert.That(result, Is.EqualTo(0));
+        server.Verify(s => s.Start(), Times.Once);
+    }
+
+    [Test]
     public void Start_WithUnsupportedMode_ThrowsArgumentOutOfRangeException()
     {
         var execution = CreateExecution((ExecutionMode)999);

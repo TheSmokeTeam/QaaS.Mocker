@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Configuration;
 using NUnit.Framework;
 using QaaS.Framework.SDK.ContextObjects;
@@ -6,6 +7,7 @@ using QaaS.Framework.SDK.DataSourceObjects;
 using QaaS.Framework.SDK.Hooks.Processor;
 using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Mocker.Options;
+using QaaS.Mocker.Controller.ConfigurationObjects;
 using QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 using QaaS.Mocker.Servers.ConfigurationObjects;
 using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
@@ -50,6 +52,51 @@ public class ExecutionBuilderCrudTests
     }
 
     [Test]
+    public void DataSourceCrud_CreateWithNullBuilder_ThrowsArgumentNullException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<ArgumentNullException>(() => builder.CreateDataSource(null!));
+    }
+
+    [Test]
+    public void DataSourceCrud_CreateWithoutName_ThrowsArgumentException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<ArgumentException>(() =>
+            builder.CreateDataSource(new DataSourceBuilder().HookNamed("DummyGenerator")));
+    }
+
+    [Test]
+    public void DataSourceCrud_UpdateMissingSource_ThrowsKeyNotFoundException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<KeyNotFoundException>(() =>
+            builder.UpdateDataSource("missing", new DataSourceBuilder().Named("SourceA").HookNamed("DummyGenerator")));
+    }
+
+    [Test]
+    public void DataSourceCrud_UpdateWithDuplicateName_ThrowsInvalidOperationException()
+    {
+        var builder = new ExecutionBuilder();
+        builder.CreateDataSource(new DataSourceBuilder().Named("SourceA").HookNamed("DummyGenerator"));
+        builder.CreateDataSource(new DataSourceBuilder().Named("SourceB").HookNamed("DummyGenerator"));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            builder.UpdateDataSource("SourceA", new DataSourceBuilder().Named("SourceB").HookNamed("DummyGenerator")));
+    }
+
+    [Test]
+    public void DataSourceCrud_DeleteMissingSource_ThrowsKeyNotFoundException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<KeyNotFoundException>(() => builder.DeleteDataSource("missing"));
+    }
+
+    [Test]
     public void StubCrud_CreateReadUpdateDelete_Works()
     {
         var builder = new ExecutionBuilder();
@@ -79,6 +126,202 @@ public class ExecutionBuilderCrudTests
         var builder = new ExecutionBuilder();
 
         Assert.Throws<KeyNotFoundException>(() => builder.DeleteStub("missing"));
+    }
+
+    [Test]
+    public void StubCrud_CreateWithNullConfig_ThrowsArgumentNullException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<ArgumentNullException>(() => builder.CreateStub((TransactionStubConfig)null!));
+    }
+
+    [Test]
+    public void StubCrud_CreateWithDuplicateName_ThrowsInvalidOperationException()
+    {
+        var builder = new ExecutionBuilder();
+        builder.CreateStub(new TransactionStubBuilder().Named("StubA").HookNamed("DummyProcessor"));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            builder.CreateStub(new TransactionStubBuilder().Named("StubA").HookNamed("OtherProcessor")));
+    }
+
+    [Test]
+    public void StubCrud_UpdateMissingStub_ThrowsKeyNotFoundException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<KeyNotFoundException>(() =>
+            builder.UpdateStub("missing", new TransactionStubBuilder().Named("StubA").HookNamed("DummyProcessor")));
+    }
+
+    [Test]
+    public void StubCrud_UpdateWithNullConfigureAction_ThrowsArgumentNullException()
+    {
+        var builder = new ExecutionBuilder();
+        builder.CreateStub(new TransactionStubBuilder().Named("StubA").HookNamed("DummyProcessor"));
+
+        Assert.Throws<ArgumentNullException>(() => builder.UpdateStub("StubA", (Action<TransactionStubBuilder>)null!));
+    }
+
+    [Test]
+    public void StubCrud_UpdateWithDuplicateName_ThrowsInvalidOperationException()
+    {
+        var builder = new ExecutionBuilder();
+        builder.CreateStub(new TransactionStubBuilder().Named("StubA").HookNamed("DummyProcessor"));
+        builder.CreateStub(new TransactionStubBuilder().Named("StubB").HookNamed("DummyProcessor"));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            builder.UpdateStub("StubA", new TransactionStubBuilder().Named("StubB").HookNamed("DummyProcessor")));
+    }
+
+    [Test]
+    public void ServerCrud_CreateServerReadReplaceAddAndUpdate_Works()
+    {
+        var builder = new ExecutionBuilder();
+        var first = BuildHttpServer("ActionA");
+        var replacement = BuildSocketServer("ActionB");
+        var added = BuildHttpServer("ActionC");
+
+        builder.CreateServer(first);
+        var created = builder.ReadServer();
+        builder.UpdateServer(server => server.Type = ServerType.Socket);
+        builder.ReplaceServer(replacement);
+        builder.AddServer(added);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(created, Is.SameAs(first));
+            Assert.That(builder.ReadServer(), Is.Null);
+            Assert.That(builder.ReadServers(), Has.Count.EqualTo(2));
+            Assert.That(builder.ReadServers().Select(server => server.Type),
+                Is.EqualTo(new[] { ServerType.Socket, ServerType.Http }));
+        });
+    }
+
+    [Test]
+    public void ServerCrud_CreateServerWhenAlreadyConfigured_ThrowsInvalidOperationException()
+    {
+        var builder = new ExecutionBuilder().CreateServer(BuildHttpServer("ActionA"));
+
+        Assert.Throws<InvalidOperationException>(() => builder.CreateServer(BuildSocketServer("ActionB")));
+    }
+
+    [Test]
+    public void ServerCrud_CreateServerWithNullConfig_ThrowsArgumentNullException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<ArgumentNullException>(() => builder.CreateServer(null!));
+    }
+
+    [Test]
+    public void ServerCrud_ReplaceServerWithNullConfig_ThrowsArgumentNullException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<ArgumentNullException>(() => builder.ReplaceServer(null!));
+    }
+
+    [Test]
+    public void ServerCrud_AddServerWithNullConfig_ThrowsArgumentNullException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<ArgumentNullException>(() => builder.AddServer(null!));
+    }
+
+    [Test]
+    public void ServerCrud_ReplaceServersWithNullArray_ThrowsArgumentNullException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<ArgumentNullException>(() => builder.ReplaceServers(null!));
+    }
+
+    [Test]
+    public void ServerCrud_UpdateServerWithoutSingleServer_ThrowsInvalidOperationException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<InvalidOperationException>(() => builder.UpdateServer(_ => { }));
+    }
+
+    [Test]
+    public void ControllerCrud_CreateReadReplaceUpdateAndDelete_Works()
+    {
+        var builder = new ExecutionBuilder();
+        var controller = new ControllerConfig { ServerName = "server-a" };
+
+        builder.CreateController(controller);
+        var created = builder.ReadController();
+        builder.UpdateController(config => config.ServerName = "server-b");
+        builder.ReplaceController(new ControllerConfig { ServerName = "server-c" });
+        builder.DeleteController();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(created, Is.SameAs(controller));
+            Assert.That(created!.ServerName, Is.EqualTo("server-b"));
+            Assert.That(builder.ReadController(), Is.Null);
+        });
+    }
+
+    [Test]
+    public void ControllerCrud_CreateControllerWhenAlreadyConfigured_ThrowsInvalidOperationException()
+    {
+        var builder = new ExecutionBuilder().CreateController(new ControllerConfig { ServerName = "server-a" });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            builder.CreateController(new ControllerConfig { ServerName = "server-b" }));
+    }
+
+    [Test]
+    public void ControllerCrud_UpdateWithoutController_ThrowsInvalidOperationException()
+    {
+        var builder = new ExecutionBuilder();
+
+        Assert.Throws<InvalidOperationException>(() => builder.UpdateController(_ => { }));
+    }
+
+    [Test]
+    public void ControllerCrud_UpdateWithNullAction_ThrowsArgumentNullException()
+    {
+        var builder = new ExecutionBuilder().CreateController(new ControllerConfig { ServerName = "server-a" });
+
+        Assert.Throws<ArgumentNullException>(() => builder.UpdateController(null!));
+    }
+
+    [Test]
+    public void Validate_WithNoServerConfiguration_ReturnsSingleValidationError()
+    {
+        var builder = new ExecutionBuilder();
+
+        var results = builder.Validate(new ValidationContext(builder)).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(results, Has.Length.EqualTo(1));
+            Assert.That(results[0].ErrorMessage, Is.EqualTo("Either 'Server' or 'Servers' must be configured."));
+        });
+    }
+
+    [Test]
+    public void Validate_WithSingleAndMultipleServersConfigured_ReturnsSingleValidationError()
+    {
+        var builder = new ExecutionBuilder
+        {
+            Server = BuildHttpServer("ActionA"),
+            Servers = [BuildSocketServer("ActionB")]
+        };
+
+        var results = builder.Validate(new ValidationContext(builder)).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(results, Has.Length.EqualTo(1));
+            Assert.That(results[0].ErrorMessage, Is.EqualTo("Configure either 'Server' or 'Servers', not both."));
+        });
     }
 
     [Test]

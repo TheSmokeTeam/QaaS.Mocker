@@ -74,6 +74,49 @@ public class CompositeServerStateTests
         });
     }
 
+    [Test]
+    public void Constructor_WithNoStates_UsesNoInputOutput()
+    {
+        var state = new CompositeServerState([]);
+
+        Assert.That(state.InputOutputState, Is.EqualTo(InputOutputState.NoInputOutput));
+    }
+
+    [Test]
+    public void Constructor_WithOnlyOutputState_UsesOnlyOutput()
+    {
+        var state = new CompositeServerState([new FakeServerState(InputOutputState.OnlyOutput, "OutputAction")]);
+
+        Assert.That(state.InputOutputState, Is.EqualTo(InputOutputState.OnlyOutput));
+    }
+
+    [Test]
+    public void HasAction_WithCaseInsensitiveName_ReturnsTrue()
+    {
+        var state = new CompositeServerState([new FakeServerState(InputOutputState.OnlyInput, "EchoAction")]);
+
+        Assert.That(state.HasAction("echoaction"), Is.True);
+    }
+
+    [Test]
+    public void ChangeActionStub_WhenActionMissing_ThrowsActionDoesNotExistException()
+    {
+        var state = new CompositeServerState([new FakeServerState(InputOutputState.OnlyInput, "EchoAction")]);
+
+        Assert.Throws<ActionDoesNotExistException>(() => state.ChangeActionStub("MissingAction", "StubA"));
+    }
+
+    [Test]
+    public void TriggerAction_WithMatchingAction_RoutesToOwningServer()
+    {
+        var socketState = new FakeServerState(InputOutputState.OnlyOutput, "BroadcastAction");
+        var compositeState = new CompositeServerState([socketState]);
+
+        compositeState.TriggerAction("BroadcastAction", 250);
+
+        Assert.That(socketState.TriggeredActions, Is.EqualTo(new[] { ("BroadcastAction", 250) }));
+    }
+
     private sealed class FakeServerState : IServerState
     {
         private readonly HashSet<string> _actions;
@@ -89,10 +132,11 @@ public class CompositeServerStateTests
         public InputOutputState InputOutputState { get; init; }
 
         public List<(string ActionName, string StubName)> ChangedActions { get; } = [];
+        public List<(string ActionName, int? TimeoutMs)> TriggeredActions { get; } = [];
 
         public bool HasAction(string actionName)
         {
-            return _actions.Contains(actionName);
+            return _actions.Contains(actionName, StringComparer.OrdinalIgnoreCase);
         }
 
         public void ChangeActionStub(string actionName, string stubName)
@@ -107,6 +151,8 @@ public class CompositeServerStateTests
         {
             if (!HasAction(actionName))
                 throw new ActionDoesNotExistException($"Cannot trigger action '{actionName}' that doesn't exist");
+
+            TriggeredActions.Add((actionName, timeoutMs));
         }
 
         public ICache GetCache() => _cache;

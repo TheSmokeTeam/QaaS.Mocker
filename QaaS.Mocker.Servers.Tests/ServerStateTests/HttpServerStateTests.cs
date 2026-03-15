@@ -63,6 +63,24 @@ public class HttpServerStateTests
     }
 
     [Test]
+    public void Process_WithKnownPathButUnsupportedMethod_UsesNotFoundStub()
+    {
+        var state = CreateState(
+            ("MainStub", _ => CreateResponse("main")),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => CreateResponse("internal")));
+
+        var request = CreateRequestData();
+        var response = state.Process("/users/42", HttpMethod.Post, request);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Encoding.UTF8.GetString((byte[])response.Body!), Is.EqualTo("not-found"));
+            Assert.That(request.MetaData!.Http.PathParameters, Is.Null);
+        });
+    }
+
+    [Test]
     public void Process_WhenPrimaryStubThrows_UsesInternalErrorStub()
     {
         var state = CreateState(
@@ -146,6 +164,77 @@ public class HttpServerStateTests
             Assert.That(cache.RetrieveFirstOrDefaultStringInput(), Is.Not.Null);
             Assert.That(cache.RetrieveFirstOrDefaultStringOutput(), Is.Not.Null);
         });
+    }
+
+    [Test]
+    public void Constructor_WithNullEndpoints_CreatesEmptyActionMap()
+    {
+        var state = new HttpServerState(
+            Globals.Logger,
+            new[]
+            {
+                CreateStub("NotFoundStub", _ => CreateResponse("not-found")),
+                CreateStub("InternalStub", _ => CreateResponse("internal"))
+            }.ToImmutableList(),
+            "NotFoundStub",
+            "InternalStub",
+            endpoints: null);
+
+        Assert.That(state.HasAction("anything"), Is.False);
+    }
+
+    [Test]
+    public void ChangeActionStub_WhenStubDoesNotExist_ThrowsStubNotLoadedException()
+    {
+        var state = CreateState(
+            ("MainStub", _ => CreateResponse("main")),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => CreateResponse("internal")));
+
+        Assert.Throws<StubNotLoadedException>(() => state.ChangeActionStub("GetUser", "MissingStub"));
+    }
+
+    [Test]
+    public void TriggerAction_ThrowsNotImplementedException()
+    {
+        var state = CreateState(
+            ("MainStub", _ => CreateResponse("main")),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => CreateResponse("internal")));
+
+        Assert.Throws<NotImplementedException>(() => state.TriggerAction("GetUser", 100));
+    }
+
+    [Test]
+    public void Constructor_WithUnnamedAction_DoesNotRegisterControllerVisibleAction()
+    {
+        var endpoint = new HttpEndpointConfig
+        {
+            Path = "/users/{id}",
+            Actions =
+            [
+                new HttpEndpointActionConfig
+                {
+                    Name = null,
+                    Method = HttpMethod.Get,
+                    TransactionStubName = "MainStub"
+                }
+            ]
+        };
+
+        var state = new HttpServerState(
+            Globals.Logger,
+            new[]
+            {
+                CreateStub("MainStub", _ => CreateResponse("main")),
+                CreateStub("NotFoundStub", _ => CreateResponse("not-found")),
+                CreateStub("InternalStub", _ => CreateResponse("internal"))
+            }.ToImmutableList(),
+            "NotFoundStub",
+            "InternalStub",
+            [endpoint]);
+
+        Assert.That(state.HasAction("GetUser"), Is.False);
     }
 
     private static HttpServerState CreateState(params (string Name, Func<Data<object>, Data<object>> Processor)[] stubs)
