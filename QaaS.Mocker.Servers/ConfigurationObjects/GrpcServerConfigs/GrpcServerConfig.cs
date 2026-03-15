@@ -4,6 +4,7 @@ using QaaS.Framework.Configurations.CustomValidationAttributes;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.GrpcServerConfigs;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record GrpcServerConfig : IValidatableObject
 {
     [Required, Range(0, 65535), Description("The port to expose on the grpc server")]

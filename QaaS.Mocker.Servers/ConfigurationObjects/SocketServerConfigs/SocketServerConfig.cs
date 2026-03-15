@@ -4,6 +4,7 @@ using QaaS.Framework.Configurations.CustomValidationAttributes;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record SocketServerConfig
 {
     [DefaultValue("0.0.0.0"), Description("Subnet ipv4 mask to bind socket client's connection to")]
@@ -21,6 +22,7 @@ public record SocketServerConfig
     public SocketEndpointConfig[]? Endpoints { get; set; }
 }
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class UniqueActionNameInAllEndpointsAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
@@ -53,6 +55,7 @@ internal class UniqueActionNameInAllEndpointsAttribute : ValidationAttribute
 /// Rejects UDP broadcast endpoints up front because the current socket runtime has no remote
 /// destination to send to for that mode.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class BroadcastOverUdpNotSupportedAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
@@ -79,6 +82,7 @@ internal class BroadcastOverUdpNotSupportedAttribute : ValidationAttribute
 /// Rejects protocol/socket-type combinations that would otherwise fail later with opaque
 /// platform socket exceptions during server construction.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class SocketTypeMatchesProtocolAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)

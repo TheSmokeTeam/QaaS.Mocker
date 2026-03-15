@@ -5,6 +5,7 @@ using QaaS.Framework.Configurations.CustomValidationAttributes;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record HttpServerConfig : IValidatableObject
 {
     [Required, Range(0, 65535), Description("The port to expose on the http server")]
@@ -70,6 +71,7 @@ public record HttpServerConfig : IValidatableObject
     }
 }
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class ValidAndUniquePathRegexEndpointsAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
@@ -126,6 +128,7 @@ internal class ValidAndUniquePathRegexEndpointsAttribute : ValidationAttribute
 }
 
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class UniqueActionNameEndpointsAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)

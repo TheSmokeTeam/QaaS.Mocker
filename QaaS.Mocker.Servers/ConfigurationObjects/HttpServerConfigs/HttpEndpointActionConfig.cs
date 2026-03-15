@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record HttpEndpointActionConfig
 {
     [Description("The http endpoint action name identifier")]

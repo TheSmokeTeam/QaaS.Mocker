@@ -7,6 +7,7 @@ using QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record ServerConfig : IValidatableObject
 {
     [Required, Description("The type of the server protocol to run")]

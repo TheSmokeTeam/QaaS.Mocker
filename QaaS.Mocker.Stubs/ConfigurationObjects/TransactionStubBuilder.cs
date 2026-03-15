@@ -6,6 +6,7 @@ using QaaS.Framework.Serialization;
 
 namespace QaaS.Mocker.Stubs.ConfigurationObjects;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public class TransactionStubBuilder
 {
     public string? Name { get; private set; }

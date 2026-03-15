@@ -8,6 +8,7 @@ namespace QaaS.Mocker.Options;
 /// <summary>
 /// Mocker running options.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record MockerOptions : LoggerOptions
 {
     [Option('m', "mode",

@@ -5,6 +5,7 @@ using QaaS.Framework.Configurations.CustomValidationAttributes;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record HttpEndpointConfig
 {
     [Required, UniquePropertyInEnumerable(nameof(HttpEndpointActionConfig.Method)),
