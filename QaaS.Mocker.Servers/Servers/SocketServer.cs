@@ -152,9 +152,10 @@ public class SocketServer : IServer
             Task.WhenAll(endpointTasks).GetAwaiter().GetResult();
             Task.WhenAll(_activeProcessingTasks.Keys).GetAwaiter().GetResult();
         }
-        catch (OperationCanceledException) when (_cancellationTokenSource.IsCancellationRequested && _fatalException == null)
+        catch (OperationCanceledException) when (_cancellationTokenSource.IsCancellationRequested)
         {
-            _logger.LogInformation("Socket server processing loop was canceled.");
+            if (_fatalException == null)
+                _logger.LogInformation("Socket server processing loop was canceled.");
         }
 
         if (_fatalException != null)

@@ -410,6 +410,34 @@ public class SocketServerTests
     }
 
     [Test]
+    public async Task Start_WhenCancellationFollowsRecordedFatalException_ThrowsIOException()
+    {
+        var port = GetFreeTcpPort();
+        var server = CreateServer(port, ProtocolType.Tcp, SocketMethod.Collect);
+        var semaphore = (SemaphoreSlim)typeof(SocketServer)
+            .GetField("_semaphore", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(server)!;
+        while (semaphore.Wait(0))
+        {
+        }
+
+        var startTask = Task.Run(() => server.Start());
+        await Task.Delay(100);
+
+        typeof(SocketServer)
+            .GetMethod("RecordFatalException", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(server, [new InvalidOperationException("boom")]);
+        var cancellationTokenSource = (CancellationTokenSource)typeof(SocketServer)
+            .GetField("_cancellationTokenSource", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(server)!;
+        await cancellationTokenSource.CancelAsync();
+
+        var exception = Assert.ThrowsAsync<IOException>(async () => await startTask);
+
+        Assert.That(exception!.InnerException, Is.TypeOf<InvalidOperationException>());
+    }
+
+    [Test]
     public void DisposeServerSockets_WithDisposedServerSocket_DoesNotThrow()
     {
         var server = CreateServer(7001, ProtocolType.Tcp, SocketMethod.Collect);
