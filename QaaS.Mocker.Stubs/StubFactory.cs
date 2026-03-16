@@ -3,9 +3,9 @@ using Microsoft.Extensions.Logging;
 using QaaS.Framework.SDK.ConfigurationObjects;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Framework.SDK.DataSourceObjects;
-using QaaS.Common.Processors;
 using QaaS.Framework.SDK.Hooks.Processor;
 using QaaS.Mocker.Stubs.ConfigurationObjects;
+using QaaS.Mocker.Stubs.Processors;
 using QaaS.Mocker.Stubs.Stubs;
 
 namespace QaaS.Mocker.Stubs;
@@ -57,25 +57,13 @@ public class StubFactory(Context context, TransactionStubConfig[] stubs,
         transactionStubs.Add(new TransactionStub
         {
             Name = Constants.DefaultNotFoundTransactionStubLabel,
-            Processor = new StatusCodeTransactionProcessor
-            {
-                Configuration = new StatusCodeConfiguration 
-                {
-                    StatusCode = Constants.DefaultNotFoundTransactionStubStatusCode
-                }
-            },
+            Processor = new StatusCodeTransactionProcessor(Constants.DefaultNotFoundTransactionStubStatusCode),
         });
         
         transactionStubs.Add(new TransactionStub
         {
             Name = Constants.DefaultInternalErrorTransactionStubLabel,
-            Processor = new StatusCodeTransactionProcessor
-            {
-                Configuration = new StatusCodeConfiguration
-                {
-                    StatusCode = Constants.DefaultInternalErrorTransactionStubStatusCode
-                }
-            },        
+            Processor = new StatusCodeTransactionProcessor(Constants.DefaultInternalErrorTransactionStubStatusCode),        
         });
 
         context.Logger.LogInformation(

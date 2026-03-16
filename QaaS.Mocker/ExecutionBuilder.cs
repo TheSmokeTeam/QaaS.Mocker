@@ -370,7 +370,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
             containerBuilder.Register<IComponentContext, IEnumerable<HookData<ITransactionProcessor>>>(_ =>
                 Stubs.Select(stubConfig => new HookData<ITransactionProcessor>
                 {
-                    Type = stubConfig.Processor!,
+                    Type = ResolveProcessorTypeName(stubConfig.Processor!),
                     Configuration = stubConfig.ProcessorSpecificConfiguration,
                     Name = stubConfig.Name!
                 })
@@ -443,6 +443,40 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return DataSourceGeneratorProperty.GetValue(dataSourceBuilder)?.ToString() ??
                throw new InvalidOperationException(
                    "Could not resolve generator name from DataSource configuration. Ensure DataSources are configured correctly.");
+    }
+
+    private static string ResolveProcessorTypeName(string configuredProcessor)
+    {
+        if (string.IsNullOrWhiteSpace(configuredProcessor) || configuredProcessor.Contains('.'))
+            return configuredProcessor;
+
+        var matchingProcessorTypes = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(assembly => !assembly.IsDynamic)
+            .SelectMany(GetLoadableTypes)
+            .Where(type =>
+                type is { IsAbstract: false, IsInterface: false } &&
+                typeof(ITransactionProcessor).IsAssignableFrom(type) &&
+                string.Equals(type.Name, configuredProcessor, StringComparison.Ordinal))
+            .Select(type => type.FullName)
+            .Where(typeName => !string.IsNullOrWhiteSpace(typeName))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return matchingProcessorTypes.Length == 1
+            ? matchingProcessorTypes[0]!
+            : configuredProcessor;
+    }
+
+    private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
+    {
+        try
+        {
+            return assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException exception)
+        {
+            return exception.Types.Where(type => type is not null)!;
+        }
     }
 
     private static IConfiguration GetDataSourceGeneratorConfiguration(DataSourceBuilder dataSourceBuilder)

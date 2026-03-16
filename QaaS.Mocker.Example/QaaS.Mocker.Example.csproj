@@ -13,10 +13,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <InternalsVisibleTo Include="QaaS.Mocker.Tests" />
-    </ItemGroup>
-
-    <ItemGroup>
       <None Update="mocker.qaas.yaml">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>

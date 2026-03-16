@@ -1,27 +1,27 @@
 using QaaS.Mocker.Options;
 
-namespace QaaS.Mocker.Example;
+namespace QaaS.Mocker;
 
-internal static class ExampleArgumentNormalizer
+internal static class CommandLinePathNormalizer
 {
     public static string[] Normalize(
         IEnumerable<string> args,
         string callerWorkingDirectory,
-        string exampleWorkingDirectory)
+        string fallbackInputWorkingDirectory,
+        bool includeNoEnvFlag = false)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentException.ThrowIfNullOrWhiteSpace(callerWorkingDirectory);
-        ArgumentException.ThrowIfNullOrWhiteSpace(exampleWorkingDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fallbackInputWorkingDirectory);
 
         var normalizedArguments = RewriteRelativePaths(
             args.ToArray(),
             callerWorkingDirectory,
-            exampleWorkingDirectory);
+            fallbackInputWorkingDirectory);
 
-        if (normalizedArguments.All(argument =>
+        if (includeNoEnvFlag && normalizedArguments.All(argument =>
                 !string.Equals(argument, "--no-env", StringComparison.OrdinalIgnoreCase)))
         {
-            // Keep the sample deterministic in IDE terminals that inject many unrelated environment variables.
             normalizedArguments.Add("--no-env");
         }
 
@@ -31,7 +31,7 @@ internal static class ExampleArgumentNormalizer
     private static List<string> RewriteRelativePaths(
         IReadOnlyList<string> args,
         string callerWorkingDirectory,
-        string exampleWorkingDirectory)
+        string fallbackInputWorkingDirectory)
     {
         var rewrittenArguments = new List<string>(args.Count + 1);
         var configurationFileResolved = false;
@@ -74,7 +74,7 @@ internal static class ExampleArgumentNormalizer
                     rewrittenArguments,
                     "--overwrite-files",
                     "-w",
-                    value => ResolveInputPath(value, callerWorkingDirectory, exampleWorkingDirectory)))
+                    value => ResolveInputPath(value, callerWorkingDirectory, fallbackInputWorkingDirectory)))
             {
                 continue;
             }
@@ -93,7 +93,7 @@ internal static class ExampleArgumentNormalizer
             if (!configurationFileResolved && !IsOption(argument))
             {
                 rewrittenArguments.Add(
-                    ResolveInputPath(argument, callerWorkingDirectory, exampleWorkingDirectory));
+                    ResolveInputPath(argument, callerWorkingDirectory, fallbackInputWorkingDirectory));
                 configurationFileResolved = true;
                 continue;
             }
@@ -192,7 +192,7 @@ internal static class ExampleArgumentNormalizer
     private static string ResolveInputPath(
         string path,
         string callerWorkingDirectory,
-        string exampleWorkingDirectory)
+        string fallbackInputWorkingDirectory)
     {
         if (Path.IsPathRooted(path))
             return path;
@@ -201,8 +201,8 @@ internal static class ExampleArgumentNormalizer
         if (File.Exists(callerRelativePath))
             return callerRelativePath;
 
-        var exampleRelativePath = Path.GetFullPath(path, exampleWorkingDirectory);
-        return File.Exists(exampleRelativePath) ? exampleRelativePath : callerRelativePath;
+        var fallbackRelativePath = Path.GetFullPath(path, fallbackInputWorkingDirectory);
+        return File.Exists(fallbackRelativePath) ? fallbackRelativePath : callerRelativePath;
     }
 
     private static string ResolveOutputPath(string path, string callerWorkingDirectory) =>

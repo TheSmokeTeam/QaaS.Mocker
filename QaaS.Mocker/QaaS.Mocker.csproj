@@ -42,6 +42,7 @@
     </Target>
 
     <ItemGroup>
+      <InternalsVisibleTo Include="QaaS.Mocker.Example" />
       <InternalsVisibleTo Include="QaaS.Mocker.Tests" />
     </ItemGroup>
 
