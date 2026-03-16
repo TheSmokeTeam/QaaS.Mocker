@@ -6,11 +6,14 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <RootNamespace>QaaS.Mocker.Example</RootNamespace>
-        <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
     </PropertyGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\QaaS.Mocker\QaaS.Mocker.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <InternalsVisibleTo Include="QaaS.Mocker.Tests" />
     </ItemGroup>
 
     <ItemGroup>

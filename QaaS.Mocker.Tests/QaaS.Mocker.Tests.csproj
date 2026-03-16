@@ -29,6 +29,7 @@
     <ItemGroup>
       <ProjectReference Include="..\QaaS.Mocker\QaaS.Mocker.csproj" />
       <ProjectReference Include="..\QaaS.Mocker.Controller\QaaS.Mocker.Controller.csproj" />
+      <ProjectReference Include="..\QaaS.Mocker.Example\QaaS.Mocker.Example.csproj" />
       <ProjectReference Include="..\QaaS.Mocker.Servers\QaaS.Mocker.Servers.csproj" />
     </ItemGroup>
 
