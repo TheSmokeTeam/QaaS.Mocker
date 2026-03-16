@@ -88,28 +88,51 @@ public class ExecutionBranchTests
     [Test]
     public void Start_WithRunMode_AndRunLocallyUnderRedirectedInput_ReturnsZeroWithoutBlocking()
     {
-        Assume.That(Console.IsInputRedirected, Is.True);
-
         var server = new Mock<IServer>();
         server.Setup(s => s.Start());
+        var executionConsole = new TestExecutionConsole { IsInputRedirected = true };
 
         var context = CreateContext();
-        var execution = CreateExecution(
+        var redirectedExecution = CreateExecution(
             ExecutionMode.Run,
             context,
             serverLogic: new ServerLogic(server.Object),
-            controllerLogic: null);
-        var redirectedExecution = new Execution(ExecutionMode.Run, context, runLocally: true)
-        {
-            ServerLogic = execution.ServerLogic,
-            ControllerLogic = execution.ControllerLogic,
-            TemplateLogic = execution.TemplateLogic
-        };
+            controllerLogic: null,
+            runLocally: true,
+            executionConsole: executionConsole);
 
         var result = redirectedExecution.Start();
 
-        Assert.That(result, Is.EqualTo(0));
-        server.Verify(s => s.Start(), Times.Once);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(0));
+            Assert.That(executionConsole.ReadKeyCallCount, Is.EqualTo(0));
+            server.Verify(s => s.Start(), Times.Once);
+        });
+    }
+
+    [Test]
+    public void Start_WithRunMode_AndRunLocallyUnderInteractiveInput_ReadsKeyAndReturnsZero()
+    {
+        var server = new Mock<IServer>();
+        server.Setup(s => s.Start());
+        var executionConsole = new TestExecutionConsole { IsInputRedirected = false };
+
+        var execution = CreateExecution(
+            ExecutionMode.Run,
+            serverLogic: new ServerLogic(server.Object),
+            controllerLogic: null,
+            runLocally: true,
+            executionConsole: executionConsole);
+
+        var result = execution.Start();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(0));
+            Assert.That(executionConsole.ReadKeyCallCount, Is.EqualTo(1));
+            server.Verify(s => s.Start(), Times.Once);
+        });
     }
 
     [Test]
@@ -125,14 +148,16 @@ public class ExecutionBranchTests
         Context? context = null,
         ServerLogic? serverLogic = null,
         ControllerLogic? controllerLogic = null,
-        TemplateLogic? templateLogic = null)
+        TemplateLogic? templateLogic = null,
+        bool runLocally = false,
+        IExecutionConsole? executionConsole = null)
     {
         context ??= CreateContext();
 
         serverLogic ??= new ServerLogic(new Mock<IServer>().Object);
         templateLogic ??= new TemplateLogic(context, writer: TextWriter.Null);
 
-        return new Execution(mode, context, runLocally: false)
+        return new Execution(mode, context, runLocally, executionConsole)
         {
             ServerLogic = serverLogic,
             ControllerLogic = controllerLogic,
@@ -151,5 +176,18 @@ public class ExecutionBranchTests
             Logger = Globals.Logger,
             RootConfiguration = configuration
         };
+    }
+
+    private sealed class TestExecutionConsole : IExecutionConsole
+    {
+        public bool IsInputRedirected { get; init; }
+
+        public int ReadKeyCallCount { get; private set; }
+
+        public ConsoleKeyInfo ReadKey(bool intercept)
+        {
+            ReadKeyCallCount++;
+            return new ConsoleKeyInfo('x', ConsoleKey.X, shift: false, alt: false, control: false);
+        }
     }
 }

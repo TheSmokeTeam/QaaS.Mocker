@@ -11,6 +11,7 @@ namespace QaaS.Mocker;
 /// </summary>
 public class Execution : BaseExecution
 {
+    private readonly IExecutionConsole _executionConsole;
     private readonly ExecutionMode _executionMode;
     private readonly bool _runLocally;
 
@@ -18,10 +19,23 @@ public class Execution : BaseExecution
     internal ControllerLogic? ControllerLogic { get; init; }
     internal TemplateLogic TemplateLogic { get; init; } = null!;
 
-    public Execution(ExecutionMode executionMode, Context context, bool runLocally)
+    public Execution(
+        ExecutionMode executionMode,
+        Context context,
+        bool runLocally)
+        : this(executionMode, context, runLocally, SystemExecutionConsole.Instance)
+    {
+    }
+
+    internal Execution(
+        ExecutionMode executionMode,
+        Context context,
+        bool runLocally,
+        IExecutionConsole executionConsole)
     {
         _executionMode = executionMode;
         _runLocally = runLocally;
+        _executionConsole = executionConsole;
         Context = context;
     }
 
@@ -74,10 +88,10 @@ public class Execution : BaseExecution
 
         if (_runLocally)
         {
-            if (!Console.IsInputRedirected)
+            if (!_executionConsole.IsInputRedirected)
             {
                 Context.Logger.LogInformation("Press any key to stop the mocker...");
-                Console.ReadKey(intercept: true);
+                _executionConsole.ReadKey(intercept: true);
             }
             else
             {
@@ -105,4 +119,23 @@ public class Execution : BaseExecution
     public override void Dispose()
     {
     }
+}
+
+internal interface IExecutionConsole
+{
+    bool IsInputRedirected { get; }
+    ConsoleKeyInfo ReadKey(bool intercept);
+}
+
+internal sealed class SystemExecutionConsole : IExecutionConsole
+{
+    public static SystemExecutionConsole Instance { get; } = new();
+
+    private SystemExecutionConsole()
+    {
+    }
+
+    public bool IsInputRedirected => Console.IsInputRedirected;
+
+    public ConsoleKeyInfo ReadKey(bool intercept) => Console.ReadKey(intercept);
 }

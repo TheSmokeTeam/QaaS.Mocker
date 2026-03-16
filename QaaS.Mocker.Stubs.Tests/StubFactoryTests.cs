@@ -4,6 +4,7 @@ using Moq;
 using NUnit.Framework;
 using QaaS.Framework.SDK.DataSourceObjects;
 using QaaS.Framework.SDK.Hooks.Processor;
+using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Mocker.Stubs.ConfigurationObjects;
 
 namespace QaaS.Mocker.Stubs.Tests;
@@ -39,6 +40,39 @@ public class StubFactoryTests
             Assert.That(stubs.Select(stub => stub.Name), Does.Contain(Constants.DefaultNotFoundTransactionStubLabel));
             Assert.That(stubs.Select(stub => stub.Name), Does.Contain(Constants.DefaultInternalErrorTransactionStubLabel));
             Assert.That(stubs.Single(stub => stub.Name == "StubA").DataSourceList.Single(), Is.SameAs(dataSource));
+        });
+    }
+
+    [Test]
+    public void Build_DefaultFallbackStubs_ReturnConfiguredStatusCodes()
+    {
+        var processor = new Mock<ITransactionProcessor>();
+        var factory = new StubFactory(
+            Globals.Context,
+            [
+                new TransactionStubConfig
+                {
+                    Name = "StubA",
+                    Processor = "ProcessorA"
+                }
+            ],
+            new List<KeyValuePair<string, ITransactionProcessor>>
+            {
+                new("StubA", processor.Object)
+            });
+
+        var stubs = factory.Build(ImmutableList<DataSource>.Empty);
+        var notFoundResponse = stubs.Single(stub => stub.Name == Constants.DefaultNotFoundTransactionStubLabel)
+            .Exercise(new Data<object> { Body = Array.Empty<byte>() });
+        var internalErrorResponse = stubs.Single(stub => stub.Name == Constants.DefaultInternalErrorTransactionStubLabel)
+            .Exercise(new Data<object> { Body = Array.Empty<byte>() });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(notFoundResponse.MetaData?.Http?.StatusCode, Is.EqualTo(Constants.DefaultNotFoundTransactionStubStatusCode));
+            Assert.That(internalErrorResponse.MetaData?.Http?.StatusCode, Is.EqualTo(Constants.DefaultInternalErrorTransactionStubStatusCode));
+            Assert.That(notFoundResponse.Body, Is.EqualTo(Array.Empty<byte>()));
+            Assert.That(internalErrorResponse.Body, Is.EqualTo(Array.Empty<byte>()));
         });
     }
 

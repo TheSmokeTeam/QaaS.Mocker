@@ -9,9 +9,9 @@ using QaaS.Mocker.Options;
 namespace QaaS.Mocker.Loaders;
 
 /// <summary>
-/// Loads CLI options into an execution-ready <see cref="Mocker"/> instance.
+/// Loads CLI options into an execution-ready <see cref="MockerRunner"/> instance.
 /// </summary>
-public class MockerLoader : BaseLoader<MockerOptions, Mocker>, IDisposable
+public class MockerLoader : BaseLoader<MockerOptions, MockerRunner>, IDisposable
 {
     private readonly ILifetimeScope _runScope;
     private static readonly string[] SupportedEnvironmentSeparators = [":", "__"];
@@ -79,8 +79,8 @@ public class MockerLoader : BaseLoader<MockerOptions, Mocker>, IDisposable
     /// <summary>
     /// Creates the runner instance from current loader options.
     /// </summary>
-    /// <returns>A runnable <see cref="Mocker"/> instance.</returns>
-    public override Mocker GetLoadedRunner() => new(LoadContextToExecutionBuilder(GetLoadedContext()));
+    /// <returns>A runnable <see cref="MockerRunner"/> instance.</returns>
+    public override MockerRunner GetLoadedRunner() => new(LoadContextToExecutionBuilder(GetLoadedContext()));
 
     public void Dispose()
     {
@@ -93,11 +93,25 @@ public class MockerLoader : BaseLoader<MockerOptions, Mocker>, IDisposable
     /// </summary>
     private void ApplyEnvironmentOverrides(ContextBuilder contextBuilder)
     {
+        var environmentVariables = Environment.GetEnvironmentVariables()
+            .Cast<DictionaryEntry>()
+            .Select(entry => new KeyValuePair<string?, string?>(
+                entry.Key?.ToString(),
+                entry.Value?.ToString()));
+
+        ApplyEnvironmentOverrides(contextBuilder, environmentVariables, Logger);
+    }
+
+    internal static void ApplyEnvironmentOverrides(
+        ContextBuilder contextBuilder,
+        IEnumerable<KeyValuePair<string?, string?>> environmentVariables,
+        ILogger logger)
+    {
         var appliedOverrides = 0;
-        foreach (DictionaryEntry environmentVariable in Environment.GetEnvironmentVariables())
+        foreach (var environmentVariable in environmentVariables)
         {
-            var environmentVariableName = environmentVariable.Key?.ToString();
-            var environmentVariableValue = environmentVariable.Value?.ToString();
+            var environmentVariableName = environmentVariable.Key;
+            var environmentVariableValue = environmentVariable.Value;
             if (string.IsNullOrWhiteSpace(environmentVariableName) || environmentVariableValue == null)
                 continue;
 
@@ -109,7 +123,7 @@ public class MockerLoader : BaseLoader<MockerOptions, Mocker>, IDisposable
         }
 
         if (appliedOverrides > 0)
-            Logger.LogInformation("Applied {EnvironmentOverrideCount} environment override(s)", appliedOverrides);
+            logger.LogInformation("Applied {EnvironmentOverrideCount} environment override(s)", appliedOverrides);
     }
 
     private static bool TryMapEnvironmentVariableToConfigurationPath(

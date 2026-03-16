@@ -1,14 +1,10 @@
-QaaS.Mocker.Bootstrap.New(NormalizeExampleArgs(args)).Run();
+var callerWorkingDirectory = Directory.GetCurrentDirectory();
+var exampleWorkingDirectory = AppContext.BaseDirectory;
+var normalizedArguments = QaaS.Mocker.CommandLinePathNormalizer.Normalize(
+    args,
+    callerWorkingDirectory,
+    exampleWorkingDirectory,
+    includeNoEnvFlag: true);
 
-static string[] NormalizeExampleArgs(IEnumerable<string> args)
-{
-    var normalizedArguments = args.ToList();
-    if (normalizedArguments.All(argument =>
-            !string.Equals(argument, "--no-env", StringComparison.OrdinalIgnoreCase)))
-    {
-        // Keep the sample deterministic in IDE terminals that inject many unrelated environment variables.
-        normalizedArguments.Add("--no-env");
-    }
-
-    return [.. normalizedArguments];
-}
+Directory.SetCurrentDirectory(exampleWorkingDirectory);
+QaaS.Mocker.Bootstrap.New(normalizedArguments).Run();
