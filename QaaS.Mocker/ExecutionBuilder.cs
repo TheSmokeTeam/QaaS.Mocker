@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Autofac;
 using Microsoft.Extensions.Configuration;
@@ -33,11 +32,13 @@ namespace QaaS.Mocker;
 
 public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionData>, IValidatableObject
 {
-    private static readonly PropertyInfo? DataSourceGeneratorProperty =
-        typeof(DataSourceBuilder).GetProperty("Generator", BindingFlags.Instance | BindingFlags.NonPublic);
+    private static readonly PropertyInfo DataSourceGeneratorProperty =
+        typeof(DataSourceBuilder).GetProperty("Generator", BindingFlags.Instance | BindingFlags.NonPublic) ??
+        throw new InvalidOperationException("Could not resolve DataSourceBuilder.Generator property.");
 
-    private static readonly PropertyInfo? DataSourceGeneratorConfigurationProperty =
-        typeof(DataSourceBuilder).GetProperty("GeneratorConfiguration", BindingFlags.Instance | BindingFlags.NonPublic);
+    private static readonly PropertyInfo DataSourceGeneratorConfigurationProperty =
+        typeof(DataSourceBuilder).GetProperty("GeneratorConfiguration", BindingFlags.Instance | BindingFlags.NonPublic) ??
+        throw new InvalidOperationException("Could not resolve DataSourceBuilder.GeneratorConfiguration property.");
 
     [UniquePropertyInEnumerable(nameof(TransactionStubConfig.Name)),
      Description("List of transaction stubs that can be used for server actions." +
@@ -437,18 +438,16 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         };
     }
 
-    [ExcludeFromCodeCoverage]
     private static string GetDataSourceGeneratorName(DataSourceBuilder dataSourceBuilder)
     {
-        return DataSourceGeneratorProperty?.GetValue(dataSourceBuilder)?.ToString() ??
+        return DataSourceGeneratorProperty.GetValue(dataSourceBuilder)?.ToString() ??
                throw new InvalidOperationException(
                    "Could not resolve generator name from DataSource configuration. Ensure DataSources are configured correctly.");
     }
 
-    [ExcludeFromCodeCoverage]
     private static IConfiguration GetDataSourceGeneratorConfiguration(DataSourceBuilder dataSourceBuilder)
     {
-        return (IConfiguration?)DataSourceGeneratorConfigurationProperty?.GetValue(dataSourceBuilder) ??
+        return (IConfiguration?)DataSourceGeneratorConfigurationProperty.GetValue(dataSourceBuilder) ??
                new ConfigurationBuilder().Build();
     }
 

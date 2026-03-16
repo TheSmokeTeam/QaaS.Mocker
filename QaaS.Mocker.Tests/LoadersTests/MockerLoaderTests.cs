@@ -1,4 +1,6 @@
 using System.Reflection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using QaaS.Framework.Configurations.CustomExceptions;
 using QaaS.Framework.SDK.ContextObjects;
@@ -85,7 +87,7 @@ public class MockerLoaderTests
     }
 
     [Test]
-    public void GetLoadedRunner_WithValidOptions_ReturnsMocker()
+    public void GetLoadedRunner_WithValidOptions_ReturnsMockerRunner()
     {
         var tempDirectory = CreateTempDirectory();
         try
@@ -103,7 +105,7 @@ public class MockerLoaderTests
             var runner = loader.GetLoadedRunner();
 
             Assert.That(runner, Is.Not.Null);
-            Assert.That(runner, Is.TypeOf<Mocker>());
+            Assert.That(runner, Is.TypeOf<MockerRunner>());
         }
         finally
         {
@@ -304,6 +306,49 @@ public class MockerLoaderTests
             });
 
             Assert.DoesNotThrow(() => loader.Dispose());
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void ApplyEnvironmentOverrides_IgnoresInvalidEntriesAndAppliesSupportedMappings()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Type: Http
+                  Http:
+                    Port: 8443
+                """);
+            var contextBuilder = new ContextBuilder(new ConfigurationBuilder());
+            contextBuilder.SetLogger(NullLogger.Instance);
+            contextBuilder.SetConfigurationFile(configFile);
+
+            MockerLoader.ApplyEnvironmentOverrides(
+                contextBuilder,
+                [
+                    new KeyValuePair<string?, string?>(null, "ignored"),
+                    new KeyValuePair<string?, string?>("", "ignored"),
+                    new KeyValuePair<string?, string?>("PATH", "ignored"),
+                    new KeyValuePair<string?, string?>("Server__Type", "Grpc"),
+                    new KeyValuePair<string?, string?>("Servers__0__Type", "Socket"),
+                    new KeyValuePair<string?, string?>("Server__Http__Port", null)
+                ],
+                NullLogger.Instance);
+
+            var context = contextBuilder.BuildInternal();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Grpc"));
+                Assert.That(context.RootConfiguration["Servers:0:Type"], Is.EqualTo("Socket"));
+                Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
+            });
         }
         finally
         {

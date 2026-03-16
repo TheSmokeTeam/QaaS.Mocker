@@ -1,19 +1,19 @@
 using QaaS.Framework.Executions;
-using System.Diagnostics.CodeAnalysis;
 
 namespace QaaS.Mocker;
 
 /// <summary>
 /// Runner object representing a single QaaS.Mocker run.
 /// </summary>
-[ExcludeFromCodeCoverage]
-public class Mocker(ExecutionBuilder? executionBuilder) : IRunner
+public class MockerRunner(ExecutionBuilder? executionBuilder, Action<int>? exitAction = null) : IRunner
 {
+    private readonly Action<int> _exitAction = exitAction ?? Environment.Exit;
+
     public void Run()
     {
         if (executionBuilder == null)
             return;
 
-        Environment.Exit(executionBuilder.Build().Start());
+        _exitAction(executionBuilder.Build().Start());
     }
 }

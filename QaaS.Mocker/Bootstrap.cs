@@ -6,17 +6,17 @@ using QaaS.Mocker.Options;
 namespace QaaS.Mocker;
 
 /// <summary>
-/// Bootstrap class responsible for parsing arguments and creating a configured <see cref="Mocker"/>.
+/// Bootstrap class responsible for parsing arguments and creating a configured <see cref="MockerRunner"/>.
 /// </summary>
 public static class Bootstrap
 {
     /// <summary>
-    /// Creates a new <see cref="Mocker"/> from command-line arguments.
+    /// Creates a new <see cref="MockerRunner"/> from command-line arguments.
     /// </summary>
-    public static Mocker New(IEnumerable<string>? args = null)
+    public static MockerRunner New(IEnumerable<string>? args = null)
     {
         if (args == null)
-            return new Mocker(null);
+            return new MockerRunner(null);
 
         var normalizedArguments = NormalizeArguments(args);
         using var cliParser = CommandLineBuilders.ParserBuilder.BuildParser();
@@ -51,7 +51,7 @@ public static class Bootstrap
             : arguments;
     }
 
-    private static Mocker HandleParseError(IEnumerable<Error> errors)
+    private static MockerRunner HandleParseError(IEnumerable<Error> errors)
     {
         var errorsArray = errors.ToArray();
 
@@ -65,7 +65,7 @@ public static class Bootstrap
                 $"{qaasMockerAssemblyName} {GetAssemblyVersionFromName(qaasMockerAssemblyName)}\n");
         }
 
-        return new Mocker(null);
+        return new MockerRunner(null);
     }
 
     private static string GetAssemblyVersionFromName(string assemblyName) =>
