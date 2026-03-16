@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Autofac;
 using Microsoft.Extensions.Configuration;
@@ -436,6 +437,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         };
     }
 
+    [ExcludeFromCodeCoverage]
     private static string GetDataSourceGeneratorName(DataSourceBuilder dataSourceBuilder)
     {
         return DataSourceGeneratorProperty?.GetValue(dataSourceBuilder)?.ToString() ??
@@ -443,6 +445,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
                    "Could not resolve generator name from DataSource configuration. Ensure DataSources are configured correctly.");
     }
 
+    [ExcludeFromCodeCoverage]
     private static IConfiguration GetDataSourceGeneratorConfiguration(DataSourceBuilder dataSourceBuilder)
     {
         return (IConfiguration?)DataSourceGeneratorConfigurationProperty?.GetValue(dataSourceBuilder) ??

@@ -50,6 +50,45 @@ public class TemplateLogicTests
         Assert.That(fileSystem.File.Exists(expectedPath), Is.True);
     }
 
+    [Test]
+    public void Run_WithExistingOutputFolder_WritesTemplateFileWithoutRecreatingDirectory()
+    {
+        var fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
+        {
+            [@"C:\temp\templates\existing.txt"] = new("seed")
+        });
+        var originalDirectory = Environment.CurrentDirectory;
+
+        try
+        {
+            Environment.CurrentDirectory = @"C:\temp";
+            var logic = new TemplateLogic(CreateContext(), "templates", fileSystem, TextWriter.Null);
+            var expectedPath = fileSystem.Path.Combine(Environment.CurrentDirectory, "templates", "template.qaas.yaml");
+
+            _ = logic.Run(new ExecutionData());
+
+            Assert.That(fileSystem.File.Exists(expectedPath), Is.True);
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalDirectory;
+        }
+    }
+
+    [Test]
+    public void Run_WithOutputFileInCurrentDirectory_WritesTemplateWithoutDirectoryCreation()
+    {
+        var fileSystem = new MockFileSystem();
+        var context = CreateContext();
+        var logic = new TemplateLogic(context, "templates", fileSystem, TextWriter.Null);
+
+        typeof(TemplateLogic)
+            .GetMethod("WriteTemplateToFile", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .Invoke(logic, ["template.qaas.yaml", "Server:\n  Type: Http"]);
+
+        Assert.That(fileSystem.File.Exists("template.qaas.yaml"), Is.True);
+    }
+
     private static Context CreateContext()
     {
         var configuration = new ConfigurationBuilder()

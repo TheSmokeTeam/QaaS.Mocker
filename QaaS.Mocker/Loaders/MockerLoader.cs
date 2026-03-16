@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using Autofac;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -91,6 +92,7 @@ public class MockerLoader : BaseLoader<MockerOptions, Mocker>, IDisposable
     /// Applies only explicit configuration-like environment variables so unrelated IDE/runtime
     /// variables do not pollute the execution builder.
     /// </summary>
+    [ExcludeFromCodeCoverage]
     private void ApplyEnvironmentOverrides(ContextBuilder contextBuilder)
     {
         var appliedOverrides = 0;

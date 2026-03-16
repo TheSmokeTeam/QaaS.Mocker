@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
@@ -91,6 +92,143 @@ public class ExecutionBuilderBranchTests
     }
 
     [Test]
+    public void DataSourceCrud_CreateWithNullDataSourceCollection_InitializesCollection()
+    {
+        var builder = new ExecutionBuilder
+        {
+            DataSources = null!
+        };
+
+        builder.CreateDataSource(new DataSourceBuilder().Named("SourceA").HookNamed("DummyGenerator"));
+
+        Assert.That(builder.ReadDataSource("SourceA"), Is.Not.Null);
+    }
+
+    [Test]
+    public void DataSourceCrud_UpdateWithNullDataSourceCollection_ThrowsKeyNotFoundException()
+    {
+        var builder = new ExecutionBuilder
+        {
+            DataSources = null!
+        };
+
+        Assert.Throws<KeyNotFoundException>(() =>
+            builder.UpdateDataSource("source-a", new DataSourceBuilder().Named("SourceA").HookNamed("DummyGenerator")));
+    }
+
+    [Test]
+    public void StubCrud_UpdateWithConfigureAction_UpdatesExistingStub()
+    {
+        var builder = new ExecutionBuilder();
+        builder.CreateStub(new TransactionStubBuilder().Named("StubA").HookNamed("DummyProcessor"));
+
+        builder.UpdateStub("StubA", update => update.Named("StubB"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(builder.ReadStub("StubA"), Is.Null);
+            Assert.That(builder.ReadStub("StubB"), Is.Not.Null);
+        });
+    }
+
+    [Test]
+    public void GetDataSourceGeneratorConfiguration_WithConfiguredGenerator_ReturnsGeneratorConfiguration()
+    {
+        var generatorConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Prefix"] = "value" })
+            .Build();
+        var dataSourceBuilder = new DataSourceBuilder()
+            .Named("SourceA")
+            .HookNamed("DummyGenerator");
+        typeof(DataSourceBuilder)
+            .GetProperty("GeneratorConfiguration", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(dataSourceBuilder, generatorConfiguration);
+
+        var configuration = (IConfiguration)typeof(ExecutionBuilder)
+            .GetMethod("GetDataSourceGeneratorConfiguration", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [dataSourceBuilder])!;
+
+        Assert.That(configuration["Prefix"], Is.EqualTo(generatorConfiguration["Prefix"]));
+    }
+
+    [Test]
+    public void ResolveConfiguredServers_WithSingleServer_ReturnsSingleServerList()
+    {
+        var builder = new ExecutionBuilder
+        {
+            Server = new Servers.ConfigurationObjects.ServerConfig
+            {
+                Type = Servers.ConfigurationObjects.ServerType.Http
+            }
+        };
+
+        var configuredServers = (IReadOnlyList<Servers.ConfigurationObjects.ServerConfig>)typeof(ExecutionBuilder)
+            .GetMethod("ResolveConfiguredServers", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(builder, null)!;
+
+        Assert.That(configuredServers, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void ResolveConfiguredServers_WithoutConfiguredServers_ReturnsEmptyList()
+    {
+        var builder = new ExecutionBuilder();
+
+        var configuredServers = (IReadOnlyList<Servers.ConfigurationObjects.ServerConfig>)typeof(ExecutionBuilder)
+            .GetMethod("ResolveConfiguredServers", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(builder, null)!;
+
+        Assert.That(configuredServers, Is.Empty);
+    }
+
+    [Test]
+    public void BuildDataSources_WithNullCollection_ReturnsEmptySequence()
+    {
+        var builder = new TestExecutionBuilder
+        {
+            DataSources = null!
+        };
+
+        var dataSources = builder.InvokeBuildDataSources();
+
+        Assert.That(dataSources, Is.Empty);
+    }
+
+    [Test]
+    public void Validate_WithSocketEndpointWithoutAction_IgnoresUnnamedSocketEndpoint()
+    {
+        var builder = new ExecutionBuilder
+        {
+            Servers =
+            [
+                new Servers.ConfigurationObjects.ServerConfig
+                {
+                    Type = Servers.ConfigurationObjects.ServerType.Socket,
+                    Socket = new Servers.ConfigurationObjects.SocketServerConfigs.SocketServerConfig
+                    {
+                        Endpoints =
+                        [
+                            new Servers.ConfigurationObjects.SocketServerConfigs.SocketEndpointConfig
+                            {
+                                Port = 19090,
+                                ProtocolType = System.Net.Sockets.ProtocolType.Tcp,
+                                SocketType = System.Net.Sockets.SocketType.Stream,
+                                TimeoutMs = 1000,
+                                BufferSizeBytes = 2048,
+                                Action = null
+                            }
+                        ]
+                    }
+                }
+            ]
+        };
+
+        var results = builder.Validate(new ValidationContext(builder)).ToArray();
+
+        Assert.That(results, Is.Empty);
+    }
+
+    [Test]
     public void BuilderContextFluentMethods_CloneAndUpdateExecutionContext()
     {
         var originalConfiguration = new ConfigurationBuilder()
@@ -138,5 +276,10 @@ public class ExecutionBuilderBranchTests
             Assert.That(runLocally, Is.True);
             Assert.That(outputFolder, Is.EqualTo("templates"));
         });
+    }
+
+    private sealed class TestExecutionBuilder : ExecutionBuilder
+    {
+        public IEnumerable<DataSource> InvokeBuildDataSources() => BuildDataSources();
     }
 }

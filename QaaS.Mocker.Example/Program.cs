@@ -1,3 +1,4 @@
+Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 QaaS.Mocker.Bootstrap.New(NormalizeExampleArgs(args)).Run();
 
 static string[] NormalizeExampleArgs(IEnumerable<string> args)

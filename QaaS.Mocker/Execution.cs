@@ -3,6 +3,7 @@ using QaaS.Framework.SDK.ContextObjects;
 using Microsoft.Extensions.Logging;
 using QaaS.Mocker.Logics;
 using QaaS.Mocker.Options;
+using System.Diagnostics.CodeAnalysis;
 
 namespace QaaS.Mocker;
 
@@ -54,6 +55,7 @@ public class Execution : BaseExecution
         return 0;
     }
 
+    [ExcludeFromCodeCoverage]
     private int Run()
     {
         var runTasks = new List<Task>

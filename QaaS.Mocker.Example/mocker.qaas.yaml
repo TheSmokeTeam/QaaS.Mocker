@@ -2,9 +2,9 @@ DataSources: []
 
 Stubs:
   - Name: ExampleStub
-    Processor: ExampleProcessor
+    Processor: QaaS.Mocker.Example.Processors.ExampleProcessor
   - Name: GrpcEchoStub
-    Processor: GrpcEchoProcessor
+    Processor: QaaS.Mocker.Example.Processors.GrpcEchoProcessor
 
 Servers:
   - Type: Http

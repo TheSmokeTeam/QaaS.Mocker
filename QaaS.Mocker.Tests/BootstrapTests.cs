@@ -72,4 +72,20 @@ public class BootstrapTests
 
         Assert.That(normalizedArguments, Is.EqualTo(new[] { "--mode", "run", "mocker.qaas.yaml" }));
     }
+
+    [Test]
+    public void NormalizeArguments_WithNoArguments_ReturnsEmptyArray()
+    {
+        var normalizedArguments = Bootstrap.NormalizeArguments([]);
+
+        Assert.That(normalizedArguments, Is.Empty);
+    }
+
+    [Test]
+    public void NormalizeArguments_WithUnknownVerb_LeavesArgumentsUntouched()
+    {
+        var normalizedArguments = Bootstrap.NormalizeArguments(["serve", "mocker.qaas.yaml"]);
+
+        Assert.That(normalizedArguments, Is.EqualTo(new[] { "serve", "mocker.qaas.yaml" }));
+    }
 }

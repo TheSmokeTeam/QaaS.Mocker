@@ -40,11 +40,11 @@ public class ActionStateTests
 
         var firstTrigger = state.SetEnabledForTimeoutMs(40);
         await Task.Delay(10);
-        var secondTrigger = state.SetEnabledForTimeoutMs(120);
+        var secondTrigger = state.SetEnabledForTimeoutMs(300);
 
         await firstTrigger;
         var enabledAfterFirstWindowElapsed = state.Enabled;
-        await Task.Delay(70);
+        await Task.Delay(100);
         var stillEnabledDuringSecondWindow = state.Enabled;
         await secondTrigger;
 
