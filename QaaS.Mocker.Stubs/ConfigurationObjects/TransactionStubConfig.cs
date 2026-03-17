@@ -23,9 +23,17 @@ public record TransactionStubConfig : IYamlConvertible
                  " defined before this data source.")]
     public string[] DataSourceNames { get; set; } = Array.Empty<string>();
 
-    [Description("Implementation specific configuration for the processor, " +
+    [Description("Implementation configuration for the processor, " +
                  "the configuration given here is loaded into the provided processor dynamically.")]
-    public IConfiguration ProcessorSpecificConfiguration { get; set; } = new ConfigurationBuilder().Build();
+    public IConfiguration ProcessorConfiguration { get; set; } = new ConfigurationBuilder().Build();
+
+    [Obsolete("Use ProcessorConfiguration instead.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    internal IConfiguration ProcessorSpecificConfiguration
+    {
+        get => ProcessorConfiguration;
+        set => ProcessorConfiguration = value ?? new ConfigurationBuilder().Build();
+    }
     
     [Description("Deserialize to use on the request body"), DefaultValue(null)]
     public DeserializeConfig? RequestBodyDeserialization { get; set; } = null;
@@ -41,16 +49,16 @@ public record TransactionStubConfig : IYamlConvertible
 
     public void Write(IEmitter emitter, ObjectSerializer nestedObjectSerializer)
     {
-        var generatorSpecificConfiguration = ProcessorSpecificConfiguration
+        var processorConfiguration = ProcessorConfiguration
             .GetDictionaryFromConfiguration();
         
         nestedObjectSerializer(new {
             Name,
             Processor,
             DataSourceNames,
+            ProcessorConfiguration = processorConfiguration,
             RequestBodyDeserialization,
-            ResponseBodySerialization,
-            GeneratorSpecificConfiguration = generatorSpecificConfiguration
+            ResponseBodySerialization
         });
     }
 }

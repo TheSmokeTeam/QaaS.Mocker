@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using NUnit.Framework;
+using QaaS.Framework.Configurations;
 using QaaS.Mocker.Stubs.ConfigurationObjects;
+using YamlDotNet.Serialization;
 
 namespace QaaS.Mocker.Stubs.Tests;
 
@@ -8,7 +10,7 @@ namespace QaaS.Mocker.Stubs.Tests;
 public class TransactionStubBuilderTests
 {
     [Test]
-    public void Build_WithObjectConfiguration_LoadsProcessorSpecificConfiguration()
+    public void Build_WithObjectConfiguration_LoadsProcessorConfiguration()
     {
         var config = new { Prefix = "value", Retries = 3 };
 
@@ -22,8 +24,8 @@ public class TransactionStubBuilderTests
         {
             Assert.That(built.Name, Is.EqualTo("StubA"));
             Assert.That(built.Processor, Is.EqualTo("MyProcessor"));
-            Assert.That(built.ProcessorSpecificConfiguration["Prefix"], Is.EqualTo("value"));
-            Assert.That(built.ProcessorSpecificConfiguration["Retries"], Is.EqualTo("3"));
+            Assert.That(built.ProcessorConfiguration["Prefix"], Is.EqualTo("value"));
+            Assert.That(built.ProcessorConfiguration["Retries"], Is.EqualTo("3"));
         });
     }
 
@@ -43,7 +45,64 @@ public class TransactionStubBuilderTests
             .Configure(configuration)
             .Build();
 
-        Assert.That(built.ProcessorSpecificConfiguration["Nested:Enabled"], Is.EqualTo("true"));
+        Assert.That(built.ProcessorConfiguration["Nested:Enabled"], Is.EqualTo("true"));
+    }
+
+    [Test]
+    public void Build_SerializesProcessorConfigurationWithUpdatedKey()
+    {
+        var built = new TransactionStubBuilder()
+            .Named("StubA")
+            .HookNamed("MyProcessor")
+            .Configure(new { Prefix = "value" })
+            .Build();
+
+        var yaml = new SerializerBuilder().Build().Serialize(built);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(yaml, Does.Contain("ProcessorConfiguration:"));
+            Assert.That(yaml, Does.Contain("Prefix: value"));
+            Assert.That(yaml, Does.Not.Contain("ProcessorSpecificConfiguration:"));
+            Assert.That(yaml, Does.Not.Contain("GeneratorSpecificConfiguration:"));
+        });
+    }
+
+    [Test]
+    public void Bind_WithProcessorConfigurationKey_LoadsConfigurationSection()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Name"] = "StubA",
+                ["Processor"] = "MyProcessor",
+                ["ProcessorConfiguration:Nested:Enabled"] = "true"
+            })
+            .Build()
+            .BindToObject<TransactionStubConfig>(new BinderOptions());
+
+        Assert.That(configuration, Is.Not.Null);
+        Assert.That(configuration!.ProcessorConfiguration["Nested:Enabled"], Is.EqualTo("true"));
+    }
+
+    [Test]
+    public void Bind_WithLegacyProcessorSpecificConfigurationKey_LoadsConfigurationSection()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Name"] = "StubA",
+                ["Processor"] = "MyProcessor",
+                ["ProcessorSpecificConfiguration:Nested:Enabled"] = "true"
+            })
+            .Build()
+            .BindToObject<TransactionStubConfig>(new BinderOptions
+            {
+                BindNonPublicProperties = true
+            });
+
+        Assert.That(configuration, Is.Not.Null);
+        Assert.That(configuration!.ProcessorConfiguration["Nested:Enabled"], Is.EqualTo("true"));
     }
 
     [Test]
