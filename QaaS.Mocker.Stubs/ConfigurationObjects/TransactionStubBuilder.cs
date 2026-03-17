@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
@@ -15,7 +16,11 @@ public class TransactionStubBuilder
 
     public string[] DataSourceNames { get; private set; } = [];
 
-    public IConfiguration ProcessorSpecificConfiguration { get; private set; } = new ConfigurationBuilder().Build();
+    public IConfiguration ProcessorConfiguration { get; private set; } = new ConfigurationBuilder().Build();
+
+    [Obsolete("Use ProcessorConfiguration instead.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public IConfiguration ProcessorSpecificConfiguration => ProcessorConfiguration;
 
     public DeserializeConfig? RequestBodyDeserialization { get; private set; }
 
@@ -53,14 +58,14 @@ public class TransactionStubBuilder
 
     public TransactionStubBuilder Configure(IConfiguration configuration)
     {
-        ProcessorSpecificConfiguration = configuration;
+        ProcessorConfiguration = configuration;
         return this;
     }
 
     public TransactionStubBuilder Configure(object configuration)
     {
         var stream = new MemoryStream(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(configuration)));
-        ProcessorSpecificConfiguration = new ConfigurationBuilder().AddJsonStream(stream).Build();
+        ProcessorConfiguration = new ConfigurationBuilder().AddJsonStream(stream).Build();
         return this;
     }
 
@@ -88,7 +93,7 @@ public class TransactionStubBuilder
             Name = Name,
             Processor = Processor,
             DataSourceNames = DataSourceNames,
-            ProcessorSpecificConfiguration = ProcessorSpecificConfiguration,
+            ProcessorConfiguration = ProcessorConfiguration,
             RequestBodyDeserialization = RequestBodyDeserialization,
             ResponseBodySerialization = ResponseBodySerialization
         };
@@ -100,7 +105,7 @@ public class TransactionStubBuilder
             .Named(config.Name!)
             .HookNamed(config.Processor!)
             .WithDataSourceNames(config.DataSourceNames)
-            .Configure(config.ProcessorSpecificConfiguration)
+            .Configure(config.ProcessorConfiguration)
             .WithRequestBodyDeserialization(config.RequestBodyDeserialization)
             .WithResponseBodySerialization(config.ResponseBodySerialization);
     }

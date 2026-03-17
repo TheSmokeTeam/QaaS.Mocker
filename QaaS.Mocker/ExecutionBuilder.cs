@@ -371,7 +371,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
                 Stubs.Select(stubConfig => new HookData<ITransactionProcessor>
                 {
                     Type = ResolveProcessorTypeName(stubConfig.Processor!),
-                    Configuration = stubConfig.ProcessorSpecificConfiguration,
+                    Configuration = stubConfig.ProcessorConfiguration,
                     Name = stubConfig.Name!
                 })
             ).InstancePerLifetimeScope();

@@ -9,7 +9,7 @@ namespace QaaS.Mocker.Tests;
 public static class Globals
 {
     public static readonly ILogger Logger = new SerilogLoggerFactory(
-        new LoggerConfiguration().MinimumLevel.Debug()
+        new LoggerConfiguration().MinimumLevel.Warning()
             .WriteTo.NUnitOutput()
             .CreateLogger()).CreateLogger("TestsLogger");
     
