@@ -15,6 +15,7 @@ Configurable mock runtime for QaaS protocol workloads.
 - [Protocol Support](#protocol-support)
 - [Quick Start](#quick-start)
 - [Run the Example](#run-the-example)
+- [Runner Integration Overlay](#runner-integration-overlay)
 - [Build and Test](#build-and-test)
 - [Documentation](#documentation)
 
@@ -132,6 +133,46 @@ dotnet run -- template mocker.qaas.yaml
 ```powershell
 dotnet run -- run mocker.grpc.qaas.yaml
 ```
+
+## Runner Integration Overlay
+The example now includes [`mocker.runner.qaas.yaml`](./QaaS.Mocker.Example/mocker.runner.qaas.yaml), an overwrite file that appends only the runner-integration pieces missing from [`mocker.qaas.yaml`](./QaaS.Mocker.Example/mocker.qaas.yaml):
+
+- Redis controller configuration for runner mocker commands
+- Alternate stubs for `ChangeActionStub` checks on HTTP, gRPC, and socket
+- A socket broadcast endpoint on port `6000` for `TriggerAction`
+
+The overlay uses explicit numeric indexes for list sections so it can be appended with `--overwrite-files` without editing the base sample.
+
+Use it together with the base file instead of editing the base sample:
+
+1. Start local Redis:
+
+```powershell
+docker run -d --name qaas-redis -p 6379:6379 redis:7-alpine
+```
+
+2. Ensure the sample certificate exists:
+
+```powershell
+Set-Location .\QaaS.Mocker.Example
+dotnet dev-certs https -ep .\Certificates\devcert.pfx -p qaas-dev-cert
+```
+
+3. Run the sample plus the overlay:
+
+```powershell
+dotnet run -- run mocker.qaas.yaml --overwrite-files mocker.runner.qaas.yaml
+```
+
+The combined runtime exposes:
+
+- HTTPS health endpoint on `https://127.0.0.1:8443/health`
+- TLS gRPC endpoint on `127.0.0.1:50051`
+- TCP socket collect endpoint on `127.0.0.1:7001`
+- TCP socket broadcast endpoint on `127.0.0.1:6000`
+- Redis controller under server name `RunnerMockerExample`
+
+The broadcast endpoint is disabled by default and becomes active only when the runner sends `TriggerAction` for `SocketBroadcastAction`.
 
 ## Build and Test
 ```bash

@@ -1,10 +1,17 @@
 using System.Reflection;
+using System.Collections.Immutable;
 using System.ComponentModel.DataAnnotations;
+using Autofac;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using QaaS.Framework.SDK.DataSourceObjects;
 using QaaS.Framework.SDK.ContextObjects;
+using QaaS.Framework.SDK.Extensions;
+using QaaS.Framework.SDK.Hooks.Generator;
+using QaaS.Framework.SDK.Session.DataObjects;
+using QaaS.Framework.SDK.Session.SessionDataObjects;
+using QaaS.Framework.SDK.Session.SessionDataObjects.RunningSessionsObjects;
 using QaaS.Mocker.Stubs.ConfigurationObjects;
 
 namespace QaaS.Mocker.Tests.ExecutionTests;
@@ -195,6 +202,36 @@ public class ExecutionBuilderBranchTests
     }
 
     [Test]
+    public void BuildDataSources_WithMissingContextMetadata_InitializesDefaultMetadata()
+    {
+        var builder = new TestExecutionBuilder
+        {
+            DataSources =
+            [
+                new DataSourceBuilder().Named("SourceA").HookNamed("DummyGenerator")
+            ]
+        };
+        builder.WithContext(new InternalContext
+        {
+            Logger = NullLogger.Instance,
+            RootConfiguration = new ConfigurationBuilder().Build(),
+            InternalRunningSessions = new RunningSessions(new Dictionary<string, RunningSessionData<object, object>>())
+        });
+        var generators = builder.LoadRuntimeGenerators();
+        Assert.That(generators.Select(generator => generator.Key).ToArray(), Is.EqualTo(["SourceA"]));
+        Assert.That(generators.Single().Value, Is.Not.Null);
+
+        var dataSources = builder.InvokeBuildDataSources().ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(dataSources, Has.Length.EqualTo(1));
+            Assert.That(dataSources[0].Name, Is.EqualTo("SourceA"));
+            Assert.That(builder.GetInternalContext().GetMetaDataFromContext(), Is.Not.Null);
+        });
+    }
+
+    [Test]
     public void Validate_WithSocketEndpointWithoutAction_IgnoresUnnamedSocketEndpoint()
     {
         var builder = new ExecutionBuilder
@@ -281,5 +318,31 @@ public class ExecutionBuilderBranchTests
     private sealed class TestExecutionBuilder : ExecutionBuilder
     {
         public IEnumerable<DataSource> InvokeBuildDataSources() => BuildDataSources();
+
+        public IList<KeyValuePair<string, IGenerator>> LoadRuntimeGenerators()
+        {
+            typeof(ExecutionBuilder)
+                .GetMethod("LoadContextScopeDependencies", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(this, null);
+            return ((ILifetimeScope)typeof(ExecutionBuilder)
+                    .GetField("_scope", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(this)!)
+                .Resolve<IList<KeyValuePair<string, IGenerator>>>();
+        }
+
+        public InternalContext GetInternalContext() => Context;
+    }
+
+    private sealed class DummyGenerator : IGenerator
+    {
+        public Context Context { get; set; } = null!;
+
+        public List<ValidationResult>? LoadAndValidateConfiguration(IConfiguration configuration) => [];
+
+        public IEnumerable<Data<object>> Generate(IImmutableList<SessionData> sessionDataList,
+            IImmutableList<DataSource> dataSourceList)
+        {
+            return [];
+        }
     }
 }
