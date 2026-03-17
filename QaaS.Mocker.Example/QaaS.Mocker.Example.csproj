@@ -16,6 +16,9 @@
       <None Update="mocker.qaas.yaml">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
+      <None Update="mocker.runner.qaas.yaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
       <None Update="mocker.grpc.qaas.yaml">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>

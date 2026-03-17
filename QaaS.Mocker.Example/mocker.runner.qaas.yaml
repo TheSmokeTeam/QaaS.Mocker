@@ -1,0 +1,46 @@
+# Append this file after mocker.qaas.yaml with --overwrite-files to enable
+# local runner-to-mocker command integration without modifying the base sample.
+
+Controller:
+  ServerName: RunnerMockerExample
+  Redis:
+    Host: localhost
+    RedisDataBase: 0
+
+DataSources:
+  0:
+    Name: SocketBroadcastPayloads
+    Generator: StaticSocketBroadcastGenerator
+    GeneratorConfiguration:
+      Messages:
+        - socket-broadcast-default
+
+Stubs:
+  2:
+    Name: AlternateHealthStub
+    Processor: AlternateHealthProcessor
+  3:
+    Name: AlternateGrpcEchoStub
+    Processor: AlternateGrpcEchoProcessor
+  4:
+    Name: SocketBroadcastDefaultStub
+    Processor: SocketPassthroughProcessor
+  5:
+    Name: SocketBroadcastAlternateStub
+    Processor: SocketPrefixProcessor
+
+Servers:
+  2:
+    Socket:
+      Endpoints:
+        1:
+          Port: 6000
+          ProtocolType: Tcp
+          SocketType: Stream
+          TimeoutMs: 1000
+          BufferSizeBytes: 2048
+          Action:
+            Name: SocketBroadcastAction
+            Method: Broadcast
+            DataSourceName: SocketBroadcastPayloads
+            TransactionStubName: SocketBroadcastDefaultStub

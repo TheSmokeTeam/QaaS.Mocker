@@ -13,9 +13,11 @@ using QaaS.Framework.Executions;
 using QaaS.Framework.Providers;
 using QaaS.Framework.Providers.Modules;
 using QaaS.Framework.Providers.ObjectCreation;
+using QaaS.Framework.SDK;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Framework.SDK.DataSourceObjects;
 using QaaS.Framework.SDK.ExecutionObjects;
+using QaaS.Framework.SDK.Extensions;
 using QaaS.Framework.SDK.Hooks.Generator;
 using QaaS.Framework.SDK.Hooks.Processor;
 using QaaS.Mocker.Controller;
@@ -63,13 +65,31 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
 
     protected override IEnumerable<DataSource> BuildDataSources()
     {
+        EnsureDefaultMetaData();
+
         var configuredDataSources = DataSources ?? [];
         var dataSources = configuredDataSources
             .Select(dataSourceBuilder => dataSourceBuilder.Register())
             .ToImmutableList();
+        var resolvedGenerators = _scope.Resolve<IList<KeyValuePair<string, IGenerator>>>();
 
         return configuredDataSources.Select(dataSourceBuilder =>
-            dataSourceBuilder.Build(Context, dataSources, _scope.Resolve<IList<KeyValuePair<string, IGenerator>>>()));
+        {
+            var configuredGenerator = GetDataSourceGeneratorName(dataSourceBuilder);
+
+            // Scope generator hook instances by data source name so overlays can introduce
+            // additional sources without forcing their Name to match the hook type.
+            DataSourceGeneratorProperty.SetValue(dataSourceBuilder, dataSourceBuilder.Name);
+
+            try
+            {
+                return dataSourceBuilder.Build(Context, dataSources, resolvedGenerators);
+            }
+            finally
+            {
+                DataSourceGeneratorProperty.SetValue(dataSourceBuilder, configuredGenerator);
+            }
+        });
     }
 
     internal ExecutionBuilder(
@@ -571,6 +591,22 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     private static string ResolveServerTypesSummary(IEnumerable<ServerConfig> serverConfigs)
     {
         return string.Join(", ", serverConfigs.Select(serverConfig => serverConfig.Type));
+    }
+
+    private void EnsureDefaultMetaData()
+    {
+        try
+        {
+            _ = Context.GetMetaDataFromContext();
+        }
+        catch (KeyNotFoundException)
+        {
+            Context.InsertValueIntoGlobalDictionary(Context.GetMetaDataPath(), new MetaDataConfig());
+        }
+        catch (InvalidOperationException)
+        {
+            Context.InsertValueIntoGlobalDictionary(Context.GetMetaDataPath(), new MetaDataConfig());
+        }
     }
 
     private InternalContext CloneContext(ILogger? logger = null, IConfiguration? rootConfiguration = null)
