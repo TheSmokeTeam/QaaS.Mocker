@@ -1,4 +1,6 @@
+using Google.Protobuf;
 using NUnit.Framework;
+using Google.Protobuf.WellKnownTypes;
 using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Framework.SDK.Session.MetaDataObjects;
 using QaaS.Mocker.Servers.Caches;
@@ -60,6 +62,24 @@ public class TransactionsCacheTests
         var result = cache.RetrieveFirstOrDefaultStringOutput();
 
         Assert.That(result, Is.EqualTo("null"));
+    }
+
+    [Test]
+    public void RetrieveFirstOrDefaultStringInput_WhenBodyIsProtobufMessage_SerializesBodyAsByteArray()
+    {
+        var cache = new TransactionsCache { EnableStorage = true };
+        cache.StoreInput(new DetailedData<object>
+        {
+            Timestamp = DateTime.UtcNow,
+            Body = new StringValue { Value = "grpc-payload" },
+            MetaData = new MetaData()
+        }, "ActionA");
+
+        var result = cache.RetrieveFirstOrDefaultStringInput();
+        var deserialized = System.Text.Json.JsonSerializer.Deserialize<DetailedData<byte[]>>(result!);
+
+        Assert.That(deserialized, Is.Not.Null);
+        Assert.That(deserialized!.Body, Is.EqualTo(new StringValue { Value = "grpc-payload" }.ToByteArray()));
     }
 
     [Test]
