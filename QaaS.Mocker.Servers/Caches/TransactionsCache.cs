@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text;
 using System.Text.Json;
 using Google.Protobuf;
 using QaaS.Framework.SDK.Extensions;
@@ -40,21 +39,23 @@ public class TransactionsCache : BaseCache<DetailedData<object>>
         return JsonSerializer.Serialize(SerializeForRunner(item));
     }
 
-    private static DetailedData<byte[]>? SerializeForRunner(DetailedData<object>? item)
+    private static object? SerializeForRunner(DetailedData<object>? item)
     {
         if (item is null) return null;
 
+        return item.Body switch
+        {
+            ReadOnlyMemory<byte> memory => CreateSerializedBinaryItem(item, memory.ToArray()),
+            IMessage protobufMessage => CreateSerializedBinaryItem(item, protobufMessage.ToByteArray()),
+            _ => item
+        };
+    }
+
+    private static DetailedData<byte[]> CreateSerializedBinaryItem(DetailedData<object> item, byte[] body)
+    {
         return new DetailedData<byte[]>
         {
-            Body = item.Body switch
-            {
-                null => null,
-                byte[] bytes => bytes,
-                ReadOnlyMemory<byte> memory => memory.ToArray(),
-                IMessage protobufMessage => protobufMessage.ToByteArray(),
-                string value => Encoding.UTF8.GetBytes(value),
-                _ => JsonSerializer.SerializeToUtf8Bytes(item.Body, item.Body.GetType())
-            },
+            Body = body,
             MetaData = item.MetaData,
             Timestamp = item.Timestamp
         };

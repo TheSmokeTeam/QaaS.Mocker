@@ -1,7 +1,6 @@
 using Google.Protobuf;
 using NUnit.Framework;
 using Google.Protobuf.WellKnownTypes;
-using System.Text;
 using System.Text.Json;
 using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Framework.SDK.Session.MetaDataObjects;
@@ -43,8 +42,8 @@ public class TransactionsCacheTests
         cache.StoreInput(CreateDetailedData("first"), "ActionA");
         cache.StoreInput(CreateDetailedData("second"), "ActionA");
 
-        var first = DeserializeBodyAsUtf8String(cache.RetrieveFirstOrDefaultStringInput());
-        var second = DeserializeBodyAsUtf8String(cache.RetrieveFirstOrDefaultStringInput());
+        var first = GetBodyString(cache.RetrieveFirstOrDefaultStringInput());
+        var second = GetBodyString(cache.RetrieveFirstOrDefaultStringInput());
         var third = cache.RetrieveFirstOrDefaultStringInput();
 
         Assert.Multiple(() =>
@@ -94,7 +93,7 @@ public class TransactionsCacheTests
 
         var results = (await Task.WhenAll(Enumerable.Range(0, 3)
                 .Select(_ => Task.Run(cache.RetrieveFirstOrDefaultStringInput))))
-            .Select(DeserializeBodyAsUtf8String)
+            .Select(GetBodyString)
             .ToArray();
 
         Assert.Multiple(() =>
@@ -116,17 +115,14 @@ public class TransactionsCacheTests
         };
     }
 
-    private static string? DeserializeBodyAsUtf8String(string? serializedItem)
+    private static string? GetBodyString(string? serializedItem)
     {
         if (serializedItem is null)
         {
             return null;
         }
 
-        var deserialized = JsonSerializer.Deserialize<DetailedData<byte[]>>(serializedItem);
-
-        return deserialized?.Body is null
-            ? null
-            : Encoding.UTF8.GetString(deserialized.Body);
+        using var document = JsonDocument.Parse(serializedItem);
+        return document.RootElement.GetProperty("Body").GetString();
     }
 }
