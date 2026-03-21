@@ -32,7 +32,8 @@ public class MockerLoaderTests
         {
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Server:
-                  Type: Http
+                  Http:
+                    Port: 8443
                 """);
             var loader = new MockerLoader(new MockerOptions
             {
@@ -62,23 +63,25 @@ public class MockerLoaderTests
         {
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Server:
-                  Type: Http
+                  Http:
+                    Port: 8443
                 """);
             var overwriteFile = WriteFile(tempDirectory, "overwrite.qaas.yaml", """
                 Server:
-                  Type: Socket
+                  Http:
+                    Port: 18080
                 """);
 
             var loader = new MockerLoader(new MockerOptions
             {
                 ConfigurationFile = configFile,
                 OverwriteFiles = [overwriteFile],
-                OverwriteArguments = ["Server:Type=Grpc"]
+                OverwriteArguments = ["Server:Http:Port=5001"]
             });
 
             var context = InvokeGetLoadedContext(loader);
 
-            Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Grpc"));
+            Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("5001"));
         }
         finally
         {
@@ -94,7 +97,8 @@ public class MockerLoaderTests
         {
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Server:
-                  Type: Http
+                  Http:
+                    Port: 8443
                 """);
             var loader = new MockerLoader(new MockerOptions
             {
@@ -121,17 +125,20 @@ public class MockerLoaderTests
         {
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Server:
-                  Type: Http
+                  Http:
+                    Port: 8443
                 """);
             var overwriteFolder = Path.Combine(tempDirectory, "overrides");
             Directory.CreateDirectory(overwriteFolder);
-            WriteFile(overwriteFolder, "20-grpc.yaml", """
+            WriteFile(overwriteFolder, "20-http.yaml", """
                 Server:
-                  Type: Grpc
+                  Http:
+                    Port: 19090
                 """);
-            WriteFile(overwriteFolder, "10-socket.yaml", """
+            WriteFile(overwriteFolder, "10-http.yaml", """
                 Server:
-                  Type: Socket
+                  Http:
+                    Port: 18080
                 """);
             WriteFile(overwriteFolder, "readme.txt", "ignored");
 
@@ -143,7 +150,7 @@ public class MockerLoaderTests
 
             var context = InvokeGetLoadedContext(loader);
 
-            Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Grpc"));
+            Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("19090"));
         }
         finally
         {
@@ -154,15 +161,16 @@ public class MockerLoaderTests
     [Test]
     public void GetLoadedContext_WithScopedEnvironmentOverride_AppliesEnvironmentVariable()
     {
-        const string environmentVariableName = "Server__Type";
+        const string environmentVariableName = "Server__Http__Port";
         var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
         var tempDirectory = CreateTempDirectory();
         try
         {
-            Environment.SetEnvironmentVariable(environmentVariableName, "Grpc");
+            Environment.SetEnvironmentVariable(environmentVariableName, "5001");
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Server:
-                  Type: Http
+                  Http:
+                    Port: 8443
                 """);
             var loader = new MockerLoader(new MockerOptions
             {
@@ -171,7 +179,7 @@ public class MockerLoaderTests
 
             var context = InvokeGetLoadedContext(loader);
 
-            Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Grpc"));
+            Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("5001"));
         }
         finally
         {
@@ -191,7 +199,6 @@ public class MockerLoaderTests
             Environment.SetEnvironmentVariable(environmentVariableName, "1");
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Server:
-                  Type: Http
                   Http:
                     Port: 8443
                 """);
@@ -205,7 +212,6 @@ public class MockerLoaderTests
             Assert.Multiple(() =>
             {
                 Assert.That(context.RootConfiguration["JETBRAINS_INTELLIJ_ASK_PSREADLINE_UPDATE"], Is.Null);
-                Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Http"));
                 Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
             });
         }
@@ -219,16 +225,15 @@ public class MockerLoaderTests
     [Test]
     public void GetLoadedContext_WithMultiServerEnvironmentOverride_AppliesEnvironmentVariable()
     {
-        const string environmentVariableName = "Servers__0__Type";
+        const string environmentVariableName = "Servers__0__Http__Port";
         var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
         var tempDirectory = CreateTempDirectory();
         try
         {
-            Environment.SetEnvironmentVariable(environmentVariableName, "Grpc");
+            Environment.SetEnvironmentVariable(environmentVariableName, "5001");
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Servers:
-                  - Type: Http
-                    Http:
+                  - Http:
                       Port: 8443
                 """);
             var loader = new MockerLoader(new MockerOptions
@@ -238,7 +243,7 @@ public class MockerLoaderTests
 
             var context = InvokeGetLoadedContext(loader);
 
-            Assert.That(context.RootConfiguration["Servers:0:Type"], Is.EqualTo("Grpc"));
+            Assert.That(context.RootConfiguration["Servers:0:Http:Port"], Is.EqualTo("5001"));
         }
         finally
         {
@@ -250,15 +255,16 @@ public class MockerLoaderTests
     [Test]
     public void GetLoadedContext_WithDontResolveWithEnvironmentVariables_DoesNotApplyEnvironmentVariable()
     {
-        const string environmentVariableName = "Server__Type";
+        const string environmentVariableName = "Server__Http__Port";
         var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
         var tempDirectory = CreateTempDirectory();
         try
         {
-            Environment.SetEnvironmentVariable(environmentVariableName, "Grpc");
+            Environment.SetEnvironmentVariable(environmentVariableName, "5001");
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Server:
-                  Type: Http
+                  Http:
+                    Port: 8443
                 """);
             var loader = new MockerLoader(new MockerOptions
             {
@@ -268,7 +274,7 @@ public class MockerLoaderTests
 
             var context = InvokeGetLoadedContext(loader);
 
-            Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Http"));
+            Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
         }
         finally
         {
@@ -278,7 +284,7 @@ public class MockerLoaderTests
     }
 
     [TestCase("Server__Http__Port", true, "Server:Http:Port")]
-    [TestCase("Server:Type", true, "Server:Type")]
+    [TestCase("Server:Http:Port", true, "Server:Http:Port")]
     [TestCase("__", false, "")]
     [TestCase("PATH", false, "")]
     public void TryMapEnvironmentVariableToConfigurationPath_MapsOnlySupportedRoots(
@@ -309,7 +315,8 @@ public class MockerLoaderTests
         {
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Server:
-                  Type: Http
+                  Http:
+                    Port: 8443
                 """);
             var loader = new MockerLoader(new MockerOptions
             {
@@ -321,7 +328,7 @@ public class MockerLoaderTests
 
             var context = InvokeGetLoadedContext(loader);
 
-            Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Http"));
+            Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
         }
         finally
         {
@@ -337,7 +344,8 @@ public class MockerLoaderTests
         {
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Server:
-                  Type: Http
+                  Http:
+                    Port: 8443
                 """);
             var loader = new MockerLoader(new MockerOptions
             {
@@ -360,7 +368,6 @@ public class MockerLoaderTests
         {
             var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
                 Server:
-                  Type: Http
                   Http:
                     Port: 8443
                 """);
@@ -374,8 +381,8 @@ public class MockerLoaderTests
                     new KeyValuePair<string?, string?>(null, "ignored"),
                     new KeyValuePair<string?, string?>("", "ignored"),
                     new KeyValuePair<string?, string?>("PATH", "ignored"),
-                    new KeyValuePair<string?, string?>("Server__Type", "Grpc"),
-                    new KeyValuePair<string?, string?>("Servers__0__Type", "Socket"),
+                    new KeyValuePair<string?, string?>("Server__Http__Port", "5001"),
+                    new KeyValuePair<string?, string?>("Servers__0__Http__Port", "6001"),
                     new KeyValuePair<string?, string?>("Server__Http__Port", null)
                 ],
                 NullLogger.Instance);
@@ -384,9 +391,8 @@ public class MockerLoaderTests
 
             Assert.Multiple(() =>
             {
-                Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Grpc"));
-                Assert.That(context.RootConfiguration["Servers:0:Type"], Is.EqualTo("Socket"));
-                Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
+                Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("5001"));
+                Assert.That(context.RootConfiguration["Servers:0:Http:Port"], Is.EqualTo("6001"));
             });
         }
         finally

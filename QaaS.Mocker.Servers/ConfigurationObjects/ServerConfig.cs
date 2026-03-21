@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using QaaS.Framework.Configurations.CustomValidationAttributes;
 using QaaS.Mocker.Servers.ConfigurationObjects.GrpcServerConfigs;
 using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 using QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
@@ -13,20 +12,13 @@ namespace QaaS.Mocker.Servers.ConfigurationObjects;
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record ServerConfig : IValidatableObject
 {
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    [System.Text.Json.Serialization.JsonIgnore]
-    public ServerType Type { get; set; }
-
-    [RequiredIfAny(nameof(Type), ServerType.Http),
-     Description("'HTTP' server type configuration")]
+    [Description("'HTTP' server type configuration")]
     public HttpServerConfig? Http { get; set; }
 
-    [RequiredIfAny(nameof(Type), ServerType.Grpc),
-     Description("'gRPC' server type configuration")]
+    [Description("'gRPC' server type configuration")]
     public GrpcServerConfig? Grpc { get; set; }
 
-    [RequiredIfAny(nameof(Type), ServerType.Socket),
-     Description("Socket streaming server typed configuration")]
+    [Description("Socket streaming server typed configuration")]
     public SocketServerConfig? Socket { get; set; }
 
     /// <summary>
@@ -36,26 +28,13 @@ public record ServerConfig : IValidatableObject
     {
         var configuredTypes = GetConfiguredServerTypes().Distinct().ToArray();
         if (configuredTypes.Length == 1)
-        {
-            if (Type != ServerType.Unknown && Type != configuredTypes[0])
-            {
-                throw new InvalidOperationException(
-                    $"Legacy Server.Type value '{Type}' does not match the configured transport section '{configuredTypes[0]}'.");
-            }
-
             return configuredTypes[0];
-        }
-
-        if (configuredTypes.Length == 0 && Type != ServerType.Unknown)
-        {
-            return Type;
-        }
 
         throw new InvalidOperationException("Server must configure exactly one of Http, Grpc, or Socket.");
     }
 
     /// <summary>
-    /// Validates that exactly one transport section is configured and that any legacy discriminator matches it.
+    /// Validates that exactly one transport section is configured.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -74,13 +53,6 @@ public record ServerConfig : IValidatableObject
                 "Server can configure only one of: Http, Grpc, Socket.",
                 [nameof(Http), nameof(Grpc), nameof(Socket)]);
             yield break;
-        }
-
-        if (Type != ServerType.Unknown && Type != configuredTypes[0])
-        {
-            yield return new ValidationResult(
-                $"Legacy Server.Type value '{Type}' does not match the configured transport section '{configuredTypes[0]}'.",
-                [nameof(Http), nameof(Grpc), nameof(Socket)]);
         }
     }
 

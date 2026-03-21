@@ -24,7 +24,6 @@ public class ServerFactoryTests
     {
         var factory = new ServerFactory(Globals.Context, new ServerConfig
         {
-            Type = ServerType.Http,
             Http = new HttpServerConfig { Port = 8080, Endpoints = [] }
         });
 
@@ -38,7 +37,6 @@ public class ServerFactoryTests
     {
         var factory = new ServerFactory(Globals.Context, new ServerConfig
         {
-            Type = ServerType.Grpc,
             Grpc = new GrpcServerConfig { Port = 50051, Services = [] }
         });
 
@@ -52,7 +50,6 @@ public class ServerFactoryTests
     {
         var factory = new ServerFactory(Globals.Context, new ServerConfig
         {
-            Type = ServerType.Socket,
             Socket = new SocketServerConfig { Endpoints = [] }
         });
 
@@ -68,12 +65,10 @@ public class ServerFactoryTests
         [
             new ServerConfig
             {
-                Type = ServerType.Http,
                 Http = new HttpServerConfig { Port = 8080, Endpoints = [] }
             },
             new ServerConfig
             {
-                Type = ServerType.Grpc,
                 Grpc = new GrpcServerConfig { Port = 50051, Services = [] }
             }
         ]);
@@ -84,14 +79,11 @@ public class ServerFactoryTests
     }
 
     [Test]
-    public void Build_WithUnsupportedServerType_ThrowsArgumentException()
+    public void Build_WithNoTransportConfigured_ThrowsInvalidOperationException()
     {
-        var factory = new ServerFactory(Globals.Context, new ServerConfig
-        {
-            Type = (ServerType)999
-        });
+        var factory = new ServerFactory(Globals.Context, new ServerConfig());
 
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<InvalidOperationException>(() =>
             factory.Build(ImmutableList<DataSource>.Empty, ImmutableList<TransactionStub>.Empty));
     }
 
