@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
+using QaaS.Framework.Configurations;
 using QaaS.Framework.SDK.ConfigurationObjects;
 using QaaS.Framework.Serialization;
 
@@ -105,12 +106,70 @@ public class TransactionStubBuilder
     }
 
     /// <summary>
+    /// Compatibility alias for <see cref="Configure(Microsoft.Extensions.Configuration.IConfiguration)" /> that matches the configuration CRUD pattern used by other builders.
+    /// </summary>
+    public TransactionStubBuilder CreateConfiguration(IConfiguration configuration)
+    {
+        return Configure(configuration);
+    }
+
+    /// <summary>
     /// Serializes an object into JSON-backed processor configuration.
     /// </summary>
     public TransactionStubBuilder Configure(object configuration)
     {
         var stream = new MemoryStream(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(configuration)));
         ProcessorConfiguration = new ConfigurationBuilder().AddJsonStream(stream).Build();
+        return this;
+    }
+
+    /// <summary>
+    /// Compatibility alias for <see cref="Configure(object)" /> that matches the configuration CRUD pattern used by other builders.
+    /// </summary>
+    public TransactionStubBuilder CreateConfiguration(object configuration)
+    {
+        return Configure(configuration);
+    }
+
+    /// <summary>
+    /// Compatibility alias for <see cref="CreateConfiguration(Microsoft.Extensions.Configuration.IConfiguration)" />.
+    /// </summary>
+    public TransactionStubBuilder Create(IConfiguration configuration)
+    {
+        return CreateConfiguration(configuration);
+    }
+
+    /// <summary>
+    /// Compatibility alias for <see cref="CreateConfiguration(object)" />.
+    /// </summary>
+    public TransactionStubBuilder Create(object configuration)
+    {
+        return CreateConfiguration(configuration);
+    }
+
+    /// <summary>
+    /// Returns the currently configured processor configuration.
+    /// </summary>
+    public IConfiguration ReadConfiguration()
+    {
+        return ProcessorConfiguration;
+    }
+
+    /// <summary>
+    /// Merges the provided configuration object into the current processor configuration.
+    /// </summary>
+    public TransactionStubBuilder UpdateConfiguration(object configuration)
+    {
+        ProcessorConfiguration = ProcessorConfiguration.UpdateConfiguration(configuration);
+        return this;
+    }
+
+    /// <summary>
+    /// Clears the configured processor configuration.
+    /// </summary>
+    public TransactionStubBuilder DeleteConfiguration()
+    {
+        ProcessorConfiguration = new ConfigurationBuilder().Build();
         return this;
     }
 
