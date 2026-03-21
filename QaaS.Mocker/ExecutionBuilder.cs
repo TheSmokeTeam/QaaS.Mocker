@@ -32,6 +32,9 @@ using QaaS.Mocker.Stubs.Stubs;
 
 namespace QaaS.Mocker;
 
+/// <summary>
+/// Builds a complete QaaS.Mocker execution from code-first configuration or bound YAML input.
+/// </summary>
 public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionData>, IValidatableObject
 {
     private static readonly PropertyInfo DataSourceGeneratorProperty =
@@ -45,15 +48,27 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     [UniquePropertyInEnumerable(nameof(TransactionStubConfig.Name)),
      Description("List of transaction stubs that can be used for server actions." +
                  "They provide processing functionality to exercise transaction data.")]
+    /// <summary>
+    /// Gets or sets the configured transaction stubs available to the runtime.
+    /// </summary>
     public TransactionStubConfig[] Stubs { get; set; } = [];
 
     [Description("The legacy single server mocker instance to run.")]
+    /// <summary>
+    /// Gets or sets the legacy single-server configuration.
+    /// </summary>
     public ServerConfig? Server { get; set; }
 
     [Description("List of server mocker instances to run concurrently.")]
+    /// <summary>
+    /// Gets or sets the multi-server configuration used for composite runtimes.
+    /// </summary>
     public ServerConfig[] Servers { get; set; } = [];
 
     [Description("The server mocker controller configuration")]
+    /// <summary>
+    /// Gets or sets the optional controller configuration.
+    /// </summary>
     public ControllerConfig? Controller { get; set; }
 
     private ILifetimeScope _scope;
@@ -112,6 +127,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         Stubs = configuredBuilder.Stubs;
     }
 
+    /// <summary>
+    /// Initializes a new empty builder with a default context and logger.
+    /// </summary>
     public ExecutionBuilder()
     {
         _validationResults = [];
@@ -124,42 +142,63 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         DataSources = [];
     }
 
+    /// <summary>
+    /// Replaces the execution context used when building the runtime.
+    /// </summary>
     public ExecutionBuilder WithContext(InternalContext context)
     {
         Context = context;
         return this;
     }
 
+    /// <summary>
+    /// Replaces the logger stored on the current execution context.
+    /// </summary>
     public ExecutionBuilder WithLogger(ILogger logger)
     {
         Context = CloneContext(logger: logger);
         return this;
     }
 
+    /// <summary>
+    /// Replaces the root configuration stored on the current execution context.
+    /// </summary>
     public ExecutionBuilder WithRootConfiguration(IConfiguration configuration)
     {
         Context = CloneContext(rootConfiguration: configuration);
         return this;
     }
 
+    /// <summary>
+    /// Sets the execution mode for the resulting runtime.
+    /// </summary>
     public ExecutionBuilder WithExecutionMode(ExecutionMode executionMode)
     {
         _executionMode = executionMode;
         return this;
     }
 
+    /// <summary>
+    /// Configures whether the built execution waits for an interactive local shutdown signal.
+    /// </summary>
     public ExecutionBuilder RunLocally(bool runLocally = true)
     {
         _runLocally = runLocally;
         return this;
     }
 
+    /// <summary>
+    /// Sets the template output folder used by template mode.
+    /// </summary>
     public ExecutionBuilder WithTemplateOutputFolder(string? templateOutputFolder)
     {
         _templateOutputFolder = templateOutputFolder;
         return this;
     }
 
+    /// <summary>
+    /// Adds a new data source and enforces a unique name within the builder.
+    /// </summary>
     public ExecutionBuilder CreateDataSource(DataSourceBuilder dataSourceBuilder)
     {
         ArgumentNullException.ThrowIfNull(dataSourceBuilder);
@@ -174,12 +213,18 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Returns a configured data source by name, or <see langword="null"/> when it does not exist.
+    /// </summary>
     public DataSourceBuilder? ReadDataSource(string dataSourceName)
     {
         return (DataSources ?? []).FirstOrDefault(builder =>
             string.Equals(builder.Name, dataSourceName, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Replaces an existing data source by name.
+    /// </summary>
     public ExecutionBuilder UpdateDataSource(string dataSourceName, DataSourceBuilder dataSourceBuilder)
     {
         ArgumentNullException.ThrowIfNull(dataSourceBuilder);
@@ -202,6 +247,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Removes a configured data source by name.
+    /// </summary>
     public ExecutionBuilder DeleteDataSource(string dataSourceName)
     {
         var dataSources = (DataSources ?? []).ToList();
@@ -214,8 +262,14 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Adds a new stub from a code-first stub builder.
+    /// </summary>
     public ExecutionBuilder CreateStub(TransactionStubBuilder stubBuilder) => CreateStub(stubBuilder.Build());
 
+    /// <summary>
+    /// Adds a new stub configuration and enforces a unique stub name.
+    /// </summary>
     public ExecutionBuilder CreateStub(TransactionStubConfig stubConfig)
     {
         ArgumentNullException.ThrowIfNull(stubConfig);
@@ -229,12 +283,18 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Returns a configured stub by name, or <see langword="null"/> when it does not exist.
+    /// </summary>
     public TransactionStubConfig? ReadStub(string stubName)
     {
         return Stubs.FirstOrDefault(stubConfig =>
             string.Equals(stubConfig.Name, stubName, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Updates an existing stub through a mutable builder callback.
+    /// </summary>
     public ExecutionBuilder UpdateStub(string stubName, Action<TransactionStubBuilder> configureAction)
     {
         ArgumentNullException.ThrowIfNull(configureAction);
@@ -246,9 +306,15 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return UpdateStub(stubName, updateBuilder.Build());
     }
 
+    /// <summary>
+    /// Replaces an existing stub from a code-first stub builder.
+    /// </summary>
     public ExecutionBuilder UpdateStub(string stubName, TransactionStubBuilder stubBuilder)
         => UpdateStub(stubName, stubBuilder.Build());
 
+    /// <summary>
+    /// Replaces an existing stub configuration by name.
+    /// </summary>
     public ExecutionBuilder UpdateStub(string stubName, TransactionStubConfig stubConfig)
     {
         ArgumentNullException.ThrowIfNull(stubConfig);
@@ -271,6 +337,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Removes a configured stub by name.
+    /// </summary>
     public ExecutionBuilder DeleteStub(string stubName)
     {
         var stubs = Stubs.ToList();
@@ -283,10 +352,19 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Returns the legacy single-server configuration, if present.
+    /// </summary>
     public ServerConfig? ReadServer() => Server;
 
+    /// <summary>
+    /// Returns the currently configured servers as a normalized read-only list.
+    /// </summary>
     public IReadOnlyList<ServerConfig> ReadServers() => ResolveConfiguredServers().ToArray();
 
+    /// <summary>
+    /// Configures the builder to use a single server definition.
+    /// </summary>
     public ExecutionBuilder CreateServer(ServerConfig serverConfig)
     {
         ArgumentNullException.ThrowIfNull(serverConfig);
@@ -298,6 +376,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Replaces any existing server configuration with a new single server definition.
+    /// </summary>
     public ExecutionBuilder ReplaceServer(ServerConfig serverConfig)
     {
         ArgumentNullException.ThrowIfNull(serverConfig);
@@ -307,6 +388,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Adds a server to the multi-server configuration and clears the legacy single-server field.
+    /// </summary>
     public ExecutionBuilder AddServer(ServerConfig serverConfig)
     {
         ArgumentNullException.ThrowIfNull(serverConfig);
@@ -316,6 +400,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Replaces the multi-server configuration and clears the legacy single-server field.
+    /// </summary>
     public ExecutionBuilder ReplaceServers(params ServerConfig[] serverConfigs)
     {
         ArgumentNullException.ThrowIfNull(serverConfigs);
@@ -325,6 +412,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Mutates the legacy single-server configuration in place.
+    /// </summary>
     public ExecutionBuilder UpdateServer(Action<ServerConfig> configureAction)
     {
         ArgumentNullException.ThrowIfNull(configureAction);
@@ -335,8 +425,14 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Returns the optional controller configuration.
+    /// </summary>
     public ControllerConfig? ReadController() => Controller;
 
+    /// <summary>
+    /// Adds controller configuration when one has not already been configured.
+    /// </summary>
     public ExecutionBuilder CreateController(ControllerConfig controllerConfig)
     {
         if (Controller != null)
@@ -346,12 +442,18 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Replaces the current controller configuration.
+    /// </summary>
     public ExecutionBuilder ReplaceController(ControllerConfig? controllerConfig)
     {
         Controller = controllerConfig;
         return this;
     }
 
+    /// <summary>
+    /// Mutates the current controller configuration in place.
+    /// </summary>
     public ExecutionBuilder UpdateController(Action<ControllerConfig> configureAction)
     {
         ArgumentNullException.ThrowIfNull(configureAction);
@@ -362,6 +464,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return this;
     }
 
+    /// <summary>
+    /// Removes the current controller configuration.
+    /// </summary>
     public ExecutionBuilder DeleteController()
     {
         Controller = null;
@@ -409,6 +514,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         return new StubsLogic(stubFactory, dataSources).Build();
     }
 
+    /// <summary>
+    /// Validates the current configuration and builds the executable runtime graph.
+    /// </summary>
     public override BaseExecution Build()
     {
         _validationResults.Clear();
@@ -505,6 +613,9 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
                new ConfigurationBuilder().Build();
     }
 
+    /// <summary>
+    /// Validates mutually exclusive server settings and multi-server action-name collisions.
+    /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         var hasSingleServer = Server != null;

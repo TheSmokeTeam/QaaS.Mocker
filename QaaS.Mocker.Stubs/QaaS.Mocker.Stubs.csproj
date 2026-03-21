@@ -4,8 +4,9 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <VersionPrefix>0.0.0</VersionPrefix>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PackageId>QaaS.Mocker.Stubs</PackageId>
+        <Description>Transaction stub definitions and processor integration primitives for QaaS.Mocker.</Description>
+        <IsPackable>true</IsPackable>
     </PropertyGroup>
 
     <ItemGroup>

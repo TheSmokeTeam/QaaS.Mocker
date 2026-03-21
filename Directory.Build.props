@@ -8,4 +8,19 @@
   <PropertyGroup>
     <NoWarn>$(NoWarn);1591;CS0168;CS0618;CS8602;CS8603;CS8604;CS8618;CS9107;SYSLIB0057;NU5104</NoWarn>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsPackable)' == 'true' and '$(IsTestProject)' != 'true' and '$(OutputType)' != 'Exe'">
+    <Authors>SmokeTeam</Authors>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/TheSmokeTeam/QaaS.Mocker</RepositoryUrl>
+    <VersionPrefix>0.0.0</VersionPrefix>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true' and '$(IsTestProject)' != 'true' and '$(OutputType)' != 'Exe'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Link="README.md" />
+  </ItemGroup>
 </Project>

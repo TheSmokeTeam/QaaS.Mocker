@@ -5,15 +5,8 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <PackageId>QaaS.Mocker</PackageId>
-        <Authors>SmokeTeam</Authors>
         <Description>Server-side mock orchestration for HTTP, HTTPS, gRPC and socket communications.</Description>
-        <RepositoryType>git</RepositoryType>
-        <VersionPrefix>0.0.0</VersionPrefix>
         <IsPackable>true</IsPackable>
-        <IncludeSymbols>true</IncludeSymbols>
-        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
 
     <ItemGroup>
@@ -26,21 +19,6 @@
       <ProjectReference Include="..\QaaS.Mocker.Controller\QaaS.Mocker.Controller.csproj" />
       <ProjectReference Include="..\QaaS.Mocker.Servers\QaaS.Mocker.Servers.csproj" />
     </ItemGroup>
-
-    <ItemGroup>
-      <None Include="..\README.md" Pack="true" PackagePath="\" Link="README.md" />
-    </ItemGroup>
-
-    <PropertyGroup>
-      <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeProjectReferencesInPackage</TargetsForTfmSpecificBuildOutput>
-    </PropertyGroup>
-
-    <Target Name="IncludeProjectReferencesInPackage" DependsOnTargets="ResolveReferences">
-      <ItemGroup>
-        <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths->WithMetadataValue('ReferenceSourceTarget', 'ProjectReference'))" />
-      </ItemGroup>
-    </Target>
-
     <ItemGroup>
       <InternalsVisibleTo Include="QaaS.Mocker.Example" />
       <InternalsVisibleTo Include="QaaS.Mocker.Tests" />

@@ -17,8 +17,8 @@ env:
   CONFIGURATION: Release
   SOLUTION_PATH: QaaS.Mocker.sln
   COVERAGE_SOLUTION_PATH: QaaS.Mocker.sln
-  PROJECT_TO_PACK: QaaS.Mocker/QaaS.Mocker.csproj
   PACKAGE_OUTPUT_DIRECTORY: ${{ github.workspace }}\BuildOutput
+  PACKABLE_PROJECTS_MANIFEST_PATH: ${{ github.workspace }}\BuildOutput\packable-projects.txt
   RESTORED_PACKAGES_PATH: ${{ github.workspace }}\RestoredPackages
   COVERAGE_RESULTS_DIRECTORY: ${{ github.workspace }}\CoverageResults
   COVERAGE_RESULTS_PATH: ${{ github.workspace }}\CoverageResults\coverage.xml
@@ -75,6 +75,64 @@ jobs:
 
       - name: Build solution
         run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore --configuration ${{ env.CONFIGURATION }}
+
+      - name: Resolve packable projects
+        if: steps.stable_tag.outputs.is_stable_tag == 'true'
+        shell: pwsh
+        run: |
+          function Get-ProjectPropertyValue([xml]$project, [string]$propertyName) {
+            return @($project.Project.PropertyGroup.$propertyName | Where-Object {
+              $_ -and -not [string]::IsNullOrWhiteSpace($_.ToString())
+            } | ForEach-Object { $_.ToString().Trim() }) | Select-Object -First 1
+          }
+
+          function Test-IsTrue([string]$value) {
+            return $value -and $value.Equals('true', [System.StringComparison]::OrdinalIgnoreCase)
+          }
+
+          function Test-IsPackableProject([string]$projectPath) {
+            $projectName = [System.IO.Path]::GetFileNameWithoutExtension($projectPath)
+            if ($projectName -like '*.Tests' -or $projectName -like '*.E2E*' -or $projectName -like '*.Example') {
+              return $false
+            }
+
+            [xml]$project = Get-Content $projectPath
+            if (Test-IsTrue (Get-ProjectPropertyValue $project 'IsTestProject')) {
+              return $false
+            }
+
+            $outputType = Get-ProjectPropertyValue $project 'OutputType'
+            if ($outputType -and $outputType.Equals('Exe', [System.StringComparison]::OrdinalIgnoreCase)) {
+              return $false
+            }
+
+            $isPackable = Get-ProjectPropertyValue $project 'IsPackable'
+            if ($null -ne $isPackable) {
+              return Test-IsTrue $isPackable
+            }
+
+            return $true
+          }
+
+          New-Item -ItemType Directory -Path "${{ env.PACKAGE_OUTPUT_DIRECTORY }}" -Force | Out-Null
+          $solutionEntries = dotnet sln "${{ env.SOLUTION_PATH }}" list
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to list projects for packing."
+          }
+
+          $packableProjects = $solutionEntries |
+            Select-Object -Skip 2 |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { Join-Path $env:GITHUB_WORKSPACE $_.Trim() } |
+            Where-Object { Test-IsPackableProject $_ }
+
+          if (@($packableProjects).Count -eq 0) {
+            throw "No packable projects were resolved."
+          }
+
+          $packableProjects | Set-Content -Path "${{ env.PACKABLE_PROJECTS_MANIFEST_PATH }}"
+          Write-Host "Packable projects:"
+          $packableProjects | ForEach-Object { Write-Host " - $_" }
 
       - name: Resolve coverage scope
         shell: pwsh
@@ -244,17 +302,28 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Pack QaaS.Mocker
+      - name: Pack NuGet projects
         if: steps.stable_tag.outputs.is_stable_tag == 'true'
+        shell: pwsh
         run: |
-          dotnet pack ${{ env.PROJECT_TO_PACK }} `
-            --no-restore `
-            --configuration ${{ env.CONFIGURATION }} `
-            --include-symbols `
-            -p:DebugType=portable `
-            -p:SymbolPackageFormat=snupkg `
-            -p:PackageVersion=${{ steps.stable_tag.outputs.tag }} `
-            --output ${{ env.PACKAGE_OUTPUT_DIRECTORY }}
+          $projects = Get-Content "${{ env.PACKABLE_PROJECTS_MANIFEST_PATH }}" | Where-Object {
+            -not [string]::IsNullOrWhiteSpace($_)
+          }
+
+          foreach ($project in $projects) {
+            dotnet pack $project `
+              --no-restore `
+              --configuration ${{ env.CONFIGURATION }} `
+              --include-symbols `
+              -p:DebugType=portable `
+              -p:SymbolPackageFormat=snupkg `
+              -p:PackageVersion=${{ steps.stable_tag.outputs.tag }} `
+              --output ${{ env.PACKAGE_OUTPUT_DIRECTORY }}
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Packing failed for '$project'."
+            }
+          }
 
       - name: Stage packed packages in restored packages artifact
         if: steps.stable_tag.outputs.is_stable_tag == 'true'
@@ -280,15 +349,13 @@ jobs:
             Copy-Item $packageFile.FullName $versionDirectory -Force
           }
 
-      - name: Push QaaS.Mocker to NuGet
+      - name: Push packages to NuGet
         if: steps.stable_tag.outputs.is_stable_tag == 'true'
         shell: powershell
         run: |
-          $packages = Get-ChildItem "${{ env.PACKAGE_OUTPUT_DIRECTORY }}\QaaS.Mocker.*.nupkg"
+          $packages = Get-ChildItem "${{ env.PACKAGE_OUTPUT_DIRECTORY }}" -Filter "*.nupkg" -File
           foreach ($package in $packages) {
-            if ($package.Name -match "^QaaS\.Mocker\.[0-9]") {
-              dotnet nuget push $package.FullName -k ${{ secrets.NUGET_AUTH_TOKEN }} -s https://api.nuget.org/v3/index.json
-            }
+            dotnet nuget push $package.FullName -k ${{ secrets.NUGET_AUTH_TOKEN }} -s https://api.nuget.org/v3/index.json --skip-duplicate
           }
 
       - name: Push QaaS.Mocker symbols to NuGet
