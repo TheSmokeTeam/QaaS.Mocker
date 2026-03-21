@@ -185,7 +185,11 @@ public class ExecutionBuilderCrudTests
 
         builder.CreateServer(first);
         var created = builder.ReadServer();
-        builder.UpdateServer(server => server.Type = ServerType.Socket);
+        builder.UpdateServer(server =>
+        {
+            server.Http = null;
+            server.Socket = BuildSocketServer("ActionA").Socket;
+        });
         builder.ReplaceServer(replacement);
         builder.AddServer(added);
 
@@ -194,7 +198,7 @@ public class ExecutionBuilderCrudTests
             Assert.That(created, Is.SameAs(first));
             Assert.That(builder.ReadServer(), Is.Null);
             Assert.That(builder.ReadServers(), Has.Count.EqualTo(2));
-            Assert.That(builder.ReadServers().Select(server => server.Type),
+            Assert.That(builder.ReadServers().Select(server => server.ResolveType()),
                 Is.EqualTo(new[] { ServerType.Socket, ServerType.Http }));
         });
     }
@@ -341,7 +345,6 @@ public class ExecutionBuilderCrudTests
                 .HookNamed(nameof(CodeFirstProcessor)))
             .ReplaceServer(new ServerConfig
             {
-                Type = ServerType.Http,
                 Http = new HttpServerConfig
                 {
                     Port = 18081,
@@ -419,7 +422,6 @@ public class ExecutionBuilderCrudTests
     {
         return new ServerConfig
         {
-            Type = ServerType.Http,
             Http = new HttpServerConfig
             {
                 Port = 18081,
@@ -448,7 +450,6 @@ public class ExecutionBuilderCrudTests
     {
         return new ServerConfig
         {
-            Type = ServerType.Socket,
             Socket = new SocketServerConfig
             {
                 BindingIpAddress = "127.0.0.1",

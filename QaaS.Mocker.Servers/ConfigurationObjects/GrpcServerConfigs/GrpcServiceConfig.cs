@@ -4,6 +4,9 @@ using QaaS.Framework.Configurations.CustomValidationAttributes;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.GrpcServerConfigs;
 
+/// <summary>
+/// Describes one generated gRPC service and the RPC actions exposed through it.
+/// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record GrpcServiceConfig
 {

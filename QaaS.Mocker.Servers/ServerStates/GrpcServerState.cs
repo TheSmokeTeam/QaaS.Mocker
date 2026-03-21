@@ -12,8 +12,14 @@ using QaaS.Mocker.Stubs.Stubs;
 
 namespace QaaS.Mocker.Servers.ServerStates;
 
+/// <summary>
+/// Maintains gRPC action-to-stub mappings and request/response capture state.
+/// </summary>
 public class GrpcServerState : IServerState
 {
+    /// <summary>
+    /// Gets the capture capabilities exposed by the gRPC runtime.
+    /// </summary>
     public InputOutputState InputOutputState { get; init; } = InputOutputState.BothInputOutput;
 
     private const string NotFoundTransactionStub = "NotFoundTransactionStub";
@@ -27,6 +33,9 @@ public class GrpcServerState : IServerState
     private readonly IDictionary<string, ActionToTransactionStub> _rpcToAction;
     private readonly TransactionsCache _cache;
 
+    /// <summary>
+    /// Initializes action mappings for all configured services and RPC methods.
+    /// </summary>
     public GrpcServerState(
         ILogger logger,
         IImmutableList<TransactionStub> transactionStubList,
@@ -66,6 +75,9 @@ public class GrpcServerState : IServerState
         }
     }
 
+    /// <summary>
+    /// Processes one gRPC request and falls back to the configured internal-error stub on failures.
+    /// </summary>
     public Data<object> Process(string serviceName, string rpcName, Data<object> requestData)
     {
         Data<object>? responseData;
@@ -118,6 +130,9 @@ public class GrpcServerState : IServerState
             string.Equals(pair.ActionName, actionName, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Rebinds a configured action to a different transaction stub.
+    /// </summary>
     public void ChangeActionStub(string actionName, string stubName)
     {
         var actionToTransactionStub = _actionToStubList
@@ -134,11 +149,17 @@ public class GrpcServerState : IServerState
             actionName, oldAssignedTransactionStubName, stubName);
     }
 
+    /// <summary>
+    /// gRPC actions are request-driven and do not support manual trigger semantics.
+    /// </summary>
     public void TriggerAction(string actionName, int? timeoutMs)
     {
         throw new NotImplementedException("Grpc server does not hold actions that require trigger semantics.");
     }
 
+    /// <summary>
+    /// Returns the cache used by controller consume commands.
+    /// </summary>
     public ICache GetCache() => _cache;
 
     private TransactionStub ResolveTransactionStub(string serviceName, string rpcName)

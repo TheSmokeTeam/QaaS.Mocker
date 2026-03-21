@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Mocker.Controller.ConfigurationObjects;
 using QaaS.Mocker.Controller.Controllers;
@@ -7,8 +7,14 @@ using StackExchange.Redis;
 
 namespace QaaS.Mocker.Controller;
 
+/// <summary>
+/// Builds the optional Redis-backed controller for a configured mocker server state.
+/// </summary>
 public class ControllerFactory(Context context, ControllerConfig? controller)
 {
+    /// <summary>
+    /// Creates the controller when both a server name and valid Redis settings are available.
+    /// </summary>
     public IController? Build(IServerState serverState)
     {
         ConnectionMultiplexer redisConnection;
@@ -19,9 +25,9 @@ public class ControllerFactory(Context context, ControllerConfig? controller)
                 "Controller startup skipped because 'Controller.ServerName' is not configured.");
             return null;
         }
-        
+
         try
-        {   
+        {
             if (controller?.Redis != null)
             {
                 context.Logger.LogInformation(

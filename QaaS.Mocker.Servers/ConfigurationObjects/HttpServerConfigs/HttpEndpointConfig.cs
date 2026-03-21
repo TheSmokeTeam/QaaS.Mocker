@@ -1,46 +1,56 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
 using QaaS.Framework.Configurations.CustomValidationAttributes;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 
+/// <summary>
+/// Describes one HTTP route and the method-specific actions available on it.
+/// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record HttpEndpointConfig
 {
     [Required, UniquePropertyInEnumerable(nameof(HttpEndpointActionConfig.Method)),
      Description("The http endpoint method actions")]
-    public HttpEndpointActionConfig[] Actions { get; set; }
-    
-    [Required, Description("The http endpoint Path")]
-    public string Path { get; set; }
+    public HttpEndpointActionConfig[] Actions { get; set; } = [];
 
+    [Required, Description("The http endpoint Path")]
+    public string Path { get; set; } = null!;
+
+    /// <summary>
+    /// Gets the normalized route path used for validation and regex generation.
+    /// </summary>
     public string FixedPath
     {
         get
         {
-            var path = Path.ToLower();
-            if (path.Length != 1) path = path.TrimEnd(Slash);
+            var path = Path.ToLowerInvariant();
+            if (path.Length != 1)
+                path = path.TrimEnd(Slash);
             return path;
         }
-    } 
-    
+    }
+
     private static readonly Regex PathPattern =
         new(@"^\/$|^\/([\w\-]+\/)*([\w\-]+|{\w+})(\/[\w\-]+|\/{\w+})*(\/)?$");
+
+    /// <summary>
+    /// Validates that the configured path uses the supported placeholder syntax.
+    /// </summary>
     public bool IsPathValid() => PathPattern.IsMatch(FixedPath);
 
-    
     private static readonly Regex ParameterSchemaInPathPattern = new(@"{(\w+)}");
     private const string ParameterSectionInPathRegexPattern = @"[\w\-]+";
     private const int IndexOneRegexMatchGroup = 1;
     private const char Slash = '/';
     private const string PlaceholderSectionName = "placeholder";
-    
+
     private string[] RetrieveSegmentsFromPath()
     {
-        if (!IsPathValid()) 
+        if (!IsPathValid())
             throw new NotSupportedException($"Can't process invalid Path '{FixedPath}'");
-      
+
         var parameterNames = new HashSet<string>();
         var parameterRegexMatches = ParameterSchemaInPathPattern.Matches(FixedPath);
 
@@ -54,11 +64,16 @@ public record HttpEndpointConfig
         var segments = FixedPath.Split(Slash);
         if (!segments.Select(segment => ParameterSchemaInPathPattern.Matches(segment))
                 .All(parameterMatches => parameterMatches.Count <= 1))
+        {
             throw new ArgumentException($"Multiple parameters in the same section in Path '{FixedPath}'");
+        }
 
         return segments;
     }
-    
+
+    /// <summary>
+    /// Converts the route template into a regex that can match runtime request paths.
+    /// </summary>
     public Regex GeneratePathRegex()
     {
         var segments = RetrieveSegmentsFromPath();
@@ -69,10 +84,13 @@ public record HttpEndpointConfig
             select match.Success
                 ? $"(?<{match.Groups[IndexOneRegexMatchGroup].Value}>{ParameterSectionInPathRegexPattern})"
                 : Regex.Escape(segment)).ToList();
-        
+
         return new Regex("^/" + string.Join("/", pathBuilder) + "$");
     }
-    
+
+    /// <summary>
+    /// Generates a sample concrete path used when detecting conflicting route templates.
+    /// </summary>
     public string GenerateDummyPath()
     {
         var segments = RetrieveSegmentsFromPath();
@@ -82,7 +100,7 @@ public record HttpEndpointConfig
             select ParameterSchemaInPathPattern.IsMatch(segment)
                 ? PlaceholderSectionName
                 : Regex.Escape(segment)).ToList();
-        
+
         return "/" + string.Join("/", pathBuilder);
     }
 }

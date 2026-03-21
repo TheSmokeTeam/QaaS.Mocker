@@ -8,6 +8,7 @@
         <Authors>SmokeTeam</Authors>
         <Description>Server-side mock orchestration for HTTP, HTTPS, gRPC and socket communications.</Description>
         <RepositoryType>git</RepositoryType>
+        <RepositoryUrl>https://github.com/TheSmokeTeam/QaaS.Mocker</RepositoryUrl>
         <VersionPrefix>0.0.0</VersionPrefix>
         <IsPackable>true</IsPackable>
         <IncludeSymbols>true</IncludeSymbols>
@@ -18,7 +19,7 @@
 
     <ItemGroup>
       <PackageReference Include="CommandLineParser" Version="2.9.1" />
-    <PackageReference Include="QaaS.Framework.Executions" Version="1.2.4" />
+      <PackageReference Include="QaaS.Framework.Executions" Version="1.2.5" />
       <PackageReference Include="System.IO.Abstractions" Version="22.1.0" />
     </ItemGroup>
 
@@ -30,16 +31,6 @@
     <ItemGroup>
       <None Include="..\README.md" Pack="true" PackagePath="\" Link="README.md" />
     </ItemGroup>
-
-    <PropertyGroup>
-      <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeProjectReferencesInPackage</TargetsForTfmSpecificBuildOutput>
-    </PropertyGroup>
-
-    <Target Name="IncludeProjectReferencesInPackage" DependsOnTargets="ResolveReferences">
-      <ItemGroup>
-        <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths->WithMetadataValue('ReferenceSourceTarget', 'ProjectReference'))" />
-      </ItemGroup>
-    </Target>
 
     <ItemGroup>
       <InternalsVisibleTo Include="QaaS.Mocker.Example" />

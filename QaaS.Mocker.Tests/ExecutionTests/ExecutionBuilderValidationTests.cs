@@ -41,7 +41,6 @@ public class ExecutionBuilderValidationTests
             [
                 new ServerConfig
                 {
-                    Type = ServerType.Http,
                     Http = new HttpServerConfig
                     {
                         Port = 18081,
@@ -65,7 +64,6 @@ public class ExecutionBuilderValidationTests
                 },
                 new ServerConfig
                 {
-                    Type = ServerType.Socket,
                     Socket = new SocketServerConfig
                     {
                         Endpoints =
@@ -99,7 +97,6 @@ public class ExecutionBuilderValidationTests
     {
         return new ServerConfig
         {
-            Type = ServerType.Grpc,
             Grpc = new GrpcServerConfig
             {
                 Port = 50051,
@@ -129,7 +126,6 @@ public class ExecutionBuilderValidationTests
     {
         return new ServerConfig
         {
-            Type = ServerType.Socket,
             Socket = new SocketServerConfig
             {
                 Endpoints =

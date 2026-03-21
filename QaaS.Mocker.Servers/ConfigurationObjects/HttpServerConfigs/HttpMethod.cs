@@ -1,5 +1,8 @@
-﻿namespace QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
+namespace QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 
+/// <summary>
+/// Supported HTTP methods for configured endpoint actions.
+/// </summary>
 public enum HttpMethod
 {
     Get,

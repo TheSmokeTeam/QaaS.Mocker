@@ -165,7 +165,7 @@ public class ExecutionBuilderBranchTests
         {
             Server = new Servers.ConfigurationObjects.ServerConfig
             {
-                Type = Servers.ConfigurationObjects.ServerType.Http
+                Http = new Servers.ConfigurationObjects.HttpServerConfigs.HttpServerConfig()
             }
         };
 
@@ -240,7 +240,6 @@ public class ExecutionBuilderBranchTests
             [
                 new Servers.ConfigurationObjects.ServerConfig
                 {
-                    Type = Servers.ConfigurationObjects.ServerType.Socket,
                     Socket = new Servers.ConfigurationObjects.SocketServerConfigs.SocketServerConfig
                     {
                         Endpoints =

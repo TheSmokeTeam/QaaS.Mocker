@@ -17,7 +17,7 @@ public class TransactionStubBuilderTests
         var built = new TransactionStubBuilder()
             .Named("StubA")
             .HookNamed("MyProcessor")
-            .Configure(config)
+            .CreateConfiguration(config)
             .Build();
 
         Assert.Multiple(() =>
@@ -42,7 +42,7 @@ public class TransactionStubBuilderTests
         var built = new TransactionStubBuilder()
             .Named("StubA")
             .HookNamed("MyProcessor")
-            .Configure(configuration)
+            .CreateConfiguration(configuration)
             .Build();
 
         Assert.That(built.ProcessorConfiguration["Nested:Enabled"], Is.EqualTo("true"));
@@ -54,7 +54,7 @@ public class TransactionStubBuilderTests
         var built = new TransactionStubBuilder()
             .Named("StubA")
             .HookNamed("MyProcessor")
-            .Configure(new { Prefix = "value" })
+            .CreateConfiguration(new { Prefix = "value" })
             .Build();
 
         var yaml = new SerializerBuilder().Build().Serialize(built);
@@ -121,5 +121,37 @@ public class TransactionStubBuilderTests
             .Named("StubA");
 
         Assert.Throws<InvalidOperationException>(() => builder.Build());
+    }
+
+    [Test]
+    public void ConfigurationCrud_ReadUpdateAndDelete_WorkAsExpected()
+    {
+        var builder = new TransactionStubBuilder()
+            .CreateConfiguration(new
+            {
+                Existing = "value",
+                Nested = new
+                {
+                    Before = "keep"
+                }
+            });
+
+        builder.UpdateConfiguration(new
+        {
+            Nested = new
+            {
+                Added = "new"
+            }
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(builder.ReadConfiguration()["Existing"], Is.EqualTo("value"));
+            Assert.That(builder.ReadConfiguration()["Nested:Before"], Is.EqualTo("keep"));
+            Assert.That(builder.ReadConfiguration()["Nested:Added"], Is.EqualTo("new"));
+        });
+
+        builder.DeleteConfiguration();
+        Assert.That(builder.ReadConfiguration().AsEnumerable().Any(), Is.False);
     }
 }

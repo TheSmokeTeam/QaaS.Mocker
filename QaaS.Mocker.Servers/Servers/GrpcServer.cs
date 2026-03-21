@@ -11,6 +11,9 @@ using QaaS.Mocker.Stubs.Stubs;
 
 namespace QaaS.Mocker.Servers.Servers;
 
+/// <summary>
+/// Hosts configured gRPC services and routes each RPC call to the matching transaction stub.
+/// </summary>
 public class GrpcServer : IServer
 {
     private static readonly MethodInfo AddMethodGenericDefinition = typeof(ServerServiceDefinition.Builder)
@@ -31,8 +34,14 @@ public class GrpcServer : IServer
     private readonly GrpcServerState _grpcServerState;
     private readonly Server _grpcServer;
 
+    /// <summary>
+    /// Gets the server state used by controller commands and transport handlers.
+    /// </summary>
     public IServerState State { get; init; }
 
+    /// <summary>
+    /// Initializes a gRPC server runtime from configuration and the resolved transaction stubs.
+    /// </summary>
     public GrpcServer(GrpcServerConfig configuration, ILogger logger, IImmutableList<TransactionStub> transactionStubList)
     {
         _logger = logger;
@@ -52,6 +61,9 @@ public class GrpcServer : IServer
         _grpcServer.Ports.Add(new ServerPort(host, configuration.Port, ResolveServerCredentials(configuration, logger)));
     }
 
+    /// <summary>
+    /// Starts the gRPC server and blocks for the server lifetime.
+    /// </summary>
     public void Start()
     {
         _grpcServer.Start();
@@ -64,6 +76,9 @@ public class GrpcServer : IServer
     {
         var serviceDefinitionBuilder = ServerServiceDefinition.CreateBuilder();
 
+        // The generated gRPC static type and nested client contain the canonical method signatures
+        // and service name metadata; reflect over them once so the mocker can build handlers
+        // without requiring handwritten service adapters for every proto contract.
         var assembly = Assembly.Load(serviceConfig.AssemblyName);
         var serviceType = assembly.GetType($"{serviceConfig.ProtoNamespace}.{serviceConfig.ServiceName}", throwOnError: true)!;
         var grpcServiceName = ResolveGrpcServiceName(serviceType);
@@ -210,6 +225,8 @@ public class GrpcServer : IServer
                 $"Configured gRPC certificate '{certificatePath}' was not found. Current working directory: '{Environment.CurrentDirectory}'.");
 
         logger.LogInformation("Configuring gRPC TLS certificate from '{CertificatePath}'", certificatePath);
+        // Export the loaded PFX into PEM material because Grpc.Core server credentials expect the
+        // certificate and private key in PEM form rather than the original container format.
         var pfxCertificate = new X509Certificate2(certificatePath, configuration.CertificatePassword,
             X509KeyStorageFlags.Exportable);
         var certificate = pfxCertificate.ExportCertificatePem();

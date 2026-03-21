@@ -11,6 +11,9 @@ namespace QaaS.Mocker.Options;
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record MockerOptions : LoggerOptions
 {
+    /// <summary>
+    /// Gets the requested mocker execution mode.
+    /// </summary>
     [Option('m', "mode",
         HelpText = $"""
                     The mocker execution mode. Overrides the default execution mode 
@@ -20,6 +23,9 @@ public record MockerOptions : LoggerOptions
                     """)]
     public ExecutionMode? ExecutionMode { get; init; } = Options.ExecutionMode.Run;
 
+    /// <summary>
+    /// Gets the main YAML configuration file path.
+    /// </summary>
     [Required, ValidPath, Value(0, Default = Constants.DefaultMockerConfigurationFileName,
          HelpText = """
                     Path to a mocker yaml configuration file to use with the command."
@@ -27,6 +33,9 @@ public record MockerOptions : LoggerOptions
     public string? ConfigurationFile { get; init; }
 
 
+    /// <summary>
+    /// Gets the ordered list of YAML overlay files applied after the main configuration.
+    /// </summary>
     [AllPathsInEnumerableValid, Option('w', "overwrite-files", Default = null,
          HelpText = """
                     List of files to overwrite the mocker configuration with, The first file overwrites the mocker
@@ -34,7 +43,20 @@ public record MockerOptions : LoggerOptions
                     """)]
     public IList<string> OverwriteFiles { get; init; } = [];
 
+    /// <summary>
+    /// Gets the ordered list of folders whose YAML files are applied alphabetically after file overlays.
+    /// </summary>
+    [AllPathsInEnumerableValid, Option('f', "overwrite-folders", Default = null,
+         HelpText = """
+                    List of folders whose yaml files overwrite the mocker configuration in alphabetical order,
+                    after overwrite files and in the order the folders are given.
+                    """)]
+    public IList<string> OverwriteFolders { get; init; } = [];
 
+
+    /// <summary>
+    /// Gets the ordered list of configuration-path assignments applied after file overlays.
+    /// </summary>
     [Option('r', "overwrite-arguments", Default = null,
         HelpText = """
                    List of arguments to overwrite the mocker configuration with, The first argument overwrites the 
@@ -44,6 +66,9 @@ public record MockerOptions : LoggerOptions
     public IList<string> OverwriteArguments { get; init; } = [];
 
 
+    /// <summary>
+    /// Gets whether environment variable overrides should be skipped.
+    /// </summary>
     [Option("no-env", Default = false,
         HelpText = """
                    When this flag is used environment variables will not override loaded configurations.
@@ -51,12 +76,18 @@ public record MockerOptions : LoggerOptions
     public bool DontResolveWithEnvironmentVariables { get; init; } = false;
 
 
+    /// <summary>
+    /// Gets the folder used to write generated template output.
+    /// </summary>
     [Option('o', "output-folder", Default = null,
          HelpText = """
                     Path to a folder to write the generated templates in.
                     """)]
     public string? TemplatesOutputFolder { get; init; }
 
+    /// <summary>
+    /// Gets whether the runtime should stay attached to the local console and stop on key press.
+    /// </summary>
     [Option("run-locally", Default = false,
          HelpText = """
                     Runs the project locally and enables exit by any key press.

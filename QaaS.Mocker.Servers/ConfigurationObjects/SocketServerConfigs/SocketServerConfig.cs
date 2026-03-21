@@ -1,59 +1,64 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using QaaS.Framework.Configurations.CustomValidationAttributes;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 
+/// <summary>
+/// Describes the socket server host and the endpoints it should expose.
+/// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record SocketServerConfig
 {
     [DefaultValue("0.0.0.0"), Description("Subnet ipv4 mask to bind socket client's connection to")]
     public string BindingIpAddress { get; set; } = "0.0.0.0";
 
-    [Description(
-         "The socket's connection acceptance value used for the semaphore (Multiplied with local processor count)"),
+    [Description("The socket's connection acceptance value used for the semaphore (Multiplied with local processor count)"),
      DefaultValue(8)]
     public int ConnectionAcceptanceValue { get; set; } = 8;
 
     [Required, UniquePropertyInEnumerable(nameof(SocketEndpointConfig.Port)), MinLength(1),
      UniqueActionNameInAllEndpoints, BroadcastOverUdpNotSupported, SocketTypeMatchesProtocol,
-     // TODO - merge attribute and maybe endpoint typed records
      Description("All socket endpoint-implementation which handled by the socket server")]
     public SocketEndpointConfig[]? Endpoints { get; set; }
 }
 
+/// <summary>
+/// Ensures controller-visible socket action names remain unique across all endpoints.
+/// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class UniqueActionNameInAllEndpointsAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
     {
-        // If item is not an enumerable of SocketEndpointConfig or if its null - validation is automatically successful 
-        if (value is not IEnumerable<SocketEndpointConfig>) return ValidationResult.Success;
+        if (value is not IEnumerable<SocketEndpointConfig>)
+            return ValidationResult.Success;
         var configuration = (SocketServerConfig)validationContext.ObjectInstance;
-        if (configuration.Endpoints == null) return ValidationResult.Success;
+        if (configuration.Endpoints == null)
+            return ValidationResult.Success;
 
         var actionNames = new List<string>();
 
         foreach (var endpoint in configuration.Endpoints)
+        {
             if (endpoint.Action?.Name != null)
-                actionNames.Add(endpoint.Action.Name.ToLower());
+                actionNames.Add(endpoint.Action.Name.ToLowerInvariant());
+        }
 
         var actionNamesDuplicates = actionNames.GroupBy(id => id)
             .Where(idGroup => idGroup.Count() > 1)
             .Select(idGroup => idGroup.Key)
             .ToArray();
 
-
         return actionNamesDuplicates.Length > 0
-            ? new ValidationResult($"Duplication in the following Action Names: " +
+            ? new ValidationResult("Duplication in the following Action Names: " +
                                    $"{string.Join(", ", actionNamesDuplicates)}")
             : ValidationResult.Success;
     }
 }
 
 /// <summary>
-/// Rejects UDP broadcast endpoints up front because the current socket runtime has no remote
-/// destination to send to for that mode.
+/// Rejects UDP broadcast endpoints up front because the current socket runtime has no remote destination to send to.
 /// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class BroadcastOverUdpNotSupportedAttribute : ValidationAttribute
@@ -79,8 +84,7 @@ internal class BroadcastOverUdpNotSupportedAttribute : ValidationAttribute
 }
 
 /// <summary>
-/// Rejects protocol/socket-type combinations that would otherwise fail later with opaque
-/// platform socket exceptions during server construction.
+/// Rejects protocol/socket-type combinations that would otherwise fail later during socket construction.
 /// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class SocketTypeMatchesProtocolAttribute : ValidationAttribute

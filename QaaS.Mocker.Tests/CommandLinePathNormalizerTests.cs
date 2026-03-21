@@ -102,11 +102,42 @@ public class CommandLinePathNormalizerTests
     }
 
     [Test]
+    public void Normalize_RewritesOverwriteFolders()
+    {
+        using var sandbox = new TemporaryDirectorySandbox();
+        var exampleConfigPath = sandbox.CreateFallbackFile("mocker.qaas.yaml");
+        var overwriteFolderPath = sandbox.CreateCallerDirectory("overrides");
+
+        var normalizedArguments = CommandLinePathNormalizer.Normalize(
+            [
+                "run",
+                "mocker.qaas.yaml",
+                "--overwrite-folders",
+                "overrides"
+            ],
+            sandbox.CallerDirectory,
+            sandbox.FallbackDirectory,
+            includeNoEnvFlag: true);
+
+        Assert.That(
+            normalizedArguments,
+            Is.EqualTo(new[]
+            {
+                "run",
+                exampleConfigPath,
+                "--overwrite-folders",
+                overwriteFolderPath,
+                "--no-env"
+            }));
+    }
+
+    [Test]
     public void Normalize_SupportsEqualsSyntax_AndDoesNotDuplicateNoEnv()
     {
         using var sandbox = new TemporaryDirectorySandbox();
         var callerConfigPath = sandbox.CreateCallerFile("configs\\custom.yaml");
         var overwriteFilePath = sandbox.CreateCallerFile("overrides\\override.yaml");
+        var overwriteFolderPath = sandbox.CreateCallerDirectory("folders");
         var expectedOutputPath = Path.GetFullPath("artifacts\\templates", sandbox.CallerDirectory);
 
         var normalizedArguments = CommandLinePathNormalizer.Normalize(
@@ -114,6 +145,7 @@ public class CommandLinePathNormalizerTests
                 "-m=template",
                 "configs\\custom.yaml",
                 "-w=overrides\\override.yaml",
+                "-f=folders",
                 "-o=artifacts\\templates",
                 "--no-env"
             ],
@@ -128,6 +160,7 @@ public class CommandLinePathNormalizerTests
                 "-m=template",
                 callerConfigPath,
                 "-w=" + overwriteFilePath,
+                "-f=" + overwriteFolderPath,
                 "-o=" + expectedOutputPath,
                 "--no-env"
             }));
@@ -154,6 +187,8 @@ public class CommandLinePathNormalizerTests
 
         public string CreateFallbackFile(string relativePath) => CreateFile(FallbackDirectory, relativePath);
 
+        public string CreateCallerDirectory(string relativePath) => CreateDirectory(CallerDirectory, relativePath);
+
         public void Dispose()
         {
             if (Directory.Exists(_rootDirectory))
@@ -166,6 +201,11 @@ public class CommandLinePathNormalizerTests
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, "content");
             return path;
+        }
+
+        private static string CreateDirectory(string rootDirectory, string relativePath)
+        {
+            return Directory.CreateDirectory(Path.Combine(rootDirectory, relativePath)).FullName;
         }
     }
 }

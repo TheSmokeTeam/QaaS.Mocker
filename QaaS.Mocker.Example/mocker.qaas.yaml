@@ -7,8 +7,7 @@ Stubs:
     Processor: GrpcEchoProcessor
 
 Servers:
-  - Type: Http
-    Http:
+  - Http:
       Port: 8443
       IsLocalhost: true
       IsSecuredSchema: true
@@ -21,8 +20,7 @@ Servers:
               Method: Get
               TransactionStubName: ExampleStub
 
-  - Type: Grpc
-    Grpc:
+  - Grpc:
       Port: 50051
       IsLocalhost: true
       IsSecuredSchema: true
@@ -37,8 +35,7 @@ Servers:
               RpcName: Echo
               TransactionStubName: GrpcEchoStub
 
-  - Type: Socket
-    Socket:
+  - Socket:
       BindingIpAddress: 127.0.0.1
       Endpoints:
         - Port: 7001

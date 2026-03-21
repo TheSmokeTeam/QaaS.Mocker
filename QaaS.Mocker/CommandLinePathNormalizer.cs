@@ -2,8 +2,15 @@ using QaaS.Mocker.Options;
 
 namespace QaaS.Mocker;
 
+/// <summary>
+/// Rewrites CLI path arguments so configuration files, overlays, and template output resolve from
+/// the caller's working directory instead of the process host directory.
+/// </summary>
 internal static class CommandLinePathNormalizer
 {
+    /// <summary>
+    /// Normalizes path-bearing arguments and optionally appends the <c>--no-env</c> switch.
+    /// </summary>
     public static string[] Normalize(
         IEnumerable<string> args,
         string callerWorkingDirectory,
@@ -40,6 +47,8 @@ internal static class CommandLinePathNormalizer
         {
             var argument = args[index];
 
+            // Preserve verb-style aliases such as `run` or `template`; Bootstrap will translate
+            // them later, but they must keep their original positional slot here.
             if (index == 0 && IsExecutionModeAlias(argument))
             {
                 rewrittenArguments.Add(argument);
@@ -83,6 +92,17 @@ internal static class CommandLinePathNormalizer
                     args,
                     ref index,
                     rewrittenArguments,
+                    "--overwrite-folders",
+                    "-f",
+                    value => ResolveInputPath(value, callerWorkingDirectory, fallbackInputWorkingDirectory)))
+            {
+                continue;
+            }
+
+            if (TryRewriteListOption(
+                    args,
+                    ref index,
+                    rewrittenArguments,
                     "--overwrite-arguments",
                     "-r",
                     static value => value))
@@ -92,6 +112,7 @@ internal static class CommandLinePathNormalizer
 
             if (!configurationFileResolved && !IsOption(argument))
             {
+                // Only the first bare positional value is treated as the main configuration file.
                 rewrittenArguments.Add(
                     ResolveInputPath(argument, callerWorkingDirectory, fallbackInputWorkingDirectory));
                 configurationFileResolved = true;
@@ -198,13 +219,15 @@ internal static class CommandLinePathNormalizer
             return path;
 
         var callerRelativePath = Path.GetFullPath(path, callerWorkingDirectory);
-        if (File.Exists(callerRelativePath))
+        if (PathExists(callerRelativePath))
             return callerRelativePath;
 
         var fallbackRelativePath = Path.GetFullPath(path, fallbackInputWorkingDirectory);
-        return File.Exists(fallbackRelativePath) ? fallbackRelativePath : callerRelativePath;
+        return PathExists(fallbackRelativePath) ? fallbackRelativePath : callerRelativePath;
     }
 
     private static string ResolveOutputPath(string path, string callerWorkingDirectory) =>
         Path.IsPathRooted(path) ? path : Path.GetFullPath(path, callerWorkingDirectory);
+
+    private static bool PathExists(string path) => File.Exists(path) || Directory.Exists(path);
 }

@@ -9,8 +9,14 @@ using QaaS.Mocker.Example.Grpc;
 
 namespace QaaS.Mocker.Example.Processors;
 
+/// <summary>
+/// Alternate health processor used by the runner integration overlays to prove stub swapping works.
+/// </summary>
 public sealed class AlternateHealthProcessor : BaseTransactionProcessor<NoConfiguration>
 {
+    /// <summary>
+    /// Returns a degraded health response for overlay scenarios.
+    /// </summary>
     public override Data<object> Process(IImmutableList<DataSource> dataSourceList, Data<object> requestData)
     {
         return new Data<object>
@@ -31,8 +37,14 @@ public sealed class AlternateHealthProcessor : BaseTransactionProcessor<NoConfig
     }
 }
 
+/// <summary>
+/// Alternate gRPC echo processor used by overlay-based runner integration scenarios.
+/// </summary>
 public sealed class AlternateGrpcEchoProcessor : BaseTransactionProcessor<NoConfiguration>
 {
+    /// <summary>
+    /// Returns a modified echo response so overrides are visible in integration tests.
+    /// </summary>
     public override Data<object> Process(IImmutableList<DataSource> dataSourceList, Data<object> requestData)
     {
         if (requestData.Body is not EchoRequest request)
@@ -49,8 +61,14 @@ public sealed class AlternateGrpcEchoProcessor : BaseTransactionProcessor<NoConf
     }
 }
 
+/// <summary>
+/// Returns the incoming socket payload unchanged.
+/// </summary>
 public sealed class SocketPassthroughProcessor : BaseTransactionProcessor<NoConfiguration>
 {
+    /// <summary>
+    /// Accepts either raw bytes or text and emits bytes without changing the payload.
+    /// </summary>
     public override Data<object> Process(IImmutableList<DataSource> dataSourceList, Data<object> requestData)
     {
         return new Data<object>
@@ -65,8 +83,14 @@ public sealed class SocketPassthroughProcessor : BaseTransactionProcessor<NoConf
     }
 }
 
+/// <summary>
+/// Prefixes incoming socket payload text so overlay behavior is easy to observe.
+/// </summary>
 public sealed class SocketPrefixProcessor : BaseTransactionProcessor<NoConfiguration>
 {
+    /// <summary>
+    /// Converts the incoming payload to text, prefixes it, and returns UTF-8 bytes.
+    /// </summary>
     public override Data<object> Process(IImmutableList<DataSource> dataSourceList, Data<object> requestData)
     {
         var text = requestData.Body switch
