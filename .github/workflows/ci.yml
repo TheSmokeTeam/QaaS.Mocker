@@ -5,17 +5,21 @@ on:
     branches: ["**"]
     tags: ["*"]
   pull_request:
+    branches: ["**"]
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
-  contents: read
-  pull-requests: read
+  contents: write
 
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   CONFIGURATION: Release
-  SOLUTION_PATH: QaaS.Mocker.sln
+  PROJECT_PATH: QaaS.Mocker.sln
   COVERAGE_SOLUTION_PATH: QaaS.Mocker.sln
   PACKAGE_OUTPUT_DIRECTORY: ${{ github.workspace }}\BuildOutput
   PACKABLE_PROJECTS_MANIFEST_PATH: ${{ github.workspace }}\BuildOutput\packable-projects.txt
@@ -71,10 +75,10 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
 
       - name: Restore packages
-        run: dotnet restore ${{ env.SOLUTION_PATH }} --packages ${{ env.RESTORED_PACKAGES_PATH }}
+        run: dotnet restore ${{ env.PROJECT_PATH }} --packages ${{ env.RESTORED_PACKAGES_PATH }}
 
-      - name: Build solution
-        run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore --configuration ${{ env.CONFIGURATION }}
+      - name: Build project
+        run: dotnet build ${{ env.PROJECT_PATH }} --no-restore --configuration ${{ env.CONFIGURATION }}
 
       - name: Resolve packable projects
         if: steps.stable_tag.outputs.is_stable_tag == 'true'
@@ -115,7 +119,7 @@ jobs:
           }
 
           New-Item -ItemType Directory -Path "${{ env.PACKAGE_OUTPUT_DIRECTORY }}" -Force | Out-Null
-          $solutionEntries = dotnet sln "${{ env.SOLUTION_PATH }}" list
+          $solutionEntries = dotnet sln "${{ env.PROJECT_PATH }}" list
           if ($LASTEXITCODE -ne 0) {
             throw "Unable to list projects for packing."
           }
@@ -203,7 +207,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path "${{ env.COVERAGE_RESULTS_DIRECTORY }}" -Force | Out-Null
-          dotnet-coverage collect dotnet test ${{ env.SOLUTION_PATH }} --configuration ${{ env.CONFIGURATION }} --no-restore --no-build --maxcpucount -f cobertura -o "${{ env.COVERAGE_RESULTS_PATH }}"
+          dotnet-coverage collect dotnet test ${{ env.PROJECT_PATH }} --configuration ${{ env.CONFIGURATION }} --no-restore --no-build --maxcpucount -f cobertura -o "${{ env.COVERAGE_RESULTS_PATH }}"
 
       - name: Generate coverage reports
         shell: pwsh
@@ -313,6 +317,7 @@ jobs:
           foreach ($project in $projects) {
             dotnet pack $project `
               --no-restore `
+              --no-build `
               --configuration ${{ env.CONFIGURATION }} `
               --include-symbols `
               -p:DebugType=portable `
@@ -349,16 +354,11 @@ jobs:
             Copy-Item $packageFile.FullName $versionDirectory -Force
           }
 
-      - name: Push packages to NuGet
+      - name: Push package
         if: steps.stable_tag.outputs.is_stable_tag == 'true'
-        shell: powershell
-        run: |
-          $packages = Get-ChildItem "${{ env.PACKAGE_OUTPUT_DIRECTORY }}" -Filter "*.nupkg" -File
-          foreach ($package in $packages) {
-            dotnet nuget push $package.FullName -k ${{ secrets.NUGET_AUTH_TOKEN }} -s https://api.nuget.org/v3/index.json --skip-duplicate
-          }
+        run: dotnet nuget push ${{ env.PACKAGE_OUTPUT_DIRECTORY }}\*.nupkg -k ${{ secrets.NUGET_AUTH_TOKEN }} -s https://api.nuget.org/v3/index.json --skip-duplicate
 
-      - name: Push QaaS.Mocker symbols to NuGet
+      - name: Push symbol package
         if: steps.stable_tag.outputs.is_stable_tag == 'true'
         shell: pwsh
         run: |
