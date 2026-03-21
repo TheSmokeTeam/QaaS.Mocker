@@ -41,7 +41,7 @@ public class ServerFactory
         _context.Logger.LogInformation(
             "Built {ServerCount} server runtimes from configuration: {ServerTypes}",
             builtServers.Length,
-            string.Join(", ", _servers.Select(server => server.Type)));
+            string.Join(", ", _servers.Select(server => server.ResolveType())));
 
         return new CompositeServer(builtServers, _context.Logger);
     }
@@ -49,13 +49,13 @@ public class ServerFactory
     private IServer BuildSingleServer(ServerConfig server, IImmutableList<DataSource> dataSourceList,
         IImmutableList<TransactionStub> transactionStubList)
     {
-        return server.Type switch
+        return server.ResolveType() switch
         {
             ServerType.Http => new HttpServer(server.Http!, _context.Logger, transactionStubList),
             ServerType.Grpc => new GrpcServer(server.Grpc!, _context.Logger, transactionStubList),
             ServerType.Socket => new SocketServer(server.Socket!, _context.Logger, transactionStubList,
                 dataSourceList),
-            _ => throw new ArgumentException("Server type not supported!", server.Type.ToString())
+            _ => throw new ArgumentException("Server type not supported!", nameof(server))
         };
     }
 }

@@ -84,7 +84,7 @@ public class TemplateLogicTests
 
         typeof(TemplateLogic)
             .GetMethod("WriteTemplateToFile", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .Invoke(logic, ["template.qaas.yaml", "Server:\n  Type: Http"]);
+            .Invoke(logic, ["template.qaas.yaml", "Server:\n  Http:\n    Port: 8080"]);
 
         Assert.That(fileSystem.File.Exists("template.qaas.yaml"), Is.True);
     }
@@ -94,7 +94,6 @@ public class TemplateLogicTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Server:Type"] = "Http",
                 ["Server:Http:Port"] = "8080"
             })
             .Build();

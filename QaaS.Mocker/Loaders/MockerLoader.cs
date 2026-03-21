@@ -41,6 +41,8 @@ public class MockerLoader : BaseLoader<MockerOptions, MockerRunner>, IDisposable
         contextBuilder.SetConfigurationFile(Options.ConfigurationFile);
         foreach (var overwriteFile in Options.OverwriteFiles ?? [])
             contextBuilder.WithOverwriteFile(overwriteFile);
+        foreach (var overwriteFolder in Options.OverwriteFolders ?? [])
+            contextBuilder.WithOverwriteFolder(overwriteFolder);
         foreach (var overwriteArgument in Options.OverwriteArguments ?? [])
             contextBuilder.WithOverwriteArgument(overwriteArgument);
         if (!Options.DontResolveWithEnvironmentVariables)

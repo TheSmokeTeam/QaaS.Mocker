@@ -701,7 +701,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
 
     private static string ResolveServerTypesSummary(IEnumerable<ServerConfig> serverConfigs)
     {
-        return string.Join(", ", serverConfigs.Select(serverConfig => serverConfig.Type));
+        return string.Join(", ", serverConfigs.Select(serverConfig => serverConfig.ResolveType()));
     }
 
     private void EnsureDefaultMetaData()

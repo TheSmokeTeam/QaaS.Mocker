@@ -5,7 +5,6 @@ Stubs:
     Processor: GrpcEchoProcessor
 
 Server:
-  Type: Grpc
   Grpc:
     Port: 50051
     IsLocalhost: true

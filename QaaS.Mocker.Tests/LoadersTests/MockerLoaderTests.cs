@@ -114,6 +114,44 @@ public class MockerLoaderTests
     }
 
     [Test]
+    public void GetLoadedContext_AppliesOverwriteFoldersInAlphabeticalOrder()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Type: Http
+                """);
+            var overwriteFolder = Path.Combine(tempDirectory, "overrides");
+            Directory.CreateDirectory(overwriteFolder);
+            WriteFile(overwriteFolder, "20-grpc.yaml", """
+                Server:
+                  Type: Grpc
+                """);
+            WriteFile(overwriteFolder, "10-socket.yaml", """
+                Server:
+                  Type: Socket
+                """);
+            WriteFile(overwriteFolder, "readme.txt", "ignored");
+
+            var loader = new MockerLoader(new MockerOptions
+            {
+                ConfigurationFile = configFile,
+                OverwriteFolders = [overwriteFolder]
+            });
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.That(context.RootConfiguration["Server:Type"], Is.EqualTo("Grpc"));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
     public void GetLoadedContext_WithScopedEnvironmentOverride_AppliesEnvironmentVariable()
     {
         const string environmentVariableName = "Server__Type";
@@ -277,6 +315,7 @@ public class MockerLoaderTests
             {
                 ConfigurationFile = configFile,
                 OverwriteFiles = null!,
+                OverwriteFolders = null!,
                 OverwriteArguments = null!
             });
 

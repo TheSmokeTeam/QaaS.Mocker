@@ -43,6 +43,16 @@ public record MockerOptions : LoggerOptions
                     """)]
     public IList<string> OverwriteFiles { get; init; } = [];
 
+    /// <summary>
+    /// Gets the ordered list of folders whose YAML files are applied alphabetically after file overlays.
+    /// </summary>
+    [AllPathsInEnumerableValid, Option('f', "overwrite-folders", Default = null,
+         HelpText = """
+                    List of folders whose yaml files overwrite the mocker configuration in alphabetical order,
+                    after overwrite files and in the order the folders are given.
+                    """)]
+    public IList<string> OverwriteFolders { get; init; } = [];
+
 
     /// <summary>
     /// Gets the ordered list of configuration-path assignments applied after file overlays.
