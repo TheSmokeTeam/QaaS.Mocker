@@ -9,12 +9,18 @@ using QaaS.Framework.SDK.Session.MetaDataObjects;
 
 namespace QaaS.Mocker.Stubs.Processors;
 
+/// <summary>
+/// Minimal processor used by the built-in not-found and internal-error stubs.
+/// </summary>
 internal sealed class StatusCodeTransactionProcessor(int statusCode) : ITransactionProcessor
 {
     public Context Context { get; set; } = null!;
 
     public List<ValidationResult>? LoadAndValidateConfiguration(IConfiguration configuration) => [];
 
+    /// <summary>
+    /// Returns an empty response body with the configured HTTP status code.
+    /// </summary>
     public Data<object> Process(IImmutableList<DataSource> dataSourceList, Data<object> requestData)
     {
         return new Data<object>

@@ -6,8 +6,14 @@ using QaaS.Framework.SDK.Session.SessionDataObjects;
 
 namespace QaaS.Mocker.Example.Generators;
 
+/// <summary>
+/// Emits a fixed sequence of UTF-8 socket payloads for the sample broadcast endpoint.
+/// </summary>
 public sealed class StaticSocketBroadcastGenerator : BaseGenerator<StaticSocketBroadcastGeneratorConfig>
 {
+    /// <summary>
+    /// Generates configured messages or a single default payload when no messages are configured.
+    /// </summary>
     public override IEnumerable<Data<object>> Generate(
         IImmutableList<SessionData> sessionDataList,
         IImmutableList<DataSource> dataSourceList)
@@ -26,7 +32,13 @@ public sealed class StaticSocketBroadcastGenerator : BaseGenerator<StaticSocketB
     }
 }
 
+/// <summary>
+/// Configuration for <see cref="StaticSocketBroadcastGenerator"/>.
+/// </summary>
 public sealed record StaticSocketBroadcastGeneratorConfig
 {
+    /// <summary>
+    /// Gets the messages that should be broadcast by the sample socket endpoint.
+    /// </summary>
     public string[] Messages { get; init; } = ["socket-broadcast-default"];
 }

@@ -1,5 +1,8 @@
 namespace QaaS.Mocker.Servers.ConfigurationObjects;
 
+/// <summary>
+/// Supported mocker transport implementations.
+/// </summary>
 public enum ServerType
 {
     Unknown = 0,

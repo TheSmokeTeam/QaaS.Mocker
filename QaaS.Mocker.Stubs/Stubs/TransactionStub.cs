@@ -8,44 +8,47 @@ using QaaS.Framework.Serialization.Serializers;
 
 namespace QaaS.Mocker.Stubs.Stubs;
 
+/// <summary>
+/// Represents one executable transaction stub with optional request/response serialization rules.
+/// </summary>
 public class TransactionStub
 {
     /// <summary>
-    /// The name of the data source used to identify it
+    /// The name of the data source used to identify it.
     /// </summary>
     public string Name { get; init; } = null!;
 
     /// <summary>
-    /// The list of data sources relevant to the data source
+    /// The list of data sources available to the processor when the stub executes.
     /// </summary>
     public IImmutableList<DataSource> DataSourceList { get; set; } = null!;
 
     /// <summary>
-    /// The data source's generator
+    /// The processor hook that executes the stub logic.
     /// </summary>
     public ITransactionProcessor Processor { get; init; } = null!;
 
     /// <summary>
-    /// The Deserializer that will deserialize the input data, null means no deserialization.
+    /// The deserializer that converts incoming bytes into a typed request body.
     /// </summary>
     public IDeserializer? RequestBodyDeserializer { get; init; }
 
     /// <summary>
-    /// A Specific type that the deserializer will deserialize the data to.
+    /// A specific target type requested for request-body deserialization.
     /// </summary>
     public Type? RequestBodyDeserializerSpecificType { get; init; }
 
     /// <summary>
-    /// The Serializer that will serialize the output data, null means no serialization.
+    /// The serializer that converts processor output into transport bytes.
     /// </summary>
     public ISerializer? ResponseBodySerializer { get; init; }
 
     /// <summary>
-    /// Exercises this transaction stub's data according to given request.
+    /// Exercises this transaction stub's data according to the given request.
     /// Request deserialization accepts both raw transport bytes and protobuf messages so HTTP and
     /// gRPC actions can share the same stub configuration.
     /// </summary>
-    /// <returns> The response data from this stub </returns>
+    /// <returns>The response data from this stub.</returns>
     public Data<object> Exercise(Data<object> requestData)
     {
         if (RequestBodyDeserializer is not null)
@@ -69,20 +72,23 @@ public class TransactionStub
         }
 
         var responseData = Processor.Process(DataSourceList, requestData);
-        if (responseData.Body == null) return responseData;
+        if (responseData.Body == null)
+            return responseData;
 
         if (ResponseBodySerializer is not null)
+        {
             responseData = new Data<object>
             {
                 MetaData = responseData.MetaData,
                 Body = ResponseBodySerializer.Serialize(responseData.Body)
             };
+        }
 
         // Server transports expect the final response payload to be a byte[] that can be written
         // directly back to the client.
         if (responseData.Body is not byte[])
             throw new ArgumentException($"Transaction Stub '{Name}' " +
-                                        $"output is not byte[] for response payload");
+                                        "output is not byte[] for response payload");
 
         return responseData;
     }

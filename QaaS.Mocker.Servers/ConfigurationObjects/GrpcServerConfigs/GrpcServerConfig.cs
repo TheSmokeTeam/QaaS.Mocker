@@ -4,6 +4,9 @@ using QaaS.Framework.Configurations.CustomValidationAttributes;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.GrpcServerConfigs;
 
+/// <summary>
+/// Describes a gRPC server endpoint and the services it exposes.
+/// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record GrpcServerConfig : IValidatableObject
 {
@@ -15,10 +18,10 @@ public record GrpcServerConfig : IValidatableObject
     public GrpcServiceConfig[] Services { get; set; } = [];
 
     [Description("To run the server with TLS credentials"), DefaultValue(false)]
-    public bool IsSecuredSchema { get; set; } = false;
+    public bool IsSecuredSchema { get; set; }
 
     [Description("To run the server host as localhost. This is mainly for local testing."), DefaultValue(false)]
-    public bool IsLocalhost { get; set; } = false;
+    public bool IsLocalhost { get; set; }
 
     [Description("Transaction stub referred when unknown action is triggered"), DefaultValue(null)]
     public string? NotFoundTransactionStubName { get; set; }

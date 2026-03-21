@@ -10,39 +10,46 @@ using QaaS.Mocker.Stubs.Stubs;
 
 namespace QaaS.Mocker.Stubs;
 
-public class StubFactory(Context context, TransactionStubConfig[] stubs, 
-    IList<KeyValuePair<string, ITransactionProcessor>> transactionProcessors) 
+/// <summary>
+/// Builds runtime transaction stubs from configuration and resolved processor hooks.
+/// </summary>
+public class StubFactory(
+    Context context,
+    TransactionStubConfig[] stubs,
+    IList<KeyValuePair<string, ITransactionProcessor>> transactionProcessors)
 {
+    /// <summary>
+    /// Creates the configured transaction stubs and appends the built-in fallback stubs.
+    /// </summary>
     public IImmutableList<TransactionStub> Build(IImmutableList<DataSource> dataSourceList)
     {
         var transactionStubs = new List<TransactionStub>();
 
         foreach (var transactionStubConfig in stubs)
         {
-            var transactionProcessor = 
-                transactionProcessors.FirstOrDefault(pair => pair.Key==transactionStubConfig.Name!).Value ??
+            var transactionProcessor =
+                transactionProcessors.FirstOrDefault(pair => pair.Key == transactionStubConfig.Name!).Value ??
                 throw new ArgumentException($"Transaction Stub {transactionStubConfig.Name}'s provided transaction" +
                                             $" processor {transactionStubConfig.Processor} was not found in provided " +
-                                            $"processors.");
-        
+                                            "processors.");
+
             context.Logger.LogInformation(
                 "Building transaction stub '{TransactionStubName}' with processor '{TransactionStubProcessor}'",
                 transactionStubConfig.Name, transactionStubConfig.Processor);
-            
+
             var transactionStubDataSources = transactionStubConfig.DataSourceNames.Select(dataSourceName =>
                     dataSourceList.FirstOrDefault(dataSource => dataSource.Name == dataSourceName) ??
                     throw new ArgumentException($"Could not find data source {dataSourceName} " +
                                                 $"to pass to transaction stub {transactionStubConfig.Name}"))
                 .ToImmutableList();
-            
-            
+
             context.Logger.LogDebug(
                 "Transaction stub '{TransactionStubName}' is configured with {DataSourcesPassedCount} data source(s), request deserializer '{RequestDeserializer}', and response serializer '{ResponseSerializer}'",
                 transactionStubConfig.Name,
                 transactionStubDataSources.Count,
                 transactionStubConfig.RequestBodyDeserialization?.Deserializer?.ToString() ?? "<none>",
                 transactionStubConfig.ResponseBodySerialization?.Serializer?.ToString() ?? "<none>");
-            
+
             transactionStubs.Add(new TransactionStub
             {
                 Name = transactionStubConfig.Name!,
@@ -54,22 +61,24 @@ public class StubFactory(Context context, TransactionStubConfig[] stubs,
             });
         }
 
+        // Every runtime gets built-in fallback stubs so transport layers can keep responding even
+        // when a route is missing or user-defined stub processing throws.
         transactionStubs.Add(new TransactionStub
         {
             Name = Constants.DefaultNotFoundTransactionStubLabel,
             Processor = new StatusCodeTransactionProcessor(Constants.DefaultNotFoundTransactionStubStatusCode),
         });
-        
+
         transactionStubs.Add(new TransactionStub
         {
             Name = Constants.DefaultInternalErrorTransactionStubLabel,
-            Processor = new StatusCodeTransactionProcessor(Constants.DefaultInternalErrorTransactionStubStatusCode),        
+            Processor = new StatusCodeTransactionProcessor(Constants.DefaultInternalErrorTransactionStubStatusCode),
         });
 
         context.Logger.LogInformation(
             "Built {TransactionStubCount} transaction stub(s) including default not-found and internal-error stubs",
             transactionStubs.Count);
-        
+
         return transactionStubs.ToImmutableList();
     }
 }

@@ -1,9 +1,12 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Net.Sockets;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 
+/// <summary>
+/// Describes one socket listener endpoint and the action it performs.
+/// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record SocketEndpointConfig
 {
@@ -11,8 +14,7 @@ public record SocketEndpointConfig
     public int? Port { get; set; }
 
     [Required,
-     Description(
-         "Specifies the protocol to use in the socket")] // TODO - add RangeIfAnyAttribute to validate right values for Tcp and Udp implementations
+     Description("Specifies the protocol to use in the socket")]
     public ProtocolType? ProtocolType { get; set; }
 
     [Description("Specifies the type of socket"), DefaultValue(SocketType.Stream)]
@@ -25,19 +27,17 @@ public record SocketEndpointConfig
     [Range(0, int.MaxValue), DefaultValue(65536), Description("The size of communication messages buffer, in bytes")]
     public int BufferSizeBytes { get; set; } = 65536;
 
-    [Description(
-         "Whether to use the Nagle Algorithm or not - to reduce small packets and communicate more efficiently over Tcp/Ip connection"),
-     DefaultValue(false)] // TODO - add SetToIfAny attribute to validate if true only if Tcp configured
-    public bool NagleAlgorithm { get; set; } = false;
+    [Description("Whether to use the Nagle Algorithm or not - to reduce small packets and communicate more efficiently over Tcp/Ip connection"),
+     DefaultValue(false)]
+    public bool NagleAlgorithm { get; set; }
 
-    [Description(
-         "The number of seconds to retain connection after communication. `null` means it won't remain connected"),
+    [Description("The number of seconds to retain connection after communication. `null` means it won't remain connected"),
      DefaultValue(null)]
-    public int? LingerTimeSeconds { get; set; } = null;
+    public int? LingerTimeSeconds { get; set; }
 
     [Required, Description("Timeout in milliseconds for socket to perform method before terminating connection")]
     public int? TimeoutMs { get; set; }
 
     [Required, Description("The socket action to perform on the client connection endpoint")]
     public SocketActionConfig? Action { get; set; }
-  };
+}

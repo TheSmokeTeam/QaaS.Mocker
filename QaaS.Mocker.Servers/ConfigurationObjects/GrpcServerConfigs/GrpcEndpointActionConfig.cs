@@ -3,6 +3,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.GrpcServerConfigs;
 
+/// <summary>
+/// Maps a gRPC RPC method to the transaction stub that should handle it.
+/// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record GrpcEndpointActionConfig
 {

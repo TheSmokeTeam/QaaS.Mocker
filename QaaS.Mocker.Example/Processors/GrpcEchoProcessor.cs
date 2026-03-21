@@ -7,8 +7,14 @@ using QaaS.Mocker.Example.Grpc;
 
 namespace QaaS.Mocker.Example.Processors;
 
+/// <summary>
+/// Echoes sample gRPC request messages back to the caller.
+/// </summary>
 public sealed class GrpcEchoProcessor : BaseTransactionProcessor<NoConfiguration>
 {
+    /// <summary>
+    /// Validates that the request body is an <see cref="EchoRequest"/> and returns a serialized response.
+    /// </summary>
     public override Data<object> Process(IImmutableList<DataSource> dataSourceList, Data<object> requestData)
     {
         if (requestData.Body is not EchoRequest request)

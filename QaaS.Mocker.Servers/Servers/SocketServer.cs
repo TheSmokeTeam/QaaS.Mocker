@@ -493,6 +493,9 @@ public class SocketServer : IServer
     }
 }
 
+/// <summary>
+/// Socket cleanup helpers for accepted channels.
+/// </summary>
 internal static class SocketDisposalExtensions
 {
     /// <summary>

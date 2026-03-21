@@ -13,8 +13,14 @@ using QaaS.Mocker.Stubs.Stubs;
 
 namespace QaaS.Mocker.Servers.ServerStates;
 
+/// <summary>
+/// Maintains socket action state, trigger enablement, and controller-facing capture behavior.
+/// </summary>
 public class SocketServerState : IServerState
 {
+    /// <summary>
+    /// Gets the aggregate capture capabilities implied by the configured endpoints.
+    /// </summary>
     public InputOutputState InputOutputState { get; init; }
 
     private readonly TransactionsCache _cache = new();
@@ -25,6 +31,9 @@ public class SocketServerState : IServerState
     private readonly IImmutableList<TransactionStub> _transactionStubList;
     private readonly SocketEndpointConfig[] _endpoints;
 
+    /// <summary>
+    /// Initializes socket endpoint action state from endpoint configuration.
+    /// </summary>
     public SocketServerState(ILogger logger, IImmutableList<DataSource> dataSourceList,
         IImmutableList<TransactionStub> transactionStubList, SocketEndpointConfig[] endpoints)
     {
@@ -77,6 +86,9 @@ public class SocketServerState : IServerState
     /// <param name="port">Endpoint's port to resolve stub or datasource by</param>
     /// <param name="dataToProcess">The actual data to process</param>
     /// <returns>Processed data</returns>
+    /// <summary>
+    /// Processes collected inbound socket payloads for the specified endpoint.
+    /// </summary>
     public IEnumerable<Data<object>> Process(int port, IEnumerable<Data<object>> dataToProcess)
     {
         var stub = ResolveTransactionStub(port);
@@ -115,6 +127,9 @@ public class SocketServerState : IServerState
     /// Overload Process call by processing (adding to cache) generated data from configured <see cref="DataSource"/>
     /// </summary>
     /// <see cref="System.Diagnostics.Process"/>
+    /// <summary>
+    /// Generates outbound socket payloads for a broadcast endpoint from its configured data source.
+    /// </summary>
     public IEnumerable<Data<object>> Process(int port)
     {
         _logger.LogInformation(
@@ -162,6 +177,9 @@ public class SocketServerState : IServerState
     /// <summary>
     /// Implementation of ChangeActionStub command on SocketServer.
     /// </summary>
+    /// <summary>
+    /// Rebinds a configured socket action to a different transaction stub.
+    /// </summary>
     public void ChangeActionStub(string actionName, string stubName)
     {
         var actionState = _socketActions.Values.FirstOrDefault(state =>
@@ -181,6 +199,9 @@ public class SocketServerState : IServerState
     /// Implementation of TriggerAction command on SocketServer, the configured action will be triggered to
     /// perform for the given interval in milliseconds.
     /// </summary>
+    /// <summary>
+    /// Temporarily enables the named socket action for the supplied timeout window.
+    /// </summary>
     public void TriggerAction(string actionName, int? timeoutMs)
     {
         var actionState = _socketActions.Values.FirstOrDefault(state =>
@@ -194,11 +215,17 @@ public class SocketServerState : IServerState
         _ = actionState.SetEnabledForTimeoutMs(timeoutMs.GetValueOrDefault());
     }
 
+    /// <summary>
+    /// Returns whether the endpoint action is currently enabled for processing.
+    /// </summary>
     public bool IsEndpointPortActionEnabled(int port)
     {
         return _socketActions[port].Enabled;
     }
 
+    /// <summary>
+    /// Returns the cache used by controller consume commands.
+    /// </summary>
     public ICache GetCache()
     {
         return _cache;

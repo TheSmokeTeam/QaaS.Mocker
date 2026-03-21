@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Qaas.Mocker.CommunicationObjects;
 using Qaas.Mocker.CommunicationObjects.ConfigurationObjects.Ping;
 using QaaS.Mocker.Servers.ServerStates;
@@ -6,6 +6,9 @@ using StackExchange.Redis;
 
 namespace QaaS.Mocker.Controller.Handlers;
 
+/// <summary>
+/// Responds to controller ping requests with runtime identity and input/output capabilities.
+/// </summary>
 public class PingHandler(
     IServerState serverState,
     ISubscriber subscriberClient,
@@ -14,12 +17,26 @@ public class PingHandler(
     ILogger logger)
     : BaseHandler<PingRequest, PingResponse>(subscriberClient, serverName, serverInstanceId, logger)
 {
+    /// <summary>
+    /// Gets the logical handler content type used for channel naming.
+    /// </summary>
     protected override string ContentType => "ping";
-    protected override string RequestChannel() => 
+
+    /// <summary>
+    /// Uses the shared server-level ping channel instead of instance-specific routing.
+    /// </summary>
+    protected override string RequestChannel() =>
         CommunicationMethods.CreateChannelRunnerToMocker(ContentType, serverName);
 
+    /// <summary>
+    /// Uses the shared server-level response channel for ping acknowledgements.
+    /// </summary>
     protected override string ResponseChannel() =>
         CommunicationMethods.CreateChannelMockerToRunner(ContentType, serverName);
+
+    /// <summary>
+    /// Creates the ping response payload from the current runtime state.
+    /// </summary>
     protected override PingResponse? HandleRequest(RedisChannel channel, PingRequest request)
     {
         return new PingResponse
@@ -30,5 +47,4 @@ public class PingHandler(
             ServerInputOutputState = serverState.InputOutputState
         };
     }
-    
 }

@@ -19,6 +19,9 @@ public class Execution : BaseExecution
     internal ControllerLogic? ControllerLogic { get; init; }
     internal TemplateLogic TemplateLogic { get; init; } = null!;
 
+    /// <summary>
+    /// Initializes a runtime execution that uses the real console for local-run interactions.
+    /// </summary>
     public Execution(
         ExecutionMode executionMode,
         Context context,
@@ -39,6 +42,9 @@ public class Execution : BaseExecution
         Context = context;
     }
 
+    /// <summary>
+    /// Starts the execution flow that matches the configured mode.
+    /// </summary>
     public override int Start()
     {
         Context.Logger.LogInformation(
@@ -121,12 +127,18 @@ public class Execution : BaseExecution
     }
 }
 
+/// <summary>
+/// Abstracts console access so run-locally behavior can be tested deterministically.
+/// </summary>
 internal interface IExecutionConsole
 {
     bool IsInputRedirected { get; }
     ConsoleKeyInfo ReadKey(bool intercept);
 }
 
+/// <summary>
+/// Production implementation of <see cref="IExecutionConsole"/> backed by <see cref="Console"/>.
+/// </summary>
 internal sealed class SystemExecutionConsole : IExecutionConsole
 {
     public static SystemExecutionConsole Instance { get; } = new();

@@ -7,6 +7,9 @@ using QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects;
 
+/// <summary>
+/// Wraps the protocol-specific configuration for one configured server instance.
+/// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record ServerConfig : IValidatableObject
 {

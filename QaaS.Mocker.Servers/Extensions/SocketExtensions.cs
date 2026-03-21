@@ -5,6 +5,9 @@ using Microsoft.Extensions.Logging;
 
 namespace QaaS.Mocker.Servers.Extensions;
 
+/// <summary>
+/// Socket transport helpers for bounded reads and diagnostic endpoint formatting.
+/// </summary>
 public static class SocketExtensions
 {
     /// <summary>

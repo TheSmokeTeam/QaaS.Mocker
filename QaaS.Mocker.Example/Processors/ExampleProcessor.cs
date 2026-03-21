@@ -6,8 +6,14 @@ using QaaS.Framework.SDK.Session.MetaDataObjects;
 
 namespace QaaS.Mocker.Example.Processors;
 
+/// <summary>
+/// Minimal health processor used by the sample HTTP server.
+/// </summary>
 public sealed class ExampleProcessor : BaseTransactionProcessor<NoConfiguration>
 {
+    /// <summary>
+    /// Returns a static 200 OK plain-text health payload.
+    /// </summary>
     public override Data<object> Process(IImmutableList<DataSource> dataSourceList, Data<object> requestData)
     {
         return new Data<object>
@@ -28,4 +34,7 @@ public sealed class ExampleProcessor : BaseTransactionProcessor<NoConfiguration>
     }
 }
 
+/// <summary>
+/// Empty configuration marker for example processors that require no custom settings.
+/// </summary>
 public sealed record NoConfiguration;
