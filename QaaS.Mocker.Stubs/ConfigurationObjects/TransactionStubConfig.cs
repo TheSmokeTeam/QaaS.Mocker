@@ -9,37 +9,37 @@ using YamlDotNet.Serialization;
 
 namespace QaaS.Mocker.Stubs.ConfigurationObjects;
 
-[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 /// <summary>
 /// Describes a named transaction stub and the processor metadata required to execute it.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public record TransactionStubConfig : IYamlConvertible
 {
-    [Required, Description("Name of data source to reference it by (must be unique)")]
     /// <summary>
     /// Gets or sets the stub name.
     /// </summary>
+    [Required, Description("Name of data source to reference it by (must be unique)")]
     public string? Name { get; set; }
     
-    [Required, Description("The name of the processor to use")]
     /// <summary>
     /// Gets or sets the transaction processor hook name.
     /// </summary>
+    [Required, Description("The name of the processor to use")]
     public string? Processor { get; set; }
     
-    [EnumerablePropertyDoesNotContainAnotherPropertyValue(nameof(Name)),
-     Description("Names of data sources to pass to this data source for usage, those data sources dont have to be" +
-                 " defined before this data source.")]
     /// <summary>
     /// Gets or sets the data source names passed into the processor.
     /// </summary>
+    [EnumerablePropertyDoesNotContainAnotherPropertyValue(nameof(Name)),
+     Description("Names of data sources to pass to this data source for usage, those data sources dont have to be" +
+                 " defined before this data source.")]
     public string[] DataSourceNames { get; set; } = Array.Empty<string>();
 
-    [Description("Implementation configuration for the processor, " +
-                 "the configuration given here is loaded into the provided processor dynamically.")]
     /// <summary>
     /// Gets or sets the dynamic processor configuration.
     /// </summary>
+    [Description("Implementation configuration for the processor, " +
+                 "the configuration given here is loaded into the provided processor dynamically.")]
     public IConfiguration ProcessorConfiguration { get; set; } = new ConfigurationBuilder().Build();
 
     [Obsolete("Use ProcessorConfiguration instead.")]
@@ -50,16 +50,16 @@ public record TransactionStubConfig : IYamlConvertible
         set => ProcessorConfiguration = value ?? new ConfigurationBuilder().Build();
     }
     
-    [Description("Deserialize to use on the request body"), DefaultValue(null)]
     /// <summary>
     /// Gets or sets the optional request-body deserialization behavior.
     /// </summary>
+    [Description("Deserialize to use on the request body"), DefaultValue(null)]
     public DeserializeConfig? RequestBodyDeserialization { get; set; } = null;
     
-    [Description("Serialize to use on the response body"), DefaultValue(null)]
     /// <summary>
     /// Gets or sets the optional response-body serialization behavior.
     /// </summary>
+    [Description("Serialize to use on the response body"), DefaultValue(null)]
     public SerializeConfig? ResponseBodySerialization { get; set; } = null;
 
     /// <summary>

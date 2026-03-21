@@ -45,30 +45,30 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         typeof(DataSourceBuilder).GetProperty("GeneratorConfiguration", BindingFlags.Instance | BindingFlags.NonPublic) ??
         throw new InvalidOperationException("Could not resolve DataSourceBuilder.GeneratorConfiguration property.");
 
-    [UniquePropertyInEnumerable(nameof(TransactionStubConfig.Name)),
-     Description("List of transaction stubs that can be used for server actions." +
-                 "They provide processing functionality to exercise transaction data.")]
     /// <summary>
     /// Gets or sets the configured transaction stubs available to the runtime.
     /// </summary>
+    [UniquePropertyInEnumerable(nameof(TransactionStubConfig.Name)),
+     Description("List of transaction stubs that can be used for server actions." +
+                 "They provide processing functionality to exercise transaction data.")]
     public TransactionStubConfig[] Stubs { get; set; } = [];
 
-    [Description("The legacy single server mocker instance to run.")]
     /// <summary>
     /// Gets or sets the legacy single-server configuration.
     /// </summary>
+    [Description("The legacy single server mocker instance to run.")]
     public ServerConfig? Server { get; set; }
 
-    [Description("List of server mocker instances to run concurrently.")]
     /// <summary>
     /// Gets or sets the multi-server configuration used for composite runtimes.
     /// </summary>
+    [Description("List of server mocker instances to run concurrently.")]
     public ServerConfig[] Servers { get; set; } = [];
 
-    [Description("The server mocker controller configuration")]
     /// <summary>
     /// Gets or sets the optional controller configuration.
     /// </summary>
+    [Description("The server mocker controller configuration")]
     public ControllerConfig? Controller { get; set; }
 
     private ILifetimeScope _scope;

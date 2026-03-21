@@ -5,8 +5,16 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <PackageId>QaaS.Mocker.Controller</PackageId>
+        <Authors>SmokeTeam</Authors>
         <Description>Redis-backed control plane for managing QaaS mocker server actions and runtime state.</Description>
+        <RepositoryType>git</RepositoryType>
+        <RepositoryUrl>https://github.com/TheSmokeTeam/QaaS.Mocker</RepositoryUrl>
+        <VersionPrefix>0.0.0</VersionPrefix>
         <IsPackable>true</IsPackable>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
         <RootNamespace>QaaS.Mocker.Controller</RootNamespace>
     </PropertyGroup>
 
@@ -18,6 +26,10 @@
 
     <ItemGroup>
       <ProjectReference Include="..\QaaS.Mocker.Servers\QaaS.Mocker.Servers.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Include="..\README.md" Pack="true" PackagePath="\" Link="README.md" />
     </ItemGroup>
 
 </Project>

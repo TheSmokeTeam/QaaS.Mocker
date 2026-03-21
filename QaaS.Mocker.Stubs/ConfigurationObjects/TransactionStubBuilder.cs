@@ -7,10 +7,10 @@ using QaaS.Framework.Serialization;
 
 namespace QaaS.Mocker.Stubs.ConfigurationObjects;
 
-[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 /// <summary>
 /// Provides a fluent API for building <see cref="TransactionStubConfig"/> instances in code.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public class TransactionStubBuilder
 {
     /// <summary>
@@ -33,11 +33,11 @@ public class TransactionStubBuilder
     /// </summary>
     public IConfiguration ProcessorConfiguration { get; private set; } = new ConfigurationBuilder().Build();
 
-    [Obsolete("Use ProcessorConfiguration instead.")]
-    [EditorBrowsable(EditorBrowsableState.Never)]
     /// <summary>
     /// Gets the obsolete alias for <see cref="ProcessorConfiguration"/>.
     /// </summary>
+    [Obsolete("Use ProcessorConfiguration instead.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public IConfiguration ProcessorSpecificConfiguration => ProcessorConfiguration;
 
     /// <summary>
