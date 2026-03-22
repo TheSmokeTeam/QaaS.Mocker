@@ -17,16 +17,17 @@ public static class Bootstrap
     public static MockerRunner New(IEnumerable<string>? args = null)
     {
         var normalizedArguments = NormalizeArguments(args ?? []);
+        var effectiveTopLevelArguments = RemoveTopLevelIgnorableOptions(normalizedArguments);
         using var cliParser = CommandLineBuilders.ParserBuilder.BuildParser();
-        if (normalizedArguments.Length == 0)
+        if (effectiveTopLevelArguments.Length == 0)
         {
             var emptyArgsResult = ParseSupportedArguments(cliParser, ["--help"]);
             return WriteHelpAndCreateBootstrapHandledRunner(cliParser, emptyArgsResult, includeCommandHelp: true);
         }
 
-        if (IsTopLevelHelpRequest(normalizedArguments))
+        if (IsTopLevelHelpRequest(effectiveTopLevelArguments))
         {
-            var topLevelHelpResult = ParseSupportedArguments(cliParser, normalizedArguments);
+            var topLevelHelpResult = ParseSupportedArguments(cliParser, ["--help"]);
             return WriteHelpAndCreateBootstrapHandledRunner(cliParser, topLevelHelpResult, includeCommandHelp: true);
         }
 
@@ -142,5 +143,12 @@ public static class Bootstrap
     {
         return string.Equals(argument, "--help", StringComparison.OrdinalIgnoreCase) ||
                string.Equals(argument, "-h", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string[] RemoveTopLevelIgnorableOptions(IEnumerable<string> arguments)
+    {
+        return arguments
+            .Where(argument => !string.Equals(argument, "--no-env", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
     }
 }

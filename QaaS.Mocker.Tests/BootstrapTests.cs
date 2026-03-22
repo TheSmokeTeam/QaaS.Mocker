@@ -71,11 +71,65 @@ public class BootstrapTests
     }
 
     [Test]
+    public void New_WithOnlyNoEnvFlag_WritesHelpForEachCommand()
+    {
+        var output = CaptureConsoleOut(() =>
+        {
+            var mocker = Bootstrap.New(["--no-env"]);
+            Assert.DoesNotThrow(() => mocker.Run());
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(output, Does.Contain("Command Details:"));
+            Assert.That(output, Does.Contain("run:"));
+            Assert.That(output, Does.Contain("lint:"));
+            Assert.That(output, Does.Contain("template:"));
+        });
+    }
+
+    [Test]
+    public void New_WithTopLevelHelpAndNoEnv_WritesHelpForEachCommand()
+    {
+        var output = CaptureConsoleOut(() =>
+        {
+            var mocker = Bootstrap.New(["--help", "--no-env"]);
+            Assert.DoesNotThrow(() => mocker.Run());
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(output, Does.Contain("Command Details:"));
+            Assert.That(output, Does.Contain("run:"));
+            Assert.That(output, Does.Contain("lint:"));
+            Assert.That(output, Does.Contain("template:"));
+        });
+    }
+
+    [Test]
     public void New_WithCommandHelp_WritesRequestedCommandHelpOnly()
     {
         var output = CaptureConsoleOut(() =>
         {
             var mocker = Bootstrap.New(["run", "--help"]);
+            Assert.DoesNotThrow(() => mocker.Run());
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(output, Does.Contain("Path to a mocker yaml configuration file to use with"));
+            Assert.That(output, Does.Not.Contain("Command Details:"));
+            Assert.That(output, Does.Not.Contain("lint:"));
+            Assert.That(output, Does.Not.Contain("template:"));
+        });
+    }
+
+    [Test]
+    public void New_WithCommandHelpAndNoEnv_WritesRequestedCommandHelpOnly()
+    {
+        var output = CaptureConsoleOut(() =>
+        {
+            var mocker = Bootstrap.New(["run", "--help", "--no-env"]);
             Assert.DoesNotThrow(() => mocker.Run());
         });
 
