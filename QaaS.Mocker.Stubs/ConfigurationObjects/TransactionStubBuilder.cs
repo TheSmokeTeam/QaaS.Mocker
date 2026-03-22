@@ -17,21 +17,25 @@ public class TransactionStubBuilder
     /// <summary>
     /// Gets the stub name.
     /// </summary>
+    [Description("Name of the transaction stub to reference it by (must be unique).")]
     public string? Name { get; private set; }
 
     /// <summary>
     /// Gets the processor hook name used to resolve the stub implementation.
     /// </summary>
+    [Description("The name of the transaction processor hook to use.")]
     public string? Processor { get; private set; }
 
     /// <summary>
     /// Gets the data source names passed into the stub processor.
     /// </summary>
+    [Description("Names of data sources to pass to this stub; they do not need to be defined before the stub.")]
     public string[] DataSourceNames { get; private set; } = [];
 
     /// <summary>
     /// Gets the processor-specific configuration.
     /// </summary>
+    [Description("Implementation configuration for the processor; the configuration given here is loaded dynamically into the resolved processor.")]
     public IConfiguration ProcessorConfiguration { get; private set; } = new ConfigurationBuilder().Build();
 
     /// <summary>
@@ -44,11 +48,13 @@ public class TransactionStubBuilder
     /// <summary>
     /// Gets the optional request deserializer configuration.
     /// </summary>
+    [Description("Deserializer to use on the request body before invoking the processor.")]
     public DeserializeConfig? RequestBodyDeserialization { get; private set; }
 
     /// <summary>
     /// Gets the optional response serializer configuration.
     /// </summary>
+    [Description("Serializer to use on the response body after processor execution.")]
     public SerializeConfig? ResponseBodySerialization { get; private set; }
 
     /// <summary>
