@@ -132,17 +132,16 @@ public class CommandLinePathNormalizerTests
     }
 
     [Test]
-    public void Normalize_SupportsEqualsSyntax_AndDoesNotDuplicateNoEnv()
+    public void Normalize_PreservesUnknownLeadingCommand_AndDoesNotDuplicateNoEnv()
     {
         using var sandbox = new TemporaryDirectorySandbox();
-        var callerConfigPath = sandbox.CreateCallerFile("configs\\custom.yaml");
         var overwriteFilePath = sandbox.CreateCallerFile("overrides\\override.yaml");
         var overwriteFolderPath = sandbox.CreateCallerDirectory("folders");
         var expectedOutputPath = Path.GetFullPath("artifacts\\templates", sandbox.CallerDirectory);
 
         var normalizedArguments = CommandLinePathNormalizer.Normalize(
             [
-                "-m=template",
+                "serve",
                 "configs\\custom.yaml",
                 "-w=overrides\\override.yaml",
                 "-f=folders",
@@ -157,8 +156,8 @@ public class CommandLinePathNormalizerTests
             normalizedArguments,
             Is.EqualTo(new[]
             {
-                "-m=template",
-                callerConfigPath,
+                "serve",
+                sandbox.CallerRelativePath("configs\\custom.yaml"),
                 "-w=" + overwriteFilePath,
                 "-f=" + overwriteFolderPath,
                 "-o=" + expectedOutputPath,
@@ -188,6 +187,8 @@ public class CommandLinePathNormalizerTests
         public string CreateFallbackFile(string relativePath) => CreateFile(FallbackDirectory, relativePath);
 
         public string CreateCallerDirectory(string relativePath) => CreateDirectory(CallerDirectory, relativePath);
+
+        public string CallerRelativePath(string relativePath) => Path.GetFullPath(relativePath, CallerDirectory);
 
         public void Dispose()
         {

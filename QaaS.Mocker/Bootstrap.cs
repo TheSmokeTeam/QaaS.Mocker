@@ -59,22 +59,11 @@ public static class Bootstrap
     }
 
     /// <summary>
-    /// Supports command-style execution and preserves the older implicit-run and <c>--mode</c> forms
-    /// so existing hosts and scripts do not break during the CLI transition.
+    /// Preserves the original argument sequence so command parsing behaves the same way as QaaS.Runner.
     /// </summary>
     internal static string[] NormalizeArguments(IEnumerable<string> args)
     {
-        var arguments = args.ToArray();
-        if (arguments.Length == 0)
-            return arguments;
-
-        if (TryNormalizeLegacyModeArguments(arguments, out var normalizedLegacyModeArguments))
-            return normalizedLegacyModeArguments;
-
-        if (arguments[0].StartsWith('-'))
-            return arguments;
-
-        return IsExecutionModeAlias(arguments[0]) ? arguments : ["run", .. arguments];
+        return args.ToArray();
     }
 
     private static MockerRunner HandleParseError(
@@ -153,86 +142,5 @@ public static class Bootstrap
     {
         return string.Equals(argument, "--help", StringComparison.OrdinalIgnoreCase) ||
                string.Equals(argument, "-h", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryNormalizeLegacyModeArguments(
-        IReadOnlyList<string> arguments,
-        out string[] normalizedArguments)
-    {
-        for (var index = 0; index < arguments.Count; index++)
-        {
-            if (!TryReadModeOption(arguments, index, out var modeValue, out var consumedArgumentCount))
-                continue;
-
-            if (!IsExecutionModeAlias(modeValue))
-            {
-                normalizedArguments = arguments.ToArray();
-                return true;
-            }
-
-            var rewrittenArguments = new List<string>(arguments.Count);
-            rewrittenArguments.Add(modeValue);
-
-            for (var currentIndex = 0; currentIndex < arguments.Count; currentIndex++)
-            {
-                if (currentIndex == index)
-                {
-                    currentIndex += consumedArgumentCount - 1;
-                    continue;
-                }
-
-                rewrittenArguments.Add(arguments[currentIndex]);
-            }
-
-            normalizedArguments = rewrittenArguments.ToArray();
-            return true;
-        }
-
-        normalizedArguments = [];
-        return false;
-    }
-
-    private static bool TryReadModeOption(
-        IReadOnlyList<string> arguments,
-        int index,
-        out string modeValue,
-        out int consumedArgumentCount)
-    {
-        var argument = arguments[index];
-        if (string.Equals(argument, "--mode", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(argument, "-m", StringComparison.OrdinalIgnoreCase))
-        {
-            if (index + 1 < arguments.Count)
-            {
-                modeValue = arguments[index + 1];
-                consumedArgumentCount = 2;
-                return true;
-            }
-
-            modeValue = string.Empty;
-            consumedArgumentCount = 1;
-            return false;
-        }
-
-        var splitIndex = argument.IndexOf('=');
-        if (splitIndex <= 0)
-        {
-            modeValue = string.Empty;
-            consumedArgumentCount = 0;
-            return false;
-        }
-
-        var optionName = argument[..splitIndex];
-        if (!string.Equals(optionName, "--mode", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(optionName, "-m", StringComparison.OrdinalIgnoreCase))
-        {
-            modeValue = string.Empty;
-            consumedArgumentCount = 0;
-            return false;
-        }
-
-        modeValue = argument[(splitIndex + 1)..];
-        consumedArgumentCount = 1;
-        return true;
     }
 }

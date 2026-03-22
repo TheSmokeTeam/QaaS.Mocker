@@ -46,30 +46,30 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         throw new InvalidOperationException("Could not resolve DataSourceBuilder.GeneratorConfiguration property.");
 
     /// <summary>
-    /// Gets or sets the configured transaction stubs available to the runtime.
+    /// Gets the configured transaction stubs available to the runtime.
     /// </summary>
     [UniquePropertyInEnumerable(nameof(TransactionStubConfig.Name)),
      Description("List of transaction stubs that can be used for server actions." +
                  "They provide processing functionality to exercise transaction data.")]
-    public TransactionStubConfig[] Stubs { get; set; } = [];
+    public TransactionStubConfig[] Stubs { get; internal set; } = [];
 
     /// <summary>
-    /// Gets or sets the legacy single-server configuration.
+    /// Gets the legacy single-server configuration.
     /// </summary>
     [Description("The legacy single server mocker instance to run.")]
-    public ServerConfig? Server { get; set; }
+    public ServerConfig? Server { get; internal set; }
 
     /// <summary>
-    /// Gets or sets the multi-server configuration used for composite runtimes.
+    /// Gets the multi-server configuration used for composite runtimes.
     /// </summary>
     [Description("List of server mocker instances to run concurrently.")]
-    public ServerConfig[] Servers { get; set; } = [];
+    public ServerConfig[] Servers { get; internal set; } = [];
 
     /// <summary>
-    /// Gets or sets the optional controller configuration.
+    /// Gets the optional controller configuration.
     /// </summary>
     [Description("The server mocker controller configuration")]
-    public ControllerConfig? Controller { get; set; }
+    public ControllerConfig? Controller { get; internal set; }
 
     private ILifetimeScope _scope;
     private readonly List<ValidationResult> _validationResults;

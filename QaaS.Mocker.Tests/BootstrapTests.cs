@@ -129,11 +129,11 @@ public class BootstrapTests
     }
 
     [Test]
-    public void NormalizeArguments_WithOptionFirst_RewritesLegacyModeToVerbStyle()
+    public void NormalizeArguments_WithOptionFirst_LeavesArgumentsUntouched()
     {
         var normalizedArguments = Bootstrap.NormalizeArguments(["--mode", "run", "mocker.qaas.yaml"]);
 
-        Assert.That(normalizedArguments, Is.EqualTo(new[] { "run", "mocker.qaas.yaml" }));
+        Assert.That(normalizedArguments, Is.EqualTo(new[] { "--mode", "run", "mocker.qaas.yaml" }));
     }
 
     [Test]
@@ -145,27 +145,27 @@ public class BootstrapTests
     }
 
     [Test]
-    public void NormalizeArguments_WithConfigurationFileFirst_PrependsRunCommand()
+    public void NormalizeArguments_WithConfigurationFileFirst_LeavesArgumentsUntouched()
     {
         var normalizedArguments = Bootstrap.NormalizeArguments(["mocker.qaas.yaml"]);
 
-        Assert.That(normalizedArguments, Is.EqualTo(new[] { "run", "mocker.qaas.yaml" }));
+        Assert.That(normalizedArguments, Is.EqualTo(new[] { "mocker.qaas.yaml" }));
     }
 
     [Test]
-    public void NormalizeArguments_WithLegacyModeFlag_RewritesToVerbStyle()
+    public void New_WithLegacyModeFlag_WritesTopLevelHelpAsInvalidCommandLine()
     {
-        var normalizedArguments = Bootstrap.NormalizeArguments(["--mode", "template", "mocker.qaas.yaml"]);
+        var output = CaptureConsoleOut(() =>
+        {
+            var mocker = Bootstrap.New(["--mode", "template", "mocker.qaas.yaml"]);
+            Assert.DoesNotThrow(() => mocker.Run());
+        });
 
-        Assert.That(normalizedArguments, Is.EqualTo(new[] { "template", "mocker.qaas.yaml" }));
-    }
-
-    [Test]
-    public void NormalizeArguments_WithLegacyModeAssignment_RewritesToVerbStyle()
-    {
-        var normalizedArguments = Bootstrap.NormalizeArguments(["--mode=lint", "mocker.qaas.yaml"]);
-
-        Assert.That(normalizedArguments, Is.EqualTo(new[] { "lint", "mocker.qaas.yaml" }));
+        Assert.Multiple(() =>
+        {
+            Assert.That(output, Does.Contain("Verb '--mode' is not recognized."));
+            Assert.That(output, Does.Contain("Usage:"));
+        });
     }
 
     [Test]
@@ -173,7 +173,7 @@ public class BootstrapTests
     {
         var normalizedArguments = Bootstrap.NormalizeArguments(["serve", "mocker.qaas.yaml"]);
 
-        Assert.That(normalizedArguments, Is.EqualTo(new[] { "run", "serve", "mocker.qaas.yaml" }));
+        Assert.That(normalizedArguments, Is.EqualTo(new[] { "serve", "mocker.qaas.yaml" }));
     }
 
     private static string CaptureConsoleOut(Action action)

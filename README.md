@@ -122,7 +122,7 @@ $stream.Dispose()
 $client.Dispose()
 ```
 
-7. Generate the effective combined configuration without using `--mode`.
+7. Generate the effective combined configuration with the `template` command.
 
 ```powershell
 dotnet run -- template mocker.qaas.yaml
