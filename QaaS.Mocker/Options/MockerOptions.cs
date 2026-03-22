@@ -6,23 +6,11 @@ using QaaS.Framework.Executions.Options;
 namespace QaaS.Mocker.Options;
 
 /// <summary>
-/// Mocker running options.
+/// Shared command-line options for QaaS.Mocker commands.
 /// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
-public record MockerOptions : LoggerOptions
+public abstract record MockerOptions : LoggerOptions
 {
-    /// <summary>
-    /// Gets the requested mocker execution mode.
-    /// </summary>
-    [Option('m', "mode",
-        HelpText = $"""
-                    The mocker execution mode. Overrides the default execution mode 
-                    ({nameof(Options.ExecutionMode.Run)}). All available options (not case sensitive) are:
-                    {nameof(Options.ExecutionMode.Run)}, {nameof(Options.ExecutionMode.Lint)}, 
-                    {nameof(Options.ExecutionMode.Template)}
-                    """)]
-    public ExecutionMode? ExecutionMode { get; init; } = Options.ExecutionMode.Run;
-
     /// <summary>
     /// Gets the main YAML configuration file path.
     /// </summary>
@@ -93,4 +81,9 @@ public record MockerOptions : LoggerOptions
                     Runs the project locally and enables exit by any key press.
                     """)]
     public bool RunLocally { get; init; }
+
+    /// <summary>
+    /// Gets the execution mode represented by the concrete command.
+    /// </summary>
+    public abstract ExecutionMode GetExecutionMode();
 }

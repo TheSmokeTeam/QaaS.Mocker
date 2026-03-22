@@ -26,6 +26,24 @@ public class MockerRunnerTests
         Assert.That(exitCode, Is.EqualTo(7));
     }
 
+    [Test]
+    public void Run_WithBootstrapHandledExitCode_SetsProcessExitCodeWithoutCallingExitAction()
+    {
+        var exitActionCalled = false;
+        var runner = new MockerRunner(null, _ => exitActionCalled = true)
+            .WithBootstrapHandledExitCode(3);
+
+        runner.Run();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exitActionCalled, Is.False);
+            Assert.That(Environment.ExitCode, Is.EqualTo(3));
+        });
+
+        Environment.ExitCode = 0;
+    }
+
     private sealed class StubExecutionBuilder(BaseExecution execution) : ExecutionBuilder
     {
         public override BaseExecution Build() => execution;
