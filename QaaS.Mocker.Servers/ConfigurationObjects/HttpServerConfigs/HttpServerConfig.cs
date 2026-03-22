@@ -42,7 +42,7 @@ public record HttpServerConfig : IValidatableObject
     public int ConnectionAcceptanceValue { get; set; } = 128;
 
     /// <summary>
-    /// Validates HTTPS-specific settings so lint mode can fail before server startup.
+    /// Validates HTTPS-specific settings before server startup.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

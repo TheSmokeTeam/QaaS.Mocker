@@ -1,7 +1,6 @@
 using System.Text;
 using CommandLine;
 using FrameworkHelpTextBuilder = QaaS.Framework.Executions.CommandLineBuilders.HelpTextBuilder;
-using LintOptions = QaaS.Mocker.Options.LintOptions;
 using RunOptions = QaaS.Mocker.Options.RunOptions;
 using TemplateOptions = QaaS.Mocker.Options.TemplateOptions;
 
@@ -15,7 +14,6 @@ public static class HelpTextBuilder
     private static readonly string[] CommandHelpSections =
     [
         BuildCommandHelpSection("run"),
-        BuildCommandHelpSection("lint"),
         BuildCommandHelpSection("template")
     ];
 
@@ -47,7 +45,7 @@ public static class HelpTextBuilder
     private static string BuildCommandHelpSection(string commandName)
     {
         using var parser = ParserBuilder.BuildParser();
-        var parserResult = parser.ParseArguments<RunOptions, LintOptions, TemplateOptions>([commandName, "--help"]);
+        var parserResult = parser.ParseArguments<RunOptions, TemplateOptions>([commandName, "--help"]);
 
         var builder = new StringBuilder();
         builder.AppendLine($"{commandName}:");

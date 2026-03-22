@@ -339,7 +339,7 @@ public class ExecutionBuilderCrudTests
 
         var builder = new ExecutionBuilder()
             .WithContext(context)
-            .WithExecutionMode(ExecutionMode.Lint)
+            .WithExecutionMode(ExecutionMode.Template)
             .CreateStub(new TransactionStubBuilder()
                 .Named("StubA")
                 .HookNamed(nameof(CodeFirstProcessor)))
@@ -382,7 +382,7 @@ public class ExecutionBuilderCrudTests
 
         var builder = new ExecutionBuilder()
             .WithContext(context)
-            .WithExecutionMode(ExecutionMode.Lint)
+            .WithExecutionMode(ExecutionMode.Template)
             .CreateStub(new TransactionStubBuilder()
                 .Named("StubA")
                 .HookNamed(nameof(CodeFirstProcessor)))
@@ -404,7 +404,7 @@ public class ExecutionBuilderCrudTests
 
         var builder = new ExecutionBuilder()
             .WithContext(context)
-            .WithExecutionMode(ExecutionMode.Lint)
+            .WithExecutionMode(ExecutionMode.Template)
             .CreateStub(new TransactionStubBuilder()
                 .Named("StubA")
                 .HookNamed(nameof(CodeFirstProcessor)))
@@ -482,3 +482,4 @@ public class ExecutionBuilderCrudTests
 
     public sealed class CodeFirstProcessorConfig;
 }
+

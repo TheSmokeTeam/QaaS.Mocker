@@ -13,16 +13,6 @@ namespace QaaS.Mocker.Tests.ExecutionTests;
 public class ExecutionBranchTests
 {
     [Test]
-    public void Start_WithLintMode_ReturnsZero()
-    {
-        var execution = CreateExecution(ExecutionMode.Lint);
-
-        var result = execution.Start();
-
-        Assert.That(result, Is.EqualTo(0));
-    }
-
-    [Test]
     public void Start_WithTemplateMode_WritesTemplateToRequestedFolder()
     {
         var tempFolder = Path.Combine("BuildOutput", "TemplateTests", Guid.NewGuid().ToString("N"));

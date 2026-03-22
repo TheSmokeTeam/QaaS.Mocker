@@ -54,17 +54,10 @@ public class Execution : BaseExecution
         return _executionMode switch
         {
             ExecutionMode.Run => Run(),
-            ExecutionMode.Lint => Lint(),
             ExecutionMode.Template => Template(),
             _ => throw new ArgumentOutOfRangeException(nameof(_executionMode), _executionMode,
                 "Unsupported mocker execution mode")
         };
-    }
-
-    private int Lint()
-    {
-        Context.Logger.LogInformation("Lint mode completed successfully");
-        return 0;
     }
 
     private int Template()

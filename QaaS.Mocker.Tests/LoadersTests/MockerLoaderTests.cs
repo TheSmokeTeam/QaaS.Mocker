@@ -69,7 +69,7 @@ public class MockerLoaderTests
                   Http:
                     Port: 8443
                 """);
-            var loader = new MockerLoader<LintOptions>(new LintOptions
+            var loader = new MockerLoader<TemplateOptions>(new TemplateOptions
             {
                 ConfigurationFile = configFile
             });
@@ -401,3 +401,4 @@ public class MockerLoaderTests
             Directory.Delete(directory, recursive: true);
     }
 }
+

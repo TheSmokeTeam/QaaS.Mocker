@@ -33,7 +33,7 @@ This repository contains one solution: [`QaaS.Mocker.sln`](./QaaS.Mocker.sln).
 ### [QaaS.Mocker](./QaaS.Mocker/)
 - Parses CLI options and loads YAML configuration with overwrite files/arguments and optional environment resolution.
 - Builds and validates execution context, data sources, stubs, one or more server runtimes, and optional controller runtime.
-- Supports execution modes: `Run`, `Lint`, and `Template`.
+- Supports execution modes: `Run` and `Template`.
 
 ### [QaaS.Mocker.Stubs](./QaaS.Mocker.Stubs/)
 - Builds transaction stubs from configured processors and data source bindings.

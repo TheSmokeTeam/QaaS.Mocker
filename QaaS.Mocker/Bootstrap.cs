@@ -46,11 +46,6 @@ public static class Bootstrap
                     using var loader = new MockerLoader<RunOptions>(options);
                     return loader.GetLoadedRunner();
                 },
-                (LintOptions options) =>
-                {
-                    using var loader = new MockerLoader<LintOptions>(options);
-                    return loader.GetLoadedRunner();
-                },
                 (TemplateOptions options) =>
                 {
                     using var loader = new MockerLoader<TemplateOptions>(options);
@@ -96,7 +91,7 @@ public static class Bootstrap
 
     private static ParserResult<object> ParseSupportedArguments(Parser cliParser, IEnumerable<string> args)
     {
-        return cliParser.ParseArguments<RunOptions, LintOptions, TemplateOptions>(args);
+        return cliParser.ParseArguments<RunOptions, TemplateOptions>(args);
     }
 
     private static void WriteHelpText(

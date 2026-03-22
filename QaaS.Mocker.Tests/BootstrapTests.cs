@@ -23,7 +23,6 @@ public class BootstrapTests
             Assert.That(output, Does.Contain("Usage:"));
             Assert.That(output, Does.Contain("Command Details:"));
             Assert.That(output, Does.Contain("run:"));
-            Assert.That(output, Does.Contain("lint:"));
             Assert.That(output, Does.Contain("template:"));
         });
     }
@@ -65,7 +64,6 @@ public class BootstrapTests
         {
             Assert.That(output, Does.Contain("Command Details:"));
             Assert.That(output, Does.Contain("run:"));
-            Assert.That(output, Does.Contain("lint:"));
             Assert.That(output, Does.Contain("template:"));
         });
     }
@@ -83,7 +81,6 @@ public class BootstrapTests
         {
             Assert.That(output, Does.Contain("Command Details:"));
             Assert.That(output, Does.Contain("run:"));
-            Assert.That(output, Does.Contain("lint:"));
             Assert.That(output, Does.Contain("template:"));
         });
     }
@@ -101,7 +98,6 @@ public class BootstrapTests
         {
             Assert.That(output, Does.Contain("Command Details:"));
             Assert.That(output, Does.Contain("run:"));
-            Assert.That(output, Does.Contain("lint:"));
             Assert.That(output, Does.Contain("template:"));
         });
     }
@@ -119,7 +115,6 @@ public class BootstrapTests
         {
             Assert.That(output, Does.Contain("Path to a mocker yaml configuration file to use with"));
             Assert.That(output, Does.Not.Contain("Command Details:"));
-            Assert.That(output, Does.Not.Contain("lint:"));
             Assert.That(output, Does.Not.Contain("template:"));
         });
     }
@@ -137,7 +132,6 @@ public class BootstrapTests
         {
             Assert.That(output, Does.Contain("Path to a mocker yaml configuration file to use with"));
             Assert.That(output, Does.Not.Contain("Command Details:"));
-            Assert.That(output, Does.Not.Contain("lint:"));
             Assert.That(output, Does.Not.Contain("template:"));
         });
     }
@@ -146,12 +140,10 @@ public class BootstrapTests
     public void ParserBuilder_ParsesExecutionModeCaseInsensitive()
     {
         using var parser = ParserBuilder.BuildParser();
-        var parserResult =
-            parser.ParseArguments<RunOptions, LintOptions, TemplateOptions>(["tEmPlAtE", "mocker.qaas.yaml"]);
+        var parserResult = parser.ParseArguments<RunOptions, TemplateOptions>(["tEmPlAtE", "mocker.qaas.yaml"]);
 
         var parsedExecutionMode = parserResult.MapResult(
             (RunOptions _) => ExecutionMode.Run,
-            (LintOptions _) => ExecutionMode.Lint,
             (TemplateOptions _) => ExecutionMode.Template,
             _ => (ExecutionMode?)null);
 
@@ -159,7 +151,6 @@ public class BootstrapTests
     }
 
     [TestCase("run", ExecutionMode.Run)]
-    [TestCase("lint", ExecutionMode.Lint)]
     [TestCase("template", ExecutionMode.Template)]
     public void NormalizeArguments_WithVerbAlias_PrependsModeFlag(string verb, ExecutionMode expectedMode)
     {
@@ -168,10 +159,9 @@ public class BootstrapTests
         Assert.That(normalizedArguments, Is.EqualTo(new[] { verb, "mocker.qaas.yaml" }));
 
         using var parser = ParserBuilder.BuildParser();
-        var parsedExecutionMode = parser.ParseArguments<RunOptions, LintOptions, TemplateOptions>(normalizedArguments)
+        var parsedExecutionMode = parser.ParseArguments<RunOptions, TemplateOptions>(normalizedArguments)
             .MapResult(
                 (RunOptions _) => ExecutionMode.Run,
-                (LintOptions _) => ExecutionMode.Lint,
                 (TemplateOptions _) => ExecutionMode.Template,
                 _ => (ExecutionMode?)null);
 
