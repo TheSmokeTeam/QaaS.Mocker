@@ -11,11 +11,6 @@ public enum ExecutionMode
     Run,
 
     /// <summary>
-    /// Validates the configuration without starting runtime components.
-    /// </summary>
-    Lint,
-
-    /// <summary>
     /// Writes the effective configuration as a template.
     /// </summary>
     Template

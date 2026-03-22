@@ -11,28 +11,31 @@ namespace QaaS.Mocker.Stubs.ConfigurationObjects;
 /// <summary>
 /// Provides a fluent API for building <see cref="TransactionStubConfig"/> instances in code.
 /// </summary>
-[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public class TransactionStubBuilder
 {
     /// <summary>
     /// Gets the stub name.
     /// </summary>
-    public string? Name { get; private set; }
+    [Description("Name of the transaction stub to reference it by (must be unique).")]
+    public string? Name { get; internal set; }
 
     /// <summary>
     /// Gets the processor hook name used to resolve the stub implementation.
     /// </summary>
-    public string? Processor { get; private set; }
+    [Description("The name of the transaction processor hook to use.")]
+    public string? Processor { get; internal set; }
 
     /// <summary>
     /// Gets the data source names passed into the stub processor.
     /// </summary>
-    public string[] DataSourceNames { get; private set; } = [];
+    [Description("Names of data sources to pass to this stub; they do not need to be defined before the stub.")]
+    public string[] DataSourceNames { get; internal set; } = [];
 
     /// <summary>
     /// Gets the processor-specific configuration.
     /// </summary>
-    public IConfiguration ProcessorConfiguration { get; private set; } = new ConfigurationBuilder().Build();
+    [Description("Implementation configuration for the processor; the configuration given here is loaded dynamically into the resolved processor.")]
+    public IConfiguration ProcessorConfiguration { get; internal set; } = new ConfigurationBuilder().Build();
 
     /// <summary>
     /// Gets the obsolete alias for <see cref="ProcessorConfiguration"/>.
@@ -44,12 +47,14 @@ public class TransactionStubBuilder
     /// <summary>
     /// Gets the optional request deserializer configuration.
     /// </summary>
-    public DeserializeConfig? RequestBodyDeserialization { get; private set; }
+    [Description("Deserializer to use on the request body before invoking the processor.")]
+    public DeserializeConfig? RequestBodyDeserialization { get; internal set; }
 
     /// <summary>
     /// Gets the optional response serializer configuration.
     /// </summary>
-    public SerializeConfig? ResponseBodySerialization { get; private set; }
+    [Description("Serializer to use on the response body after processor execution.")]
+    public SerializeConfig? ResponseBodySerialization { get; internal set; }
 
     /// <summary>
     /// Sets the stub name.

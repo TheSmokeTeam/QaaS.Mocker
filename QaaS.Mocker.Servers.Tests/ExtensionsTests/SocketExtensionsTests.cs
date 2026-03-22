@@ -85,6 +85,28 @@ public class SocketExtensionsTests
     }
 
     [Test]
+    public void GetBytesFromChannelWithinTimeout_WithUnboundSocket_ReturnsNull()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+        var bytes = socket.GetBytesFromChannelWithinTimeout(50, 1024, logger: Globals.Logger);
+
+        Assert.That(bytes, Is.Null);
+    }
+
+    [Test]
+    public void TryGetRemoteEndPoint_WithUnconnectedSocket_ReturnsNull()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+        var endpoint = typeof(SocketExtensions)
+            .GetMethod("TryGetRemoteEndPoint", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [socket]);
+
+        Assert.That(endpoint, Is.Null);
+    }
+
+    [Test]
     public void TryGetRemoteEndPoint_WithDisposedSocket_ReturnsNull()
     {
         var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);

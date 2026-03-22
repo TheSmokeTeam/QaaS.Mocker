@@ -151,6 +151,54 @@ public class StubFactoryTests
         });
     }
 
+    [Test]
+    public void Build_WithOnlyRequestDeserializerConfiguration_InitializesDeserializer()
+    {
+        var config = new TransactionStubConfig
+        {
+            Name = "StubA",
+            Processor = "ProcessorA"
+        };
+        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.RequestBodyDeserialization))!
+            .SetValue(config, CreateNonNullOption(nameof(TransactionStubConfig.RequestBodyDeserialization)));
+
+        var factory = new StubFactory(
+            Globals.Context,
+            [config],
+            new List<KeyValuePair<string, ITransactionProcessor>>
+            {
+                new("StubA", new Mock<ITransactionProcessor>().Object)
+            });
+
+        var stub = factory.Build(ImmutableList<DataSource>.Empty).Single(instance => instance.Name == "StubA");
+
+        Assert.That(stub.Name, Is.EqualTo("StubA"));
+    }
+
+    [Test]
+    public void Build_WithOnlyResponseSerializerConfiguration_InitializesSerializer()
+    {
+        var config = new TransactionStubConfig
+        {
+            Name = "StubA",
+            Processor = "ProcessorA"
+        };
+        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.ResponseBodySerialization))!
+            .SetValue(config, CreateNonNullOption(nameof(TransactionStubConfig.ResponseBodySerialization)));
+
+        var factory = new StubFactory(
+            Globals.Context,
+            [config],
+            new List<KeyValuePair<string, ITransactionProcessor>>
+            {
+                new("StubA", new Mock<ITransactionProcessor>().Object)
+            });
+
+        var stub = factory.Build(ImmutableList<DataSource>.Empty).Single(instance => instance.Name == "StubA");
+
+        Assert.That(stub.Name, Is.EqualTo("StubA"));
+    }
+
     private static object CreateNonNullOption(string propertyName)
     {
         var property = typeof(TransactionStubConfig).GetProperty(propertyName)!;

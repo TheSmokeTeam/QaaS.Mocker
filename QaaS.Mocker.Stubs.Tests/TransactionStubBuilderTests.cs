@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using NUnit.Framework;
 using QaaS.Framework.Configurations;
+using QaaS.Framework.Serialization;
 using QaaS.Mocker.Stubs.ConfigurationObjects;
 using YamlDotNet.Serialization;
 
@@ -153,5 +154,115 @@ public class TransactionStubBuilderTests
 
         builder.DeleteConfiguration();
         Assert.That(builder.ReadConfiguration().AsEnumerable().Any(), Is.False);
+    }
+
+    [Test]
+    public void DataSourceCrud_AddWithReplaceAndClear_WorksAsExpected()
+    {
+        var builder = new TransactionStubBuilder()
+            .AddDataSourceName("source-a")
+            .AddDataSourceName("source-b");
+
+        Assert.That(builder.DataSourceNames, Is.EqualTo(new[] { "source-a", "source-b" }));
+
+        builder.WithDataSourceNames(["source-c"]);
+        Assert.That(builder.DataSourceNames, Is.EqualTo(new[] { "source-c" }));
+
+        builder.ClearDataSourceNames();
+        Assert.That(builder.DataSourceNames, Is.Empty);
+    }
+
+    [Test]
+    public void DataSourceCrud_AddWithNullCollection_InitializesCollection()
+    {
+        var builder = new TransactionStubBuilder();
+        typeof(TransactionStubBuilder)
+            .GetProperty(nameof(TransactionStubBuilder.DataSourceNames))!
+            .SetValue(builder, null);
+
+        builder.AddDataSourceName("source-a");
+
+        Assert.That(builder.DataSourceNames, Is.EqualTo(new[] { "source-a" }));
+    }
+
+    [Test]
+    public void Build_WithSerializationConfigurationAndAliases_PopulatesOptionalFields()
+    {
+        var requestDeserialization = new DeserializeConfig
+        {
+            Deserializer = SerializationType.Json
+        };
+        var responseSerialization = new SerializeConfig
+        {
+            Serializer = SerializationType.Yaml
+        };
+        var builder = new TransactionStubBuilder()
+            .Named("StubA")
+            .HookNamed("MyProcessor")
+            .Create(new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?> { ["Feature:Enabled"] = "true" })
+                .Build())
+            .DeserializeRequestBodyWith(requestDeserialization)
+            .SerializeResponseBodyWith(responseSerialization);
+
+        var built = builder.Build();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(builder.ProcessorSpecificConfiguration["Feature:Enabled"], Is.EqualTo("true"));
+            Assert.That(built.RequestBodyDeserialization, Is.SameAs(requestDeserialization));
+            Assert.That(built.ResponseBodySerialization, Is.SameAs(responseSerialization));
+            Assert.That(built.ProcessorConfiguration["Feature:Enabled"], Is.EqualTo("true"));
+        });
+    }
+
+    [Test]
+    public void FromConfig_CreatesEquivalentMutableBuilder()
+    {
+        var config = new TransactionStubConfig
+        {
+            Name = "StubA",
+            Processor = "MyProcessor",
+            DataSourceNames = ["source-a", "source-b"],
+            ProcessorConfiguration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?> { ["Retries"] = "2" })
+                .Build(),
+            RequestBodyDeserialization = new DeserializeConfig
+            {
+                Deserializer = SerializationType.Json
+            },
+            ResponseBodySerialization = new SerializeConfig
+            {
+                Serializer = SerializationType.Xml
+            }
+        };
+
+        var builder = TransactionStubBuilder.FromConfig(config);
+        var rebuilt = builder.Build();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rebuilt.Name, Is.EqualTo(config.Name));
+            Assert.That(rebuilt.Processor, Is.EqualTo(config.Processor));
+            Assert.That(rebuilt.DataSourceNames, Is.EqualTo(config.DataSourceNames));
+            Assert.That(rebuilt.ProcessorConfiguration["Retries"], Is.EqualTo("2"));
+            Assert.That(rebuilt.RequestBodyDeserialization, Is.SameAs(config.RequestBodyDeserialization));
+            Assert.That(rebuilt.ResponseBodySerialization, Is.SameAs(config.ResponseBodySerialization));
+        });
+    }
+
+    [Test]
+    public void Create_WithObjectAlias_LoadsProcessorConfiguration()
+    {
+        var builder = new TransactionStubBuilder()
+            .Create(new
+            {
+                Feature = new
+                {
+                    Enabled = true
+                }
+            });
+
+        Assert.That(builder.ReadConfiguration()["Feature:Enabled"], Is.EqualTo("True"));
     }
 }

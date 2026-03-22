@@ -171,6 +171,167 @@ public class HttpServerConfigValidationTests
         }
     }
 
+    [Test]
+    public void Validate_WithInvalidPathPattern_ReturnsValidationError()
+    {
+        var config = new HttpServerConfig
+        {
+            Port = 8080,
+            Endpoints =
+            [
+                new HttpEndpointConfig
+                {
+                    Path = "/users/{id",
+                    Actions =
+                    [
+                        new HttpEndpointActionConfig
+                        {
+                            Name = "GetUser",
+                            Method = HttpMethod.Get,
+                            TransactionStubName = "StubA"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var results = Validate(config);
+
+        Assert.That(results.Any(result => result.ErrorMessage != null &&
+                                          result.ErrorMessage.Contains("not valid", StringComparison.OrdinalIgnoreCase)),
+            Is.True);
+    }
+
+    [Test]
+    public void Validate_WithNullEndpoints_ReturnsRequiredValidationErrorWithoutCustomFailures()
+    {
+        var config = new HttpServerConfig
+        {
+            Port = 8080,
+            Endpoints = null
+        };
+
+        var results = Validate(config);
+
+        Assert.That(results, Is.Empty);
+        Assert.That(results.Any(result => result.ErrorMessage != null &&
+                                          result.ErrorMessage.Contains("conflicting", StringComparison.OrdinalIgnoreCase)),
+            Is.False);
+    }
+
+    [Test]
+    public void ValidAndUniquePathRegexEndpointsAttribute_WithNonEndpointValue_ReturnsSuccess()
+    {
+        var attribute = new ValidAndUniquePathRegexEndpointsAttribute();
+        var context = new ValidationContext(new HttpServerConfig())
+        {
+            MemberName = nameof(HttpServerConfig.Endpoints)
+        };
+
+        var result = attribute.GetValidationResult("invalid", context);
+
+        Assert.That(result, Is.EqualTo(ValidationResult.Success));
+    }
+
+    [Test]
+    public void UniqueActionNameEndpointsAttribute_WithUnnamedActions_IgnoresThem()
+    {
+        var attribute = new UniqueActionNameEndpointsAttribute();
+        var config = new HttpServerConfig
+        {
+            Endpoints =
+            [
+                new HttpEndpointConfig
+                {
+                    Path = "/users",
+                    Actions =
+                    [
+                        new HttpEndpointActionConfig
+                        {
+                            Name = null,
+                            Method = HttpMethod.Get,
+                            TransactionStubName = "StubA"
+                        }
+                    ]
+                },
+                new HttpEndpointConfig
+                {
+                    Path = "/orders",
+                    Actions =
+                    [
+                        new HttpEndpointActionConfig
+                        {
+                            Name = null,
+                            Method = HttpMethod.Post,
+                            TransactionStubName = "StubB"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var result = attribute.GetValidationResult(config.Endpoints, new ValidationContext(config));
+
+        Assert.That(result, Is.EqualTo(ValidationResult.Success));
+    }
+
+    [Test]
+    public void ValidAndUniquePathRegexEndpointsAttribute_WithNullEndpoints_ReturnsSuccess()
+    {
+        var attribute = new ValidAndUniquePathRegexEndpointsAttribute();
+        var config = new HttpServerConfig
+        {
+            Endpoints = null
+        };
+
+        var result = attribute.GetValidationResult(config.Endpoints, new ValidationContext(config));
+
+        Assert.That(result, Is.EqualTo(ValidationResult.Success));
+    }
+
+    [Test]
+    public void Validate_WithConflictingPathsInReverseOrder_ReturnsValidationError()
+    {
+        var config = new HttpServerConfig
+        {
+            Port = 8080,
+            Endpoints =
+            [
+                new HttpEndpointConfig
+                {
+                    Path = "/users/me",
+                    Actions =
+                    [
+                        new HttpEndpointActionConfig
+                        {
+                            Name = "ActionA",
+                            Method = HttpMethod.Get,
+                            TransactionStubName = "StubA"
+                        }
+                    ]
+                },
+                new HttpEndpointConfig
+                {
+                    Path = "/users/{id}",
+                    Actions =
+                    [
+                        new HttpEndpointActionConfig
+                        {
+                            Name = "ActionB",
+                            Method = HttpMethod.Get,
+                            TransactionStubName = "StubB"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var results = Validate(config);
+
+        Assert.That(results.Any(result => result.ErrorMessage != null &&
+                                          result.ErrorMessage.Contains("conflicting", StringComparison.OrdinalIgnoreCase)), Is.True);
+    }
+
     private static HttpServerConfig CreateValidConfig()
     {
         return new HttpServerConfig

@@ -1,5 +1,3 @@
-using QaaS.Mocker.Options;
-
 namespace QaaS.Mocker;
 
 /// <summary>
@@ -47,22 +45,12 @@ internal static class CommandLinePathNormalizer
         {
             var argument = args[index];
 
-            // Preserve verb-style aliases such as `run` or `template`; Bootstrap will translate
-            // them later, but they must keep their original positional slot here.
-            if (index == 0 && IsExecutionModeAlias(argument))
+            // The first positional token is always the command slot in the Runner-style CLI.
+            // Preserve it as-is so unknown commands still fail as commands instead of being
+            // rewritten into configuration-file paths.
+            if (index == 0 && !IsOption(argument))
             {
                 rewrittenArguments.Add(argument);
-                continue;
-            }
-
-            if (TryRewriteSingleValueOption(
-                    args,
-                    ref index,
-                    rewrittenArguments,
-                    "--mode",
-                    "-m",
-                    static value => value))
-            {
                 continue;
             }
 
@@ -206,9 +194,6 @@ internal static class CommandLinePathNormalizer
         string.Equals(argument, shortName, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsOption(string argument) => argument.StartsWith("-", StringComparison.Ordinal);
-
-    private static bool IsExecutionModeAlias(string argument) =>
-        !IsOption(argument) && Enum.TryParse<ExecutionMode>(argument, ignoreCase: true, out _);
 
     private static string ResolveInputPath(
         string path,

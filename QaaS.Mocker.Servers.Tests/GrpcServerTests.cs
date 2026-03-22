@@ -114,6 +114,23 @@ public class GrpcServerTests
     }
 
     [Test]
+    public void DeserializeMessage_WithNullParser_ThrowsInvalidOperationException()
+    {
+        var exception = Assert.Throws<TargetInvocationException>(() => InvokeDeserializeMessage<NullParserMessage>([]));
+
+        Assert.That(exception!.InnerException, Is.TypeOf<InvalidOperationException>());
+    }
+
+    [Test]
+    public void DeserializeMessage_WhenParserLacksByteArrayOverload_ThrowsInvalidOperationException()
+    {
+        var exception = Assert.Throws<TargetInvocationException>(() =>
+            InvokeDeserializeMessage<ParserWithoutByteArrayOverloadMessage>([]));
+
+        Assert.That(exception!.InnerException, Is.TypeOf<InvalidOperationException>());
+    }
+
+    [Test]
     public void ResolveGrpcServiceName_WithServiceField_ReturnsConfiguredName()
     {
         var name = (string)typeof(GrpcServer)
@@ -155,6 +172,25 @@ public class GrpcServerTests
     }
 
     [Test]
+    public void CreateMarshaller_WithNonProtobufType_ThrowsInvalidOperationException()
+    {
+        var marshaller = InvokeCreateMarshaller<NonProtobufMessage>();
+
+        Assert.Throws<InvalidOperationException>(() => marshaller.Serializer(new NonProtobufMessage()));
+    }
+
+    [Test]
+    public void CreateMarshaller_WithProtobufType_RoundTripsMessage()
+    {
+        var marshaller = InvokeCreateMarshaller<StringValue>();
+
+        var bytes = marshaller.Serializer(new StringValue { Value = "payload" });
+        var message = marshaller.Deserializer(bytes);
+
+        Assert.That(message.Value, Is.EqualTo("payload"));
+    }
+
+    [Test]
     public void Constructor_WithValidServiceConfig_RegistersServiceDefinitionAndPort()
     {
         var server = CreateServer(_ => new StringValue { Value = "ok" }.ToByteArray());
@@ -189,6 +225,40 @@ public class GrpcServerTests
 
         Assert.ThrowsAsync<QaaS.Mocker.Servers.Exceptions.FatalInternalErrorException>(async () =>
             await handler(new StringValue { Value = "request" }, CreateServerCallContext(string.Empty)));
+    }
+
+    [Test]
+    public void Start_WhenInterruptedAfterStartup_StopsBlockingThread()
+    {
+        var server = CreateServer(GetFreeTcpPort(), _ => new StringValue { Value = "ok" }.ToByteArray());
+        var grpcCoreServer = (Server)typeof(GrpcServer)
+            .GetField("_grpcServer", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(server)!;
+        Exception? threadException = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                server.Start();
+            }
+            catch (ThreadInterruptedException)
+            {
+            }
+            catch (Exception exception)
+            {
+                threadException = exception;
+            }
+        });
+
+        thread.IsBackground = true;
+        thread.Start();
+        Thread.Sleep(300);
+
+        thread.Interrupt();
+        Assert.That(thread.Join(TimeSpan.FromSeconds(2)), Is.True);
+        grpcCoreServer.ShutdownAsync().GetAwaiter().GetResult();
+
+        Assert.That(threadException, Is.Null);
     }
 
     [Test]
@@ -288,6 +358,40 @@ public class GrpcServerTests
         }
     }
 
+    [Test]
+    public void ConvertResponseBody_WithDifferentProtobufMessage_UsesIMessageSerializationPath()
+    {
+        var response = InvokeConvertResponseBody<StringValue>(new BytesValue
+        {
+            Value = ByteString.CopyFromUtf8("payload")
+        });
+
+        Assert.That(response, Is.Not.Null);
+    }
+
+    [Test]
+    public void ResolveGrpcServiceName_WithNullServiceField_FallsBackToFullTypeName()
+    {
+        var name = (string)typeof(GrpcServer)
+            .GetMethod("ResolveGrpcServiceName", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [typeof(NullNamedGrpcService)])!;
+
+        Assert.That(name, Is.EqualTo(typeof(NullNamedGrpcService).FullName));
+    }
+
+    [Test]
+    public void ResolveGrpcServiceName_WithoutServiceFieldAndFullName_ThrowsInvalidOperationException()
+    {
+        var genericParameterType = typeof(List<>).GetGenericArguments()[0];
+
+        var exception = Assert.Throws<TargetInvocationException>(() =>
+            typeof(GrpcServer)
+                .GetMethod("ResolveGrpcServiceName", BindingFlags.NonPublic | BindingFlags.Static)!
+                .Invoke(null, [genericParameterType]));
+
+        Assert.That(exception!.InnerException, Is.TypeOf<InvalidOperationException>());
+    }
+
     private static TResponse InvokeConvertResponseBody<TResponse>(object? body) where TResponse : class
     {
         return (TResponse)typeof(GrpcServer)
@@ -302,6 +406,14 @@ public class GrpcServerTests
             .GetMethod("DeserializeMessage", BindingFlags.NonPublic | BindingFlags.Static)!
             .MakeGenericMethod(typeof(TMessage))
             .Invoke(null, [bytes])!;
+    }
+
+    private static Marshaller<TMessage> InvokeCreateMarshaller<TMessage>() where TMessage : class
+    {
+        return (Marshaller<TMessage>)typeof(GrpcServer)
+            .GetMethod("CreateMarshaller", BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(typeof(TMessage))
+            .Invoke(null, null)!;
     }
 
     private static UnaryServerMethod<TRequest, TResponse> InvokeCreateUnaryHandler<TRequest, TResponse>(
@@ -326,10 +438,18 @@ public class GrpcServerTests
         Func<StringValue, object?> responseFactory,
         Func<StringValue, object?>? internalErrorResponseFactory = null)
     {
+        return CreateServer(50051, responseFactory, internalErrorResponseFactory);
+    }
+
+    private static GrpcServer CreateServer(
+        int port,
+        Func<StringValue, object?> responseFactory,
+        Func<StringValue, object?>? internalErrorResponseFactory = null)
+    {
         return new GrpcServer(
             new GrpcServerConfig
             {
-                Port = 50051,
+                Port = port,
                 IsLocalhost = true,
                 Services =
                 [
@@ -371,6 +491,13 @@ public class GrpcServerTests
                     };
                 })
             ]);
+    }
+
+    private static int GetFreeTcpPort()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }
 
     private static TransactionStub CreateStub(string name, Func<Data<object>, Data<object>> process)
@@ -425,9 +552,31 @@ public class GrpcServerTests
 
     private sealed class MissingParserMessage;
 
+    private sealed class NullParserMessage
+    {
+        public static object? Parser => null;
+    }
+
+    private sealed class ParserWithoutByteArrayOverloadMessage
+    {
+        public static object Parser => new ParserWithoutByteArrayOverload();
+    }
+
+    private sealed class ParserWithoutByteArrayOverload
+    {
+        public ParserWithoutByteArrayOverload ParseFrom(string value) => this;
+    }
+
+    private sealed class NonProtobufMessage;
+
     private sealed class NamedGrpcService
     {
         private static readonly string __ServiceName = "tests.NamedGrpcService";
+    }
+
+    private sealed class NullNamedGrpcService
+    {
+        private static readonly string? __ServiceName = null;
     }
 
     private sealed class MissingServiceNameType;

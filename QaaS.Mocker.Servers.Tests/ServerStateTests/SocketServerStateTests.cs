@@ -5,10 +5,13 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using NUnit.Framework;
 using QaaS.Framework.SDK.ContextObjects;
+using QaaS.Framework.SDK.ConfigurationObjects;
 using QaaS.Framework.SDK.DataSourceObjects;
+using QaaS.Framework.SDK.Hooks.Generator;
 using QaaS.Framework.SDK.Hooks.Processor;
 using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Framework.SDK.Session.MetaDataObjects;
+using QaaS.Framework.SDK.Session.SessionDataObjects;
 using QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 using QaaS.Mocker.Servers.Exceptions;
 using QaaS.Mocker.Servers.ServerStates;
@@ -240,8 +243,67 @@ public class SocketServerStateTests
         Assert.That(exception!.Message, Does.Contain("9999"));
     }
 
+    [Test]
+    public void ProcessBroadcast_WithConfiguredDataSource_ReturnsPayloadAndStoresOutput()
+    {
+        var stateWithDataSources = CreateStateWithDataSources(
+            [BuildEndpoint(7001, "BroadcastAction", SocketMethod.Broadcast, dataSourceName: "ds1")],
+            [
+                CreateDataSource("ds1", CreateRequest("broadcast"))
+            ]);
+        var cache = stateWithDataSources.GetCache();
+        cache.EnableStorage = true;
+
+        var result = stateWithDataSources.Process(7001).Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Encoding.UTF8.GetString((byte[])result.Body!), Is.EqualTo("broadcast"));
+            Assert.That(cache.RetrieveFirstOrDefaultStringOutput(), Is.Not.Null);
+            Assert.That(cache.RetrieveFirstOrDefaultStringInput(), Is.Null);
+        });
+    }
+
+    [Test]
+    public void Process_WithUnknownPortAndCombinedState_StoresInputAndOutput()
+    {
+        var state = CreateState(
+            [
+                BuildEndpoint(7001, "CollectAction", SocketMethod.Collect),
+                BuildEndpoint(7002, "BroadcastAction", SocketMethod.Broadcast, dataSourceName: "ds1")
+            ]);
+        var cache = state.GetCache();
+        cache.EnableStorage = true;
+
+        var result = state.Process(9999, [CreateRequest("payload")]).Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.InputOutputState, Is.EqualTo(InputOutputState.BothInputOutput));
+            Assert.That(Encoding.UTF8.GetString((byte[])result.Body!), Is.EqualTo("payload"));
+            Assert.That(cache.RetrieveFirstOrDefaultStringInput(), Is.Not.Null);
+            Assert.That(cache.RetrieveFirstOrDefaultStringOutput(), Is.Not.Null);
+        });
+    }
+
+    [Test]
+    public void ChangeActionStub_WhenActionDoesNotExist_ThrowsActionDoesNotExistException()
+    {
+        var state = CreateState([BuildEndpoint(7001, "CollectAction", SocketMethod.Collect)]);
+
+        Assert.Throws<ActionDoesNotExistException>(() => state.ChangeActionStub("MissingAction", "StubA"));
+    }
+
     private static SocketServerState CreateState(
         SocketEndpointConfig[] endpoints,
+        params (string Name, Func<Data<object>, Data<object>> Processor)[] stubs)
+    {
+        return CreateStateWithDataSources(endpoints, [], stubs);
+    }
+
+    private static SocketServerState CreateStateWithDataSources(
+        SocketEndpointConfig[] endpoints,
+        DataSource[] dataSources,
         params (string Name, Func<Data<object>, Data<object>> Processor)[] stubs)
     {
         var mappedStubs = stubs.Length == 0
@@ -250,7 +312,7 @@ public class SocketServerStateTests
 
         return new SocketServerState(
             Globals.Logger,
-            ImmutableList<DataSource>.Empty,
+            dataSources.ToImmutableList(),
             mappedStubs,
             endpoints);
     }
@@ -296,10 +358,34 @@ public class SocketServerStateTests
         };
     }
 
+    private static DataSource CreateDataSource(string name, params Data<object>[] data)
+    {
+        return new DataSource
+        {
+            Name = name,
+            DataSourceList = ImmutableList<DataSource>.Empty,
+            Generator = new DelegateGenerator(data)
+        };
+    }
+
     private sealed class DelegateProcessor(Func<Data<object>, Data<object>> process) : ITransactionProcessor
     {
         public Context Context { get; set; } = null!;
         public List<ValidationResult>? LoadAndValidateConfiguration(IConfiguration configuration) => [];
         public Data<object> Process(IImmutableList<DataSource> dataSourceList, Data<object> requestData) => process(requestData);
+    }
+
+    private sealed class DelegateGenerator(IEnumerable<Data<object>> generatedData) : IGenerator
+    {
+        public Context Context { get; set; } = null!;
+
+        public List<ValidationResult>? LoadAndValidateConfiguration(IConfiguration configuration) => [];
+
+        public IEnumerable<Data<object>> Generate(
+            IImmutableList<SessionData> sessionDataList,
+            IImmutableList<DataSource> dataSourceList)
+        {
+            return generatedData;
+        }
     }
 }

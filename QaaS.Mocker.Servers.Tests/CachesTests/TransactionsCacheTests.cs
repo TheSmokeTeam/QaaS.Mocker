@@ -1,6 +1,7 @@
 using Google.Protobuf;
 using NUnit.Framework;
 using Google.Protobuf.WellKnownTypes;
+using System.Text;
 using System.Text.Json;
 using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Framework.SDK.Session.MetaDataObjects;
@@ -17,6 +18,20 @@ public class TransactionsCacheTests
         var cache = new TransactionsCache { EnableStorage = false };
 
         cache.StoreInput(CreateDetailedData("one"), "ActionA");
+
+        Assert.That(cache.RetrieveFirstOrDefaultStringInput(), Is.Null);
+    }
+
+    [Test]
+    public void StoreInput_WhenActionFilterDoesNotMatch_DoesNotPersist()
+    {
+        var cache = new TransactionsCache
+        {
+            EnableStorage = true,
+            CachedAction = "ActionA"
+        };
+
+        cache.StoreInput(CreateDetailedData("one"), "ActionB");
 
         Assert.That(cache.RetrieveFirstOrDefaultStringInput(), Is.Null);
     }
@@ -81,6 +96,24 @@ public class TransactionsCacheTests
 
         Assert.That(deserialized, Is.Not.Null);
         Assert.That(deserialized!.Body, Is.EqualTo(new StringValue { Value = "grpc-payload" }.ToByteArray()));
+    }
+
+    [Test]
+    public void RetrieveFirstOrDefaultStringInput_WhenBodyIsReadOnlyMemory_SerializesBodyAsByteArray()
+    {
+        var cache = new TransactionsCache { EnableStorage = true };
+        cache.StoreInput(new DetailedData<object>
+        {
+            Timestamp = DateTime.UtcNow,
+            Body = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("socket-payload")),
+            MetaData = new MetaData()
+        }, "ActionA");
+
+        var result = cache.RetrieveFirstOrDefaultStringInput();
+        var deserialized = JsonSerializer.Deserialize<DetailedData<byte[]>>(result!);
+
+        Assert.That(deserialized, Is.Not.Null);
+        Assert.That(deserialized!.Body, Is.EqualTo(Encoding.UTF8.GetBytes("socket-payload")));
     }
 
     [Test]

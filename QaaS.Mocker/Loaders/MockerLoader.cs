@@ -11,7 +11,8 @@ namespace QaaS.Mocker.Loaders;
 /// <summary>
 /// Loads CLI options into an execution-ready <see cref="MockerRunner"/> instance.
 /// </summary>
-public class MockerLoader : BaseLoader<MockerOptions, MockerRunner>, IDisposable
+public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDisposable
+    where TOptions : MockerOptions
 {
     private readonly ILifetimeScope _runScope;
     private static readonly string[] SupportedEnvironmentSeparators = [":", "__"];
@@ -21,7 +22,7 @@ public class MockerLoader : BaseLoader<MockerOptions, MockerRunner>, IDisposable
     /// </summary>
     /// <param name="options">Command-line options used to load execution context.</param>
     /// <param name="executionId">Optional execution identifier override.</param>
-    public MockerLoader(MockerOptions options, string? executionId = null) : base(options, executionId)
+    public MockerLoader(TOptions options, string? executionId = null) : base(options, executionId)
     {
         _runScope = InitializeScope();
     }
@@ -57,10 +58,7 @@ public class MockerLoader : BaseLoader<MockerOptions, MockerRunner>, IDisposable
     /// <returns>Configured execution builder.</returns>
     private ExecutionBuilder LoadContextToExecutionBuilder(InternalContext context)
     {
-        if (!Options.ExecutionMode.HasValue)
-            throw new ArgumentException("Execution mode is required.", nameof(Options.ExecutionMode));
-
-        var runBuilder = new ExecutionBuilder(context, Options.ExecutionMode!.Value, Options.RunLocally,
+        var runBuilder = new ExecutionBuilder(context, Options.GetExecutionMode(), Options.RunLocally,
             Options.TemplatesOutputFolder);
         return runBuilder;
     }

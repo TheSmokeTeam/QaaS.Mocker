@@ -42,7 +42,7 @@ public record HttpServerConfig : IValidatableObject
     public int ConnectionAcceptanceValue { get; set; } = 128;
 
     /// <summary>
-    /// Validates HTTPS-specific settings so lint mode can fail before server startup.
+    /// Validates HTTPS-specific settings before server startup.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -77,7 +77,6 @@ public record HttpServerConfig : IValidatableObject
 /// <summary>
 /// Validates that HTTP route templates are individually valid and do not overlap.
 /// </summary>
-[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class ValidAndUniquePathRegexEndpointsAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
@@ -138,7 +137,6 @@ internal class ValidAndUniquePathRegexEndpointsAttribute : ValidationAttribute
 /// <summary>
 /// Ensures controller-facing action names stay unique across all configured HTTP endpoints.
 /// </summary>
-[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class UniqueActionNameEndpointsAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)

@@ -34,7 +34,7 @@ public class ProcessorHooksIntegrationTests
                 .Build()
         };
 
-        var builder = new ExecutionBuilder(context, ExecutionMode.Lint, runLocally: false, templateOutputFolder: null);
+        var builder = new ExecutionBuilder(context, ExecutionMode.Template, runLocally: false, templateOutputFolder: null);
 
         Assert.DoesNotThrow(() => builder.Build());
     }
@@ -47,3 +47,4 @@ public class ProcessorHooksIntegrationTests
 
     private sealed class TestProcessorConfig;
 }
+
