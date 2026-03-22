@@ -55,11 +55,16 @@ public static class Bootstrap
     }
 
     /// <summary>
-    /// Preserves the original argument sequence so command parsing behaves the same way as QaaS.Runner.
+    /// Preserves the original argument sequence while restoring the legacy
+    /// "config path implies run" startup path.
     /// </summary>
     internal static string[] NormalizeArguments(IEnumerable<string> args)
     {
-        return args.ToArray();
+        var arguments = args.ToArray();
+        if (!ShouldAssumeRunMode(arguments))
+            return arguments;
+
+        return ["run", .. arguments];
     }
 
     private static MockerRunner HandleParseError(
@@ -138,6 +143,41 @@ public static class Bootstrap
     {
         return string.Equals(argument, "--help", StringComparison.OrdinalIgnoreCase) ||
                string.Equals(argument, "-h", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ShouldAssumeRunMode(IReadOnlyList<string> arguments)
+    {
+        var effectiveArguments = RemoveTopLevelIgnorableOptions(arguments);
+        if (effectiveArguments.Length == 0)
+            return false;
+
+        var firstEffectiveArgument = effectiveArguments[0];
+        if (IsExecutionModeAlias(firstEffectiveArgument) ||
+            IsHelpOption(firstEffectiveArgument) ||
+            IsOption(firstEffectiveArgument))
+        {
+            return false;
+        }
+
+        return LooksLikeConfigurationPath(firstEffectiveArgument);
+    }
+
+    private static bool LooksLikeConfigurationPath(string argument)
+    {
+        if (Path.IsPathRooted(argument))
+            return true;
+
+        if (argument.IndexOfAny(['\\', '/']) >= 0)
+            return true;
+
+        var extension = Path.GetExtension(argument);
+        return extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".yml", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsOption(string argument)
+    {
+        return argument.StartsWith("-", StringComparison.Ordinal);
     }
 
     private static string[] RemoveTopLevelIgnorableOptions(IEnumerable<string> arguments)

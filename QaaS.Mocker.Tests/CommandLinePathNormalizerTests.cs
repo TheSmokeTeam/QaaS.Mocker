@@ -50,6 +50,20 @@ public class CommandLinePathNormalizerTests
     }
 
     [Test]
+    public void Normalize_PreservesRootedConfigurationFilePath()
+    {
+        using var sandbox = new TemporaryDirectorySandbox();
+        var rootedConfigPath = sandbox.CreateCallerFile("configs\\custom.yaml");
+
+        var normalizedArguments = CommandLinePathNormalizer.Normalize(
+            ["run", rootedConfigPath],
+            sandbox.CallerDirectory,
+            sandbox.FallbackDirectory);
+
+        Assert.That(normalizedArguments, Is.EqualTo(new[] { "run", rootedConfigPath }));
+    }
+
+    [Test]
     public void Normalize_RewritesOutputFolderAgainstCallerDirectory()
     {
         using var sandbox = new TemporaryDirectorySandbox();
@@ -65,6 +79,23 @@ public class CommandLinePathNormalizerTests
         Assert.That(
             normalizedArguments,
             Is.EqualTo(new[] { "template", exampleConfigPath, "--output-folder", expectedOutputPath, "--no-env" }));
+    }
+
+    [Test]
+    public void Normalize_PreservesRootedOutputFolderPath()
+    {
+        using var sandbox = new TemporaryDirectorySandbox();
+        var exampleConfigPath = sandbox.CreateFallbackFile("mocker.qaas.yaml");
+        var rootedOutputPath = Path.GetFullPath("artifacts\\templates", sandbox.CallerDirectory);
+
+        var normalizedArguments = CommandLinePathNormalizer.Normalize(
+            ["template", "mocker.qaas.yaml", "--output-folder", rootedOutputPath],
+            sandbox.CallerDirectory,
+            sandbox.FallbackDirectory);
+
+        Assert.That(
+            normalizedArguments,
+            Is.EqualTo(new[] { "template", exampleConfigPath, "--output-folder", rootedOutputPath }));
     }
 
     [Test]

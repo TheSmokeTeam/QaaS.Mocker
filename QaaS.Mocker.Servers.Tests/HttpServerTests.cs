@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
@@ -68,6 +69,21 @@ public class HttpServerTests
     public void BuildHost_WithHttpConfiguration_ReturnsHostInstance()
     {
         var server = CreateServer();
+
+        using var host = InvokeBuildHost(server);
+
+        Assert.That(host, Is.Not.Null);
+    }
+
+    [Test]
+    public void BuildHost_WithNonLocalhostConfiguration_ReturnsHostInstance()
+    {
+        var server = CreateServer(new HttpServerConfig
+        {
+            Port = 0,
+            IsLocalhost = false,
+            Endpoints = CreateEndpoints()
+        });
 
         using var host = InvokeBuildHost(server);
 
@@ -152,6 +168,85 @@ public class HttpServerTests
             .Invoke(null, [absolutePath])!;
 
         Assert.That(resolved, Is.EqualTo(absolutePath));
+    }
+
+    [Test]
+    public void Start_WithHttpConfiguration_StartsUntilInterrupted()
+    {
+        var server = CreateServer(new HttpServerConfig
+        {
+            Port = 0,
+            IsLocalhost = true,
+            IsSecuredSchema = false,
+            Endpoints = CreateEndpoints()
+        });
+
+        RunServerStartUntilInterrupted(server);
+    }
+
+    [Test]
+    public void Start_WithHttpsAndNonLocalhost_StartsUntilInterrupted()
+    {
+        var certificatePath = CreateCertificateFile();
+        try
+        {
+            var server = CreateServer(new HttpServerConfig
+            {
+                Port = 0,
+                IsLocalhost = false,
+                IsSecuredSchema = true,
+                CertificatePath = certificatePath,
+                CertificatePassword = "password",
+                Endpoints = CreateEndpoints()
+            });
+
+            RunServerStartUntilInterrupted(server);
+        }
+        finally
+        {
+            File.Delete(certificatePath);
+        }
+    }
+
+    [Test]
+    public async Task HandleTransactionAsync_WithRootPath_WritesStubResponse()
+    {
+        var server = CreateServer(new HttpServerConfig
+        {
+            Port = 0,
+            IsLocalhost = true,
+            Endpoints =
+            [
+                new HttpEndpointConfig
+                {
+                    Path = "/",
+                    Actions =
+                    [
+                        new HttpEndpointActionConfig
+                        {
+                            Name = "Root",
+                            Method = HttpMethod.Get,
+                            TransactionStubName = "MainStub"
+                        }
+                    ]
+                }
+            ]
+        });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("localhost", 8080);
+        context.Request.Path = "/";
+        context.Request.Body = new MemoryStream();
+        context.Response.Body = new MemoryStream();
+
+        await InvokeHandleTransactionAsync(server, context);
+
+        context.Response.Body.Position = 0;
+        using var reader = new StreamReader(context.Response.Body, Encoding.UTF8, leaveOpen: true);
+        var payload = await reader.ReadToEndAsync();
+
+        Assert.That(payload, Is.EqualTo("ok"));
     }
 
     private static HttpServer CreateServer()
@@ -242,6 +337,35 @@ public class HttpServerTests
         var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.pfx");
         File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx, "password"));
         return path;
+    }
+
+    private static void RunServerStartUntilInterrupted(HttpServer server)
+    {
+        Exception? threadException = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                server.Start();
+            }
+            catch (ThreadInterruptedException)
+            {
+            }
+            catch (Exception exception)
+            {
+                threadException = exception;
+            }
+        })
+        {
+            IsBackground = true
+        };
+
+        thread.Start();
+        Thread.Sleep(300);
+        thread.Interrupt();
+
+        Assert.That(thread.Join(TimeSpan.FromSeconds(3)), Is.True);
+        Assert.That(threadException, Is.Null);
     }
 
     private sealed class DelegateProcessor(Func<Data<object>, Data<object>> process) : ITransactionProcessor

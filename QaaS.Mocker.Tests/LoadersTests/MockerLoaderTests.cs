@@ -305,6 +305,52 @@ public class MockerLoaderTests
     }
 
     [Test]
+    public void GetLoadedContext_WithWhitespaceConfigurationFile_ThrowsArgumentException()
+    {
+        var exception = Assert.Throws<InvalidConfigurationsException>(() => new MockerLoader<RunOptions>(new RunOptions
+        {
+            ConfigurationFile = " "
+        }));
+
+        Assert.That(exception, Is.Not.Null);
+    }
+
+    [Test]
+    public void GetLoadedContext_WithWhitespaceConfigurationFileAfterConstruction_ThrowsArgumentException()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+            var loader = new MockerLoader<RunOptions>(new RunOptions
+            {
+                ConfigurationFile = configFile
+            });
+            var getLoadedContextMethod = loader.GetType()
+                .GetMethod("GetLoadedContext", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var optionsField = loader.GetType()
+                .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.FlattenHierarchy)
+                .Single(field => typeof(MockerOptions).IsAssignableFrom(field.FieldType));
+            var options = (RunOptions)optionsField.GetValue(loader)!;
+            var configurationFileField = typeof(MockerOptions)
+                .GetField("<ConfigurationFile>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            configurationFileField.SetValue(options, " ");
+
+            var exception = Assert.Throws<TargetInvocationException>(() => getLoadedContextMethod.Invoke(loader, null));
+
+            Assert.That(exception!.InnerException, Is.TypeOf<ArgumentException>());
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
     public void Dispose_ReleasesLoaderScopeWithoutThrowing()
     {
         var tempDirectory = CreateTempDirectory();
@@ -362,6 +408,39 @@ public class MockerLoaderTests
                 Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("5001"));
                 Assert.That(context.RootConfiguration["Servers:0:Http:Port"], Is.EqualTo("6001"));
             });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void ApplyEnvironmentOverrides_WithNoSupportedMappings_LeavesConfigurationUnchanged()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+            var contextBuilder = new ContextBuilder(new ConfigurationBuilder());
+            contextBuilder.SetLogger(NullLogger.Instance);
+            contextBuilder.SetConfigurationFile(configFile);
+
+            MockerLoader<RunOptions>.ApplyEnvironmentOverrides(
+                contextBuilder,
+                [
+                    new KeyValuePair<string?, string?>("PATH", "ignored"),
+                    new KeyValuePair<string?, string?>("DOTNET_ENVIRONMENT", "Development")
+                ],
+                NullLogger.Instance);
+
+            var context = contextBuilder.BuildInternal();
+
+            Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
         }
         finally
         {

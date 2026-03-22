@@ -86,6 +86,46 @@ public class CompositeCacheTests
         Assert.That(payload, Is.Null);
     }
 
+    [Test]
+    public void Getters_WithNoCaches_ReturnFallbackDefaults()
+    {
+        var cache = new CompositeCache([]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(cache.EnableStorage, Is.False);
+            Assert.That(cache.CachedAction, Is.Null);
+            Assert.That(cache.InputDataFilter, Is.Not.Null);
+            Assert.That(cache.OutputDataFilter, Is.Not.Null);
+        });
+    }
+
+    [Test]
+    public void CachedAction_Get_WhenFirstCacheHasNoAction_UsesNextCache()
+    {
+        var cache = new CompositeCache(
+        [
+            new FakeCache { CachedAction = null },
+            new FakeCache { CachedAction = "ActionB" }
+        ]);
+
+        Assert.That(cache.CachedAction, Is.EqualTo("ActionB"));
+    }
+
+    [Test]
+    public void RetrieveFirstOrDefaultStringOutput_WhenFirstCacheHasPayload_ReturnsIt()
+    {
+        var cache = new CompositeCache(
+        [
+            new FakeCache(outputs: ["payload-a"]),
+            new FakeCache(outputs: ["payload-b"])
+        ]);
+
+        var payload = cache.RetrieveFirstOrDefaultStringOutput();
+
+        Assert.That(payload, Is.EqualTo("payload-a"));
+    }
+
     private sealed class FakeCache(IEnumerable<string>? inputs = null, IEnumerable<string>? outputs = null) : ICache
     {
         private readonly Queue<string> _inputs = new(inputs ?? []);

@@ -189,11 +189,27 @@ public class BootstrapTests
     }
 
     [Test]
-    public void NormalizeArguments_WithConfigurationFileFirst_LeavesArgumentsUntouched()
+    public void NormalizeArguments_WithConfigurationFileFirst_PrependsRunVerb()
     {
         var normalizedArguments = Bootstrap.NormalizeArguments(["mocker.qaas.yaml"]);
 
-        Assert.That(normalizedArguments, Is.EqualTo(new[] { "mocker.qaas.yaml" }));
+        Assert.That(normalizedArguments, Is.EqualTo(new[] { "run", "mocker.qaas.yaml" }));
+    }
+
+    [Test]
+    public void NormalizeArguments_WithConfigurationFileAndNoEnv_PrependsRunVerb()
+    {
+        var normalizedArguments = Bootstrap.NormalizeArguments(["mocker.qaas.yaml", "--no-env"]);
+
+        Assert.That(normalizedArguments, Is.EqualTo(new[] { "run", "mocker.qaas.yaml", "--no-env" }));
+    }
+
+    [Test]
+    public void NormalizeArguments_WithRelativePathContainingDirectorySeparator_PrependsRunVerb()
+    {
+        var normalizedArguments = Bootstrap.NormalizeArguments(["configs\\mocker.qaas"]);
+
+        Assert.That(normalizedArguments, Is.EqualTo(new[] { "run", "configs\\mocker.qaas" }));
     }
 
     [Test]
@@ -220,6 +236,32 @@ public class BootstrapTests
         Assert.That(normalizedArguments, Is.EqualTo(new[] { "serve", "mocker.qaas.yaml" }));
     }
 
+    [Test]
+    public void New_WithConfigurationFileOnly_UsesRunModeWithoutPrintingHelp()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+
+            var output = CaptureConsoleOut(() =>
+            {
+                var mocker = Bootstrap.New([configFile]);
+                Assert.That(mocker, Is.Not.Null);
+            });
+
+            Assert.That(output, Does.Not.Contain("Usage:"));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     private static string CaptureConsoleOut(Action action)
     {
         var originalOut = Console.Out;
@@ -236,5 +278,25 @@ public class BootstrapTests
             Console.SetOut(originalOut);
             Environment.ExitCode = 0;
         }
+    }
+
+    private static string CreateTempDirectory()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "QaaS.Mocker.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        return tempDirectory;
+    }
+
+    private static string WriteFile(string directory, string fileName, string content)
+    {
+        var path = Path.Combine(directory, fileName);
+        File.WriteAllText(path, content);
+        return path;
+    }
+
+    private static void DeleteDirectory(string directory)
+    {
+        if (Directory.Exists(directory))
+            Directory.Delete(directory, recursive: true);
     }
 }

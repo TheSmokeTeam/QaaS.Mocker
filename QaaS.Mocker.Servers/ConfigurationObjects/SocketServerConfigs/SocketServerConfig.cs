@@ -26,7 +26,6 @@ public record SocketServerConfig
 /// <summary>
 /// Ensures controller-visible socket action names remain unique across all endpoints.
 /// </summary>
-[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class UniqueActionNameInAllEndpointsAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
@@ -60,7 +59,6 @@ internal class UniqueActionNameInAllEndpointsAttribute : ValidationAttribute
 /// <summary>
 /// Rejects UDP broadcast endpoints up front because the current socket runtime has no remote destination to send to.
 /// </summary>
-[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class BroadcastOverUdpNotSupportedAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
@@ -86,7 +84,6 @@ internal class BroadcastOverUdpNotSupportedAttribute : ValidationAttribute
 /// <summary>
 /// Rejects protocol/socket-type combinations that would otherwise fail later during socket construction.
 /// </summary>
-[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal class SocketTypeMatchesProtocolAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)

@@ -4,8 +4,13 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
+using Microsoft.Extensions.Configuration;
 using NUnit.Framework;
+using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Framework.SDK.DataSourceObjects;
+using QaaS.Framework.SDK.Hooks.Generator;
+using QaaS.Framework.SDK.Session.DataObjects;
+using QaaS.Framework.SDK.Session.SessionDataObjects;
 using QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 using QaaS.Mocker.Servers.Servers;
 using QaaS.Mocker.Stubs.Stubs;
@@ -281,6 +286,28 @@ public class SocketServerTests
     }
 
     [Test]
+    public async Task GetAcceptedClientChannelAsync_WithTcpEndpoint_AcceptsConnectedClient()
+    {
+        var port = GetFreeTcpPort();
+        var server = CreateServer(port, ProtocolType.Tcp, SocketMethod.Collect);
+        var endpoint = CreateEndpoint(port);
+        InvokeExposeServer(server, endpoint, 1);
+
+        using var client = new TcpClient();
+        var connectTask = client.ConnectAsync(IPAddress.Loopback, port);
+        var channel = await InvokeGetAcceptedClientChannelAsync(server, endpoint, CancellationToken.None);
+        await connectTask;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(channel.Connected, Is.True);
+            Assert.That(channel.RemoteEndPoint, Is.Not.Null);
+        });
+
+        channel.Dispose();
+    }
+
+    [Test]
     public async Task AwaitTriggerToActivateEndpointAction_CompletesAfterActionIsEnabled()
     {
         var server = CreateServer(ProtocolType.Tcp, SocketMethod.Broadcast);
@@ -370,6 +397,36 @@ public class SocketServerTests
     }
 
     [Test]
+    public async Task HandleBroadcast_WithGeneratedPayload_SendsBytesToConnectedClient()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+
+        using var client = new TcpClient();
+        var connectTask = client.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port);
+        using var serverSocket = await listener.AcceptSocketAsync();
+        await connectTask;
+
+        var server = CreateBroadcastServer(7001, Encoding.UTF8.GetBytes("broadcast"));
+
+        await InvokeHandleBroadcast(server, serverSocket, CreateEndpoint(7001));
+
+        var buffer = new byte["broadcast".Length];
+        await client.GetStream().ReadExactlyAsync(buffer);
+
+        Assert.That(Encoding.UTF8.GetString(buffer), Is.EqualTo("broadcast"));
+    }
+
+    [Test]
+    public void HandleBroadcast_WhenSendFails_DoesNotThrow()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        var server = CreateBroadcastServer(7001, Encoding.UTF8.GetBytes("broadcast"));
+
+        Assert.DoesNotThrowAsync(async () => await InvokeHandleBroadcast(server, socket, CreateEndpoint(7001)));
+    }
+
+    [Test]
     public async Task Start_WithTcpEndpointInvalidConfiguration_ThrowsArgumentException()
     {
         var port = GetFreeTcpPort();
@@ -438,6 +495,25 @@ public class SocketServerTests
     }
 
     [Test]
+    public async Task Start_WhenCanceledWithoutFatalException_CompletesGracefully()
+    {
+        var port = GetFreeUdpPort();
+        var server = CreateServer(port, ProtocolType.Udp, SocketMethod.Collect);
+
+        var startTask = Task.Run(() => server.Start());
+        await Task.Delay(150);
+
+        var cancellationTokenSource = (CancellationTokenSource)typeof(SocketServer)
+            .GetField("_cancellationTokenSource", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(server)!;
+        await cancellationTokenSource.CancelAsync();
+
+        var completedTask = await Task.WhenAny(startTask, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.That(completedTask, Is.SameAs(startTask));
+        Assert.DoesNotThrowAsync(async () => await startTask);
+    }
+
+    [Test]
     public void DisposeServerSockets_WithDisposedServerSocket_DoesNotThrow()
     {
         var server = CreateServer(7001, ProtocolType.Tcp, SocketMethod.Collect);
@@ -476,6 +552,25 @@ public class SocketServerTests
         Assert.That(description, Is.EqualTo("<unresolved>"));
     }
 
+    [Test]
+    public async Task TrackProcessingTask_RemovesCompletedTaskFromTrackingCollection()
+    {
+        var server = CreateServer(ProtocolType.Tcp, SocketMethod.Collect);
+        var task = Task.CompletedTask;
+
+        typeof(SocketServer)
+            .GetMethod("TrackProcessingTask", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(server, [task]);
+
+        await Task.Delay(50);
+
+        var trackedTasks = (System.Collections.Concurrent.ConcurrentDictionary<Task, byte>)typeof(SocketServer)
+            .GetField("_activeProcessingTasks", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(server)!;
+
+        Assert.That(trackedTasks, Is.Empty);
+    }
+
     private static IPEndPoint CreateEndpoint() => CreateEndpoint(7001);
 
     private static IPEndPoint CreateEndpoint(int port) => new(IPAddress.Parse("0.0.0.0"), port);
@@ -488,6 +583,15 @@ public class SocketServerTests
             .Invoke(server, [endpoint, cancellationToken])!;
 
         return await task;
+    }
+
+    private static async Task InvokeHandleBroadcast(SocketServer server, Socket socket, IPEndPoint endpoint)
+    {
+        var task = (Task)typeof(SocketServer)
+            .GetMethod("HandleBroadcast", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(server, [socket, endpoint])!;
+
+        await task;
     }
 
     private static async Task InvokeAwaitTriggerToActivateEndpointAction(SocketServer server, IPEndPoint endpoint)
@@ -524,6 +628,13 @@ public class SocketServerTests
             .Invoke(server, [socket, timeoutMs, bufferSizeBytes, localEndpoint])!;
     }
 
+    private static void InvokeExposeServer(SocketServer server, IPEndPoint endpoint, int backlog)
+    {
+        typeof(SocketServer)
+            .GetMethod("ExposeServer", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(server, [endpoint, backlog]);
+    }
+
     private static SocketServer CreateServer(int port, ProtocolType protocolType, SocketMethod method)
     {
         return new SocketServer(
@@ -536,6 +647,33 @@ public class SocketServerTests
     private static SocketServer CreateServer(ProtocolType protocolType, SocketMethod method)
     {
         return CreateServer(7001, protocolType, method);
+    }
+
+    private static SocketServer CreateBroadcastServer(int port, params byte[][] payloads)
+    {
+        return new SocketServer(
+            new SocketServerConfig
+            {
+                Endpoints =
+                [
+                    new SocketEndpointConfig
+                    {
+                        Port = port,
+                        ProtocolType = ProtocolType.Tcp,
+                        SocketType = SocketType.Stream,
+                        TimeoutMs = 100,
+                        Action = new SocketActionConfig
+                        {
+                            Name = "BroadcastA",
+                            Method = SocketMethod.Broadcast,
+                            DataSourceName = "ds1"
+                        }
+                    }
+                ]
+            },
+            Globals.Logger,
+            ImmutableList<TransactionStub>.Empty,
+            [CreateDataSource("ds1", payloads.Select(payload => new Data<object> { Body = payload }).ToArray())]);
     }
 
     private static SocketServerConfig CreateConfig(int port, ProtocolType protocolType, SocketMethod method)
@@ -572,5 +710,30 @@ public class SocketServerTests
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         return ((IPEndPoint)socket.LocalEndPoint!).Port;
+    }
+
+    private static DataSource CreateDataSource(string name, params Data<object>[] data)
+    {
+        return new DataSource
+        {
+            Name = name,
+            DataSourceList = ImmutableList<DataSource>.Empty,
+            Generator = new DelegateGenerator(data)
+        };
+    }
+
+    private sealed class DelegateGenerator(IEnumerable<Data<object>> generatedData) : IGenerator
+    {
+        public Context Context { get; set; } = null!;
+
+        public List<System.ComponentModel.DataAnnotations.ValidationResult>? LoadAndValidateConfiguration(IConfiguration configuration)
+            => [];
+
+        public IEnumerable<Data<object>> Generate(
+            IImmutableList<SessionData> sessionDataList,
+            IImmutableList<DataSource> dataSourceList)
+        {
+            return generatedData;
+        }
     }
 }

@@ -11,7 +11,6 @@ namespace QaaS.Mocker.Stubs.ConfigurationObjects;
 /// <summary>
 /// Provides a fluent API for building <see cref="TransactionStubConfig"/> instances in code.
 /// </summary>
-[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public class TransactionStubBuilder
 {
     /// <summary>

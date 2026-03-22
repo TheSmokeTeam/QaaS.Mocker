@@ -133,6 +133,29 @@ public class ExecutionBranchTests
         Assert.Throws<ArgumentOutOfRangeException>(() => execution.Start());
     }
 
+    [Test]
+    public void Dispose_DoesNotThrow()
+    {
+        var execution = CreateExecution(ExecutionMode.Run);
+
+        Assert.DoesNotThrow(() => execution.Dispose());
+    }
+
+    [Test]
+    public void SystemExecutionConsole_ReportsConsoleRedirectState()
+    {
+        Assert.That(SystemExecutionConsole.Instance.IsInputRedirected, Is.EqualTo(Console.IsInputRedirected));
+    }
+
+    [Test]
+    public void SystemExecutionConsole_ReadKey_WithRedirectedInput_ThrowsInvalidOperationException()
+    {
+        if (!Console.IsInputRedirected)
+            Assert.Ignore("Console.ReadKey only throws predictably under redirected input.");
+
+        Assert.Throws<InvalidOperationException>(() => SystemExecutionConsole.Instance.ReadKey(intercept: true));
+    }
+
     private static Execution CreateExecution(
         ExecutionMode mode,
         Context? context = null,
