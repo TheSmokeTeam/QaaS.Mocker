@@ -26,4 +26,9 @@
       <None Include="..\README.md" Pack="true" PackagePath="\" Link="README.md" />
     </ItemGroup>
 
+    <ItemGroup>
+      <InternalsVisibleTo Include="QaaS.Mocker" />
+      <InternalsVisibleTo Include="QaaS.Mocker.Stubs.Tests" />
+    </ItemGroup>
+
 </Project>

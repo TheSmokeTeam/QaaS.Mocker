@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net.Sockets;
+using System.Reflection;
 using NUnit.Framework;
+using QaaS.Framework.Configurations;
 using QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 
 namespace QaaS.Mocker.Servers.Tests.ConfigurationTests;
@@ -117,9 +119,9 @@ public class SocketServerConfigValidationTests
 
     private static List<ValidationResult> Validate(SocketServerConfig config)
     {
-        var context = new ValidationContext(config);
         var results = new List<ValidationResult>();
-        _ = Validator.TryValidateObject(config, context, results, validateAllProperties: true);
+        _ = ValidationUtils.TryValidateObjectRecursive(config, results,
+            bindingFlags: BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         return results;
     }
 }

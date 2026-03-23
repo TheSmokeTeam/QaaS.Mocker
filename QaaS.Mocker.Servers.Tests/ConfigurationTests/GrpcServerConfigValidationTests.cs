@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using System.Reflection;
 using NUnit.Framework;
+using QaaS.Framework.Configurations;
 using QaaS.Mocker.Servers.ConfigurationObjects.GrpcServerConfigs;
 
 namespace QaaS.Mocker.Servers.Tests.ConfigurationTests;
@@ -70,9 +72,9 @@ public class GrpcServerConfigValidationTests
 
     private static List<ValidationResult> Validate(GrpcServerConfig config)
     {
-        var context = new ValidationContext(config);
         var results = new List<ValidationResult>();
-        _ = Validator.TryValidateObject(config, context, results, validateAllProperties: true);
+        _ = ValidationUtils.TryValidateObjectRecursive(config, results,
+            bindingFlags: BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         return results;
     }
 }

@@ -39,5 +39,7 @@ public record SocketEndpointConfig
     public int? TimeoutMs { get; set; }
 
     [Required, Description("The socket action to perform on the client connection endpoint")]
-    public SocketActionConfig? Action { get; set; }
+    internal SocketActionConfig? Action { get; set; }
+
+    public SocketActionConfig? ReadAction() => Action;
 }

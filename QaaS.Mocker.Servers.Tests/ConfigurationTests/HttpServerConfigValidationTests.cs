@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using System.Reflection;
 using NUnit.Framework;
+using QaaS.Framework.Configurations;
 using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 using HttpMethod = QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs.HttpMethod;
 
@@ -197,9 +199,9 @@ public class HttpServerConfigValidationTests
 
     private static List<ValidationResult> Validate(HttpServerConfig config)
     {
-        var context = new ValidationContext(config);
         var results = new List<ValidationResult>();
-        _ = Validator.TryValidateObject(config, context, results, validateAllProperties: true);
+        _ = ValidationUtils.TryValidateObjectRecursive(config, results,
+            bindingFlags: BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         return results;
     }
 }
