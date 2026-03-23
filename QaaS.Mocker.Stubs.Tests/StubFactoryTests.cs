@@ -163,7 +163,8 @@ public class StubFactoryTests
             Name = "StubA",
             Processor = "ProcessorA"
         };
-        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.RequestBodyDeserialization))!
+        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.RequestBodyDeserialization),
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
             .SetValue(config, CreateNonNullOption(nameof(TransactionStubConfig.RequestBodyDeserialization)));
 
         var factory = new StubFactory(
@@ -187,7 +188,8 @@ public class StubFactoryTests
             Name = "StubA",
             Processor = "ProcessorA"
         };
-        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.ResponseBodySerialization))!
+        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.ResponseBodySerialization),
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
             .SetValue(config, CreateNonNullOption(nameof(TransactionStubConfig.ResponseBodySerialization)));
 
         var factory = new StubFactory(
