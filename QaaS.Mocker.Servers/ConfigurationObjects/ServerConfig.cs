@@ -13,13 +13,16 @@ namespace QaaS.Mocker.Servers.ConfigurationObjects;
 public record ServerConfig : IValidatableObject
 {
     [Description("'HTTP' server type configuration")]
-    public HttpServerConfig? Http { get; set; }
-
+    public HttpServerConfig? Http { get; internal set; }
     [Description("'gRPC' server type configuration")]
-    public GrpcServerConfig? Grpc { get; set; }
-
+    public GrpcServerConfig? Grpc { get; internal set; }
     [Description("Socket streaming server typed configuration")]
-    public SocketServerConfig? Socket { get; set; }
+    public SocketServerConfig? Socket { get; internal set; }
+    public HttpServerConfig? ReadHttp() => Http;
+
+    public GrpcServerConfig? ReadGrpc() => Grpc;
+
+    public SocketServerConfig? ReadSocket() => Socket;
 
     /// <summary>
     /// Resolves the configured server protocol from the configured transport section.

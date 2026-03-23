@@ -13,16 +13,6 @@ namespace QaaS.Mocker.Tests.ExecutionTests;
 public class ExecutionBranchTests
 {
     [Test]
-    public void Start_WithLintMode_ReturnsZero()
-    {
-        var execution = CreateExecution(ExecutionMode.Lint);
-
-        var result = execution.Start();
-
-        Assert.That(result, Is.EqualTo(0));
-    }
-
-    [Test]
     public void Start_WithTemplateMode_WritesTemplateToRequestedFolder()
     {
         var tempFolder = Path.Combine("BuildOutput", "TemplateTests", Guid.NewGuid().ToString("N"));
@@ -141,6 +131,29 @@ public class ExecutionBranchTests
         var execution = CreateExecution((ExecutionMode)999);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => execution.Start());
+    }
+
+    [Test]
+    public void Dispose_DoesNotThrow()
+    {
+        var execution = CreateExecution(ExecutionMode.Run);
+
+        Assert.DoesNotThrow(() => execution.Dispose());
+    }
+
+    [Test]
+    public void SystemExecutionConsole_ReportsConsoleRedirectState()
+    {
+        Assert.That(SystemExecutionConsole.Instance.IsInputRedirected, Is.EqualTo(Console.IsInputRedirected));
+    }
+
+    [Test]
+    public void SystemExecutionConsole_ReadKey_WithRedirectedInput_ThrowsInvalidOperationException()
+    {
+        if (!Console.IsInputRedirected)
+            Assert.Ignore("Console.ReadKey only throws predictably under redirected input.");
+
+        Assert.Throws<InvalidOperationException>(() => SystemExecutionConsole.Instance.ReadKey(intercept: true));
     }
 
     private static Execution CreateExecution(

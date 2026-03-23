@@ -20,7 +20,7 @@
 
     <ItemGroup>
       <PackageReference Include="Autofac" Version="9.1.0" />
-      <PackageReference Include="QaaS.Mocker.CommunicationObjects" Version="2.0.2" />
+    <PackageReference Include="QaaS.Mocker.CommunicationObjects" Version="2.0.3" />
       <PackageReference Include="StackExchange.Redis" Version="2.12.1" />
     </ItemGroup>
 
@@ -30,6 +30,10 @@
 
     <ItemGroup>
       <None Include="..\README.md" Pack="true" PackagePath="\" Link="README.md" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <InternalsVisibleTo Include="QaaS.Mocker.Controller.Tests" />
     </ItemGroup>
 
 </Project>

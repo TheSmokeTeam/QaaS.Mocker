@@ -33,6 +33,33 @@ public class HttpExtensionsTests
         Assert.Throws<ArgumentException>(() => "BREW".ToHttpMethodEnum());
     }
 
+    [TestCase("")]
+    [TestCase("X")]
+    [TestCase("BAD")]
+    [TestCase("BREWER")]
+    [TestCase("WHATEVER")]
+    public void ToHttpMethodEnum_WithUnsupportedMethodShapes_ThrowsArgumentException(string input)
+    {
+        Assert.Throws<ArgumentException>(() => input.ToHttpMethodEnum());
+    }
+
+    [TestCase("GEQ")]
+    [TestCase("POZT")]
+    [TestCase("PAXCH")]
+    [TestCase("DELETF")]
+    [TestCase("HEAQ")]
+    [TestCase("OPTIONA")]
+    [TestCase("TRACG")]
+    [TestCase("CONNECX")]
+    [TestCase("GETT")]
+    [TestCase("HEADS")]
+    [TestCase("PATCHS")]
+    [TestCase("TRACES")]
+    public void ToHttpMethodEnum_WithNearMatchUnsupportedMethod_ThrowsArgumentException(string input)
+    {
+        Assert.Throws<ArgumentException>(() => input.ToHttpMethodEnum());
+    }
+
     [Test]
     public async Task ConstructRequestDataAsync_CopiesBodyHeadersAndUri()
     {
@@ -92,6 +119,62 @@ public class HttpExtensionsTests
     }
 
     [Test]
+    public async Task HandleResponseDataAndCloseAsync_WithOnlyResponseHeaders_AppliesHeaders()
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+
+        var responseData = new Data<object>
+        {
+            Body = Array.Empty<byte>(),
+            MetaData = new MetaData
+            {
+                Http = new Http
+                {
+                    ResponseHeaders = new Dictionary<string, string> { ["x-response"] = "one" }
+                }
+            }
+        };
+
+        await context.Response.HandleResponseDataAndCloseAsync(responseData, HttpMethod.Get);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
+            Assert.That(context.Response.Headers["x-response"].ToString(), Is.EqualTo("one"));
+            Assert.That(context.Response.Headers.ContainsKey("x-legacy"), Is.False);
+        });
+    }
+
+    [Test]
+    public async Task HandleResponseDataAndCloseAsync_WithOnlyLegacyHeaders_AppliesHeaders()
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+
+        var responseData = new Data<object>
+        {
+            Body = Array.Empty<byte>(),
+            MetaData = new MetaData
+            {
+                Http = new Http
+                {
+                    Headers = new Dictionary<string, string> { ["x-legacy"] = "two" }
+                }
+            }
+        };
+
+        await context.Response.HandleResponseDataAndCloseAsync(responseData, HttpMethod.Get);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
+            Assert.That(context.Response.Headers.ContainsKey("x-response"), Is.False);
+            Assert.That(context.Response.Headers["x-legacy"].ToString(), Is.EqualTo("two"));
+        });
+    }
+
+    [Test]
     public async Task HandleResponseDataAndCloseAsync_WithHeadMethod_DoesNotWriteBody()
     {
         var context = new DefaultHttpContext();
@@ -106,5 +189,71 @@ public class HttpExtensionsTests
         await context.Response.HandleResponseDataAndCloseAsync(responseData, HttpMethod.Head);
 
         Assert.That(context.Response.Body.Length, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task HandleResponseDataAndCloseAsync_WithHttpMetadataAndNoHeaders_UsesDefaultStatusCode()
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+
+        await context.Response.HandleResponseDataAndCloseAsync(
+            new Data<object>
+            {
+                Body = Array.Empty<byte>(),
+                MetaData = new MetaData { Http = new Http() }
+            },
+            HttpMethod.Get);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
+            Assert.That(context.Response.Headers, Is.Empty);
+            Assert.That(context.Response.Body.Length, Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public async Task HandleResponseDataAndCloseAsync_WithMetadataWithoutHttpObject_UsesDefaults()
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+
+        await context.Response.HandleResponseDataAndCloseAsync(
+            new Data<object>
+            {
+                Body = Array.Empty<byte>(),
+                MetaData = new MetaData { Http = null! }
+            },
+            HttpMethod.Get);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
+            Assert.That(context.Response.Headers, Is.Empty);
+            Assert.That(context.Response.Body.Length, Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public async Task HandleResponseDataAndCloseAsync_WithoutHttpMetadata_UsesDefaults()
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+
+        await context.Response.HandleResponseDataAndCloseAsync(
+            new Data<object> { Body = "not-bytes" },
+            HttpMethod.Get);
+
+        context.Response.Body.Position = 0;
+        using var reader = new StreamReader(context.Response.Body, Encoding.UTF8, leaveOpen: true);
+        var body = await reader.ReadToEndAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
+            Assert.That(context.Response.Headers, Is.Empty);
+            Assert.That(body, Is.Empty);
+        });
     }
 }

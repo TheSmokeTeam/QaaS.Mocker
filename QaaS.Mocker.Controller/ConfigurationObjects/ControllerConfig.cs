@@ -18,5 +18,6 @@ public record ControllerConfig
     /// Gets or sets the Redis connection settings used by the controller.
     /// </summary>
     [Description("The Server Controller Redis API")]
-    public RedisConfig? Redis { get; set; }
+    public RedisConfig? Redis { get; internal set; }
+    public RedisConfig? ReadRedis() => Redis;
 }

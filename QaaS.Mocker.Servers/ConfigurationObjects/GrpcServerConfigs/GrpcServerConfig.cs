@@ -15,7 +15,8 @@ public record GrpcServerConfig : IValidatableObject
 
     [Required, MinLength(1), UniquePropertyInEnumerable(nameof(GrpcServiceConfig.ServiceName)),
      Description("The grpc services and rpc actions that are handled by the mocker")]
-    public GrpcServiceConfig[] Services { get; set; } = [];
+    public GrpcServiceConfig[] Services { get; internal set; } = [];
+    public IReadOnlyList<GrpcServiceConfig> ReadServices() => Services;
 
     [Description("To run the server with TLS credentials"), DefaultValue(false)]
     public bool IsSecuredSchema { get; set; }
@@ -36,7 +37,7 @@ public record GrpcServerConfig : IValidatableObject
     public string? CertificatePassword { get; set; }
 
     /// <summary>
-    /// Validates TLS-specific settings so lint mode can fail before server startup.
+    /// Validates TLS-specific settings before server startup.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

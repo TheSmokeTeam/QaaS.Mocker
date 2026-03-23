@@ -50,6 +50,20 @@ public class CommandLinePathNormalizerTests
     }
 
     [Test]
+    public void Normalize_PreservesRootedConfigurationFilePath()
+    {
+        using var sandbox = new TemporaryDirectorySandbox();
+        var rootedConfigPath = sandbox.CreateCallerFile("configs\\custom.yaml");
+
+        var normalizedArguments = CommandLinePathNormalizer.Normalize(
+            ["run", rootedConfigPath],
+            sandbox.CallerDirectory,
+            sandbox.FallbackDirectory);
+
+        Assert.That(normalizedArguments, Is.EqualTo(new[] { "run", rootedConfigPath }));
+    }
+
+    [Test]
     public void Normalize_RewritesOutputFolderAgainstCallerDirectory()
     {
         using var sandbox = new TemporaryDirectorySandbox();
@@ -65,6 +79,23 @@ public class CommandLinePathNormalizerTests
         Assert.That(
             normalizedArguments,
             Is.EqualTo(new[] { "template", exampleConfigPath, "--output-folder", expectedOutputPath, "--no-env" }));
+    }
+
+    [Test]
+    public void Normalize_PreservesRootedOutputFolderPath()
+    {
+        using var sandbox = new TemporaryDirectorySandbox();
+        var exampleConfigPath = sandbox.CreateFallbackFile("mocker.qaas.yaml");
+        var rootedOutputPath = Path.GetFullPath("artifacts\\templates", sandbox.CallerDirectory);
+
+        var normalizedArguments = CommandLinePathNormalizer.Normalize(
+            ["template", "mocker.qaas.yaml", "--output-folder", rootedOutputPath],
+            sandbox.CallerDirectory,
+            sandbox.FallbackDirectory);
+
+        Assert.That(
+            normalizedArguments,
+            Is.EqualTo(new[] { "template", exampleConfigPath, "--output-folder", rootedOutputPath }));
     }
 
     [Test]
@@ -132,17 +163,16 @@ public class CommandLinePathNormalizerTests
     }
 
     [Test]
-    public void Normalize_SupportsEqualsSyntax_AndDoesNotDuplicateNoEnv()
+    public void Normalize_PreservesUnknownLeadingCommand_AndDoesNotDuplicateNoEnv()
     {
         using var sandbox = new TemporaryDirectorySandbox();
-        var callerConfigPath = sandbox.CreateCallerFile("configs\\custom.yaml");
         var overwriteFilePath = sandbox.CreateCallerFile("overrides\\override.yaml");
         var overwriteFolderPath = sandbox.CreateCallerDirectory("folders");
         var expectedOutputPath = Path.GetFullPath("artifacts\\templates", sandbox.CallerDirectory);
 
         var normalizedArguments = CommandLinePathNormalizer.Normalize(
             [
-                "-m=template",
+                "serve",
                 "configs\\custom.yaml",
                 "-w=overrides\\override.yaml",
                 "-f=folders",
@@ -157,8 +187,8 @@ public class CommandLinePathNormalizerTests
             normalizedArguments,
             Is.EqualTo(new[]
             {
-                "-m=template",
-                callerConfigPath,
+                "serve",
+                sandbox.CallerRelativePath("configs\\custom.yaml"),
                 "-w=" + overwriteFilePath,
                 "-f=" + overwriteFolderPath,
                 "-o=" + expectedOutputPath,
@@ -188,6 +218,8 @@ public class CommandLinePathNormalizerTests
         public string CreateFallbackFile(string relativePath) => CreateFile(FallbackDirectory, relativePath);
 
         public string CreateCallerDirectory(string relativePath) => CreateDirectory(CallerDirectory, relativePath);
+
+        public string CallerRelativePath(string relativePath) => Path.GetFullPath(relativePath, CallerDirectory);
 
         public void Dispose()
         {

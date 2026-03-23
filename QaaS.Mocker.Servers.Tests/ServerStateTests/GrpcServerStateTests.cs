@@ -1,12 +1,14 @@
 using System.Collections.Immutable;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using NUnit.Framework;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Framework.SDK.DataSourceObjects;
 using QaaS.Framework.SDK.Hooks.Processor;
 using QaaS.Framework.SDK.Session.DataObjects;
+using QaaS.Mocker.Servers.Actions;
 using QaaS.Mocker.Servers.ConfigurationObjects.GrpcServerConfigs;
 using QaaS.Mocker.Servers.Exceptions;
 using QaaS.Mocker.Servers.ServerStates;
@@ -108,6 +110,17 @@ public class GrpcServerStateTests
     }
 
     [Test]
+    public void ChangeActionStub_WhenStubDoesNotExist_Throws()
+    {
+        var state = CreateState(
+            ("MainStub", _ => CreateResponse("main")),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => CreateResponse("internal")));
+
+        Assert.Throws<StubNotLoadedException>(() => state.ChangeActionStub("EchoAction", "MissingStub"));
+    }
+
+    [Test]
     public void TriggerAction_ThrowsNotImplementedException()
     {
         var state = CreateState(
@@ -135,6 +148,79 @@ public class GrpcServerStateTests
         {
             Assert.That(cache.RetrieveFirstOrDefaultStringInput(), Is.Not.Null);
             Assert.That(cache.RetrieveFirstOrDefaultStringOutput(), Is.Not.Null);
+        });
+    }
+
+    [Test]
+    public void HasAction_ReturnsExpectedValue()
+    {
+        var state = CreateState(
+            ("MainStub", _ => CreateResponse("main")),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => CreateResponse("internal")));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.HasAction("EchoAction"), Is.True);
+            Assert.That(state.HasAction("missing"), Is.False);
+        });
+    }
+
+    [Test]
+    public void ResolveActionName_WithNullStoredActionName_FallsBackToNotFoundAction()
+    {
+        var state = CreateState(
+            ("MainStub", _ => CreateResponse("main")),
+            ("NotFoundStub", _ => CreateResponse("not-found")),
+            ("InternalStub", _ => CreateResponse("internal")));
+        var rpcToActionField = typeof(GrpcServerState)
+            .GetField("_rpcToAction", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var rpcToAction = (IDictionary<string, ActionToTransactionStub>)rpcToActionField.GetValue(state)!;
+        rpcToAction["EchoService/Echo"].ActionName = null;
+        var resolveActionNameMethod = typeof(GrpcServerState)
+            .GetMethod("ResolveActionName", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        var actionName = (string)resolveActionNameMethod.Invoke(state, ["EchoService", "Echo"])!;
+
+        Assert.That(actionName, Is.EqualTo("NotFoundTransactionStub"));
+    }
+
+    [Test]
+    public void Constructor_WithUnnamedAction_UsesServiceAndRpcFallbackActionName()
+    {
+        GrpcServiceConfig[] services =
+        [
+            new()
+            {
+                ServiceName = "EchoService",
+                ProtoNamespace = "Tests",
+                AssemblyName = "Tests",
+                Actions =
+                [
+                    new GrpcEndpointActionConfig
+                    {
+                        Name = null,
+                        RpcName = "Echo",
+                        TransactionStubName = "MainStub"
+                    }
+                ]
+            }
+        ];
+
+        var state = new GrpcServerState(
+            Globals.Logger,
+            ImmutableList.Create(
+                CreateStub("MainStub", _ => CreateResponse("main")),
+                CreateStub("NotFoundStub", _ => CreateResponse("not-found")),
+                CreateStub("InternalStub", _ => CreateResponse("internal"))),
+            "NotFoundStub",
+            "InternalStub",
+            services);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.HasAction("EchoService.Echo"), Is.True);
+            Assert.That(state.HasAction("EchoAction"), Is.False);
         });
     }
 

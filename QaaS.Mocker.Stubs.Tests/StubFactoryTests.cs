@@ -126,9 +126,11 @@ public class StubFactoryTests
             Name = "StubA",
             Processor = "ProcessorA"
         };
-        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.RequestBodyDeserialization))!
+        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.RequestBodyDeserialization),
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
             .SetValue(config, CreateNonNullOption(nameof(TransactionStubConfig.RequestBodyDeserialization)));
-        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.ResponseBodySerialization))!
+        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.ResponseBodySerialization),
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
             .SetValue(config, CreateNonNullOption(nameof(TransactionStubConfig.ResponseBodySerialization)));
 
         var factory = new StubFactory(
@@ -144,16 +146,69 @@ public class StubFactoryTests
         Assert.Multiple(() =>
         {
             Assert.That(stub.Name, Is.EqualTo("StubA"));
-            Assert.That(typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.RequestBodyDeserialization))!
+            Assert.That(typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.RequestBodyDeserialization),
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
                 .GetValue(config), Is.Not.Null);
-            Assert.That(typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.ResponseBodySerialization))!
+            Assert.That(typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.ResponseBodySerialization),
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
                 .GetValue(config), Is.Not.Null);
         });
     }
 
+    [Test]
+    public void Build_WithOnlyRequestDeserializerConfiguration_InitializesDeserializer()
+    {
+        var config = new TransactionStubConfig
+        {
+            Name = "StubA",
+            Processor = "ProcessorA"
+        };
+        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.RequestBodyDeserialization),
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
+            .SetValue(config, CreateNonNullOption(nameof(TransactionStubConfig.RequestBodyDeserialization)));
+
+        var factory = new StubFactory(
+            Globals.Context,
+            [config],
+            new List<KeyValuePair<string, ITransactionProcessor>>
+            {
+                new("StubA", new Mock<ITransactionProcessor>().Object)
+            });
+
+        var stub = factory.Build(ImmutableList<DataSource>.Empty).Single(instance => instance.Name == "StubA");
+
+        Assert.That(stub.Name, Is.EqualTo("StubA"));
+    }
+
+    [Test]
+    public void Build_WithOnlyResponseSerializerConfiguration_InitializesSerializer()
+    {
+        var config = new TransactionStubConfig
+        {
+            Name = "StubA",
+            Processor = "ProcessorA"
+        };
+        typeof(TransactionStubConfig).GetProperty(nameof(TransactionStubConfig.ResponseBodySerialization),
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
+            .SetValue(config, CreateNonNullOption(nameof(TransactionStubConfig.ResponseBodySerialization)));
+
+        var factory = new StubFactory(
+            Globals.Context,
+            [config],
+            new List<KeyValuePair<string, ITransactionProcessor>>
+            {
+                new("StubA", new Mock<ITransactionProcessor>().Object)
+            });
+
+        var stub = factory.Build(ImmutableList<DataSource>.Empty).Single(instance => instance.Name == "StubA");
+
+        Assert.That(stub.Name, Is.EqualTo("StubA"));
+    }
+
     private static object CreateNonNullOption(string propertyName)
     {
-        var property = typeof(TransactionStubConfig).GetProperty(propertyName)!;
+        var property = typeof(TransactionStubConfig).GetProperty(propertyName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
         var option = Activator.CreateInstance(property.PropertyType!)!;
         foreach (var candidateProperty in property.PropertyType!.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                      .Where(instance => instance.CanWrite && instance.PropertyType.IsEnum))

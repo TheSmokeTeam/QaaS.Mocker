@@ -4,15 +4,22 @@ using System.ComponentModel.DataAnnotations;
 using Autofac;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using NUnit.Framework;
 using QaaS.Framework.SDK.DataSourceObjects;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Framework.SDK.Extensions;
 using QaaS.Framework.SDK.Hooks.Generator;
+using QaaS.Framework.SDK.Hooks.Processor;
 using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Framework.SDK.Session.SessionDataObjects;
 using QaaS.Framework.SDK.Session.SessionDataObjects.RunningSessionsObjects;
+using QaaS.Mocker.Servers.ConfigurationObjects;
+using QaaS.Mocker.Servers.ConfigurationObjects.GrpcServerConfigs;
+using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
+using QaaS.Mocker.Servers.ConfigurationObjects.SocketServerConfigs;
 using QaaS.Mocker.Stubs.ConfigurationObjects;
+using HttpMethod = QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs.HttpMethod;
 
 namespace QaaS.Mocker.Tests.ExecutionTests;
 
@@ -148,7 +155,7 @@ public class ExecutionBuilderBranchTests
             .Named("SourceA")
             .HookNamed("DummyGenerator");
         typeof(DataSourceBuilder)
-            .GetProperty("GeneratorConfiguration", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetProperty("GeneratorConfiguration", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
             .SetValue(dataSourceBuilder, generatorConfiguration);
 
         var configuration = (IConfiguration)typeof(ExecutionBuilder)
@@ -265,6 +272,19 @@ public class ExecutionBuilderBranchTests
     }
 
     [Test]
+    public void LoadRuntimeGenerators_WithNullDataSources_ReturnsEmptyList()
+    {
+        var builder = new TestExecutionBuilder
+        {
+            DataSources = null!
+        };
+
+        var generators = builder.LoadRuntimeGenerators();
+
+        Assert.That(generators, Is.Empty);
+    }
+
+    [Test]
     public void BuilderContextFluentMethods_CloneAndUpdateExecutionContext()
     {
         var originalConfiguration = new ConfigurationBuilder()
@@ -314,6 +334,266 @@ public class ExecutionBuilderBranchTests
         });
     }
 
+    [Test]
+    public void ResolveProcessorTypeName_WithQualifiedName_ReturnsConfiguredValue()
+    {
+        var fullName = typeof(ExecutionBuilderCrudTests.CodeFirstProcessor).FullName!;
+
+        var resolved = InvokeResolveProcessorTypeName(fullName);
+
+        Assert.That(resolved, Is.EqualTo(fullName));
+    }
+
+    [Test]
+    public void ResolveProcessorTypeName_WithWhitespace_ReturnsConfiguredValue()
+    {
+        var resolved = InvokeResolveProcessorTypeName(" ");
+
+        Assert.That(resolved, Is.EqualTo(" "));
+    }
+
+    [Test]
+    public void ResolveProcessorTypeName_WithUniqueShortName_ReturnsFullName()
+    {
+        var resolved = InvokeResolveProcessorTypeName(nameof(ExecutionBuilderCrudTests.CodeFirstProcessor));
+
+        Assert.That(resolved, Is.EqualTo(typeof(ExecutionBuilderCrudTests.CodeFirstProcessor).FullName));
+    }
+
+    [Test]
+    public void GetLoadableTypes_WhenAssemblyThrowsReflectionTypeLoadException_ReturnsAvailableTypes()
+    {
+        var assembly = new Mock<Assembly>();
+        assembly.Setup(instance => instance.GetTypes()).Throws(
+            new ReflectionTypeLoadException(
+                [typeof(DummyGenerator), null!],
+                [new TypeLoadException("boom"), new TypeLoadException("ignored")]));
+
+        var types = InvokeGetLoadableTypes(assembly.Object).ToArray();
+
+        Assert.That(types, Is.EqualTo(new[] { typeof(DummyGenerator) }));
+    }
+
+    [Test]
+    public void ResolveActionNames_WithHttpGrpcAndSocketServers_UsesConfiguredAndFallbackNames()
+    {
+        var actionNames = InvokeResolveActionNames(
+        [
+            new ServerConfig
+            {
+                Http = new HttpServerConfig
+                {
+                    Endpoints =
+                    [
+                        new HttpEndpointConfig
+                        {
+                            Path = "/health",
+                            Actions =
+                            [
+                                new HttpEndpointActionConfig
+                                {
+                                    Name = "HttpAction",
+                                    Method = HttpMethod.Get,
+                                    TransactionStubName = "StubA"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+            new ServerConfig
+            {
+                Grpc = new GrpcServerConfig
+                {
+                    Services =
+                    [
+                        new GrpcServiceConfig
+                        {
+                            ServiceName = "EchoGrpcService",
+                            Actions =
+                            [
+                                new GrpcEndpointActionConfig
+                                {
+                                    Name = null,
+                                    RpcName = "Echo",
+                                    TransactionStubName = "StubA"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+            new ServerConfig
+            {
+                Socket = new SocketServerConfig
+                {
+                    Endpoints =
+                    [
+                        new SocketEndpointConfig
+                        {
+                            Port = 19090,
+                            ProtocolType = System.Net.Sockets.ProtocolType.Tcp,
+                            SocketType = System.Net.Sockets.SocketType.Stream,
+                            Action = new SocketActionConfig
+                            {
+                                Name = "SocketAction",
+                                Method = SocketMethod.Collect
+                            }
+                        }
+                    ]
+                }
+            }
+        ]).ToArray();
+
+        Assert.That(actionNames, Is.EqualTo(new[] { "HttpAction", "EchoGrpcService.Echo", "SocketAction" }));
+    }
+
+    [Test]
+    public void ResolveServerTypesSummary_WithMultipleServers_ReturnsCommaSeparatedTypes()
+    {
+        var summary = InvokeResolveServerTypesSummary(
+        [
+            BuildHttpServer("HttpAction"),
+            BuildSocketServer("SocketAction")
+        ]);
+
+        Assert.That(summary, Is.EqualTo("Http, Socket"));
+    }
+
+    [Test]
+    public void Validate_WithDuplicateActionNamesAcrossServers_ReturnsSortedDuplicates()
+    {
+        var builder = new ExecutionBuilder
+        {
+            Servers =
+            [
+                BuildSocketServer("Zulu"),
+                BuildHttpServer("alpha"),
+                BuildSocketServer("alpha"),
+                BuildHttpServer("Zulu")
+            ]
+        };
+
+        var results = builder.Validate(new ValidationContext(builder)).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(results, Has.Length.EqualTo(1));
+            Assert.That(results.Single().ErrorMessage, Does.StartWith("Action names must be unique across 'Servers'. Duplicates: "));
+            Assert.That(results.Single().ErrorMessage, Does.Contain("alpha"));
+            Assert.That(results.Single().ErrorMessage, Does.Contain("Zulu"));
+        });
+    }
+
+    [Test]
+    public void EnsureDefaultMetaData_WhenMetadataAlreadyExists_LeavesMetadataAccessible()
+    {
+        var builder = new TestExecutionBuilder();
+        var context = builder.GetInternalContext();
+        InvokeEnsureDefaultMetaData(builder);
+
+        InvokeEnsureDefaultMetaData(builder);
+
+        Assert.That(context.GetMetaDataFromContext(), Is.Not.Null);
+    }
+
+    [Test]
+    public void EnsureDefaultMetaData_WhenStoredMetadataIsInvalid_ReplacesValue()
+    {
+        var builder = new TestExecutionBuilder();
+        var context = builder.GetInternalContext();
+        context.InsertValueIntoGlobalDictionary(context.GetMetaDataPath(), "invalid");
+
+        Assert.DoesNotThrow(() => InvokeEnsureDefaultMetaData(builder));
+        Assert.That(context.GetMetaDataFromContext(), Is.Not.Null);
+    }
+
+    private static string InvokeResolveProcessorTypeName(string configuredProcessor)
+    {
+        return (string)typeof(ExecutionBuilder)
+            .GetMethod("ResolveProcessorTypeName", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [configuredProcessor])!;
+    }
+
+    private static IEnumerable<Type> InvokeGetLoadableTypes(Assembly assembly)
+    {
+        return (IEnumerable<Type>)typeof(ExecutionBuilder)
+            .GetMethod("GetLoadableTypes", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [assembly])!;
+    }
+
+    private static IEnumerable<string> InvokeResolveActionNames(IEnumerable<ServerConfig> servers)
+    {
+        return (IEnumerable<string>)typeof(ExecutionBuilder)
+            .GetMethod("ResolveActionNames", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [servers])!;
+    }
+
+    private static string InvokeResolveServerTypesSummary(IEnumerable<ServerConfig> servers)
+    {
+        return (string)typeof(ExecutionBuilder)
+            .GetMethod("ResolveServerTypesSummary", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [servers])!;
+    }
+
+    private static void InvokeEnsureDefaultMetaData(ExecutionBuilder builder)
+    {
+        typeof(ExecutionBuilder)
+            .GetMethod("EnsureDefaultMetaData", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(builder, null);
+    }
+
+    private static ServerConfig BuildHttpServer(string actionName)
+    {
+        return new ServerConfig
+        {
+            Http = new HttpServerConfig
+            {
+                Endpoints =
+                [
+                    new HttpEndpointConfig
+                    {
+                        Path = "/health",
+                        Actions =
+                        [
+                            new HttpEndpointActionConfig
+                            {
+                                Name = actionName,
+                                Method = HttpMethod.Get,
+                                TransactionStubName = "StubA"
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+    }
+
+    private static ServerConfig BuildSocketServer(string actionName)
+    {
+        return new ServerConfig
+        {
+            Socket = new SocketServerConfig
+            {
+                Endpoints =
+                [
+                    new SocketEndpointConfig
+                    {
+                        Port = 19090,
+                        ProtocolType = System.Net.Sockets.ProtocolType.Tcp,
+                        SocketType = System.Net.Sockets.SocketType.Stream,
+                        Action = new SocketActionConfig
+                        {
+                            Name = actionName,
+                            Method = SocketMethod.Collect,
+                            TransactionStubName = "StubA"
+                        }
+                    }
+                ]
+            }
+        };
+    }
+
     private sealed class TestExecutionBuilder : ExecutionBuilder
     {
         public IEnumerable<DataSource> InvokeBuildDataSources() => BuildDataSources();
@@ -343,5 +623,14 @@ public class ExecutionBuilderBranchTests
         {
             return [];
         }
+    }
+
+    private sealed class DummyProcessor : ITransactionProcessor
+    {
+        public Context Context { get; set; } = null!;
+
+        public List<ValidationResult>? LoadAndValidateConfiguration(IConfiguration configuration) => [];
+
+        public Data<object> Process(IImmutableList<DataSource> dataSourceList, Data<object> requestData) => requestData;
     }
 }

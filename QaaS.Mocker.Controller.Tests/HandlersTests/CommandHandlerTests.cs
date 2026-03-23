@@ -147,6 +147,27 @@ public class CommandHandlerTests
     }
 
     [Test]
+    public void HandleRequest_WithNullRequestId_ReturnsFailedResponseWithEmptyId()
+    {
+        var (handler, serverState, _, _) = CreateHandler();
+
+        var response = handler.Invoke(new CommandRequest
+        {
+            Id = null!,
+            Command = CommandType.TriggerAction
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response, Is.Not.Null);
+            Assert.That(response!.Id, Is.EqualTo(string.Empty));
+            Assert.That(response.Status, Is.EqualTo(Status.Failed));
+            Assert.That(response.ExceptionMessage, Does.Contain("TriggerAction payload is required"));
+        });
+        serverState.Verify(state => state.TriggerAction(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
+    }
+
+    [Test]
     public void HandleRequest_WithValidChangeActionStub_CallsServerStateAndReturnsSucceeded()
     {
         var (handler, serverState, _, _) = CreateHandler();

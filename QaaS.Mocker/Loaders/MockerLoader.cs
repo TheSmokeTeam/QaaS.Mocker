@@ -2,6 +2,7 @@ using System.Collections;
 using Autofac;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using QaaS.Framework.Configurations;
 using QaaS.Framework.Executions.Loaders;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Mocker.Options;
@@ -11,26 +12,31 @@ namespace QaaS.Mocker.Loaders;
 /// <summary>
 /// Loads CLI options into an execution-ready <see cref="MockerRunner"/> instance.
 /// </summary>
-public class MockerLoader : BaseLoader<MockerOptions, MockerRunner>, IDisposable
+public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDisposable
+    where TOptions : MockerOptions
 {
     private readonly ILifetimeScope _runScope;
     private static readonly string[] SupportedEnvironmentSeparators = [":", "__"];
+    private readonly Lazy<IReadOnlyList<IExecutionBuilderConfigurator>> _executionBuilderConfigurators;
+    private bool _missingConfigurationFileWarningLogged;
 
     /// <summary>
     /// Initializes a new loader instance from parsed CLI options.
     /// </summary>
     /// <param name="options">Command-line options used to load execution context.</param>
     /// <param name="executionId">Optional execution identifier override.</param>
-    public MockerLoader(MockerOptions options, string? executionId = null) : base(options, executionId)
+    public MockerLoader(TOptions options, string? executionId = null) : base(options, executionId)
     {
         _runScope = InitializeScope();
+        _executionBuilderConfigurators = new Lazy<IReadOnlyList<IExecutionBuilderConfigurator>>(
+            DiscoverExecutionBuilderConfigurators);
     }
 
     /// <summary>
     /// Builds an <see cref="InternalContext"/> from configuration file, overwrites, and environment resolution.
     /// </summary>
     /// <returns>The loaded internal context.</returns>
-    private InternalContext GetLoadedContext()
+    protected virtual InternalContext GetLoadedContext()
     {
         if (string.IsNullOrWhiteSpace(Options.ConfigurationFile))
             throw new ArgumentException("Configuration file path is required.", nameof(Options.ConfigurationFile));
@@ -38,7 +44,8 @@ public class MockerLoader : BaseLoader<MockerOptions, MockerRunner>, IDisposable
         var contextBuilder = new ContextBuilder(_runScope.Resolve<IConfigurationBuilder>());
 
         contextBuilder.SetLogger(Logger);
-        contextBuilder.SetConfigurationFile(Options.ConfigurationFile);
+        if (ShouldLoadConfigurationFile())
+            contextBuilder.SetConfigurationFile(Options.ConfigurationFile);
         foreach (var overwriteFile in Options.OverwriteFiles ?? [])
             contextBuilder.WithOverwriteFile(overwriteFile);
         foreach (var overwriteFolder in Options.OverwriteFolders ?? [])
@@ -55,13 +62,19 @@ public class MockerLoader : BaseLoader<MockerOptions, MockerRunner>, IDisposable
     /// </summary>
     /// <param name="context">Loaded context.</param>
     /// <returns>Configured execution builder.</returns>
-    private ExecutionBuilder LoadContextToExecutionBuilder(InternalContext context)
+    protected virtual ExecutionBuilder LoadContextToExecutionBuilder(InternalContext context)
     {
-        if (!Options.ExecutionMode.HasValue)
-            throw new ArgumentException("Execution mode is required.", nameof(Options.ExecutionMode));
-
-        var runBuilder = new ExecutionBuilder(context, Options.ExecutionMode!.Value, Options.RunLocally,
+        var runBuilder = new ExecutionBuilder(context, Options.GetExecutionMode(), Options.RunLocally,
             Options.TemplatesOutputFolder);
+
+        foreach (var configurator in _executionBuilderConfigurators.Value)
+        {
+            Logger.LogDebug(
+                "Applying mocker execution configurator {ConfiguratorType}",
+                configurator.GetType().FullName);
+            configurator.Configure(runBuilder);
+        }
+
         return runBuilder;
     }
 
@@ -151,5 +164,61 @@ public class MockerLoader : BaseLoader<MockerOptions, MockerRunner>, IDisposable
 
         configurationPath = string.Empty;
         return false;
+    }
+
+    protected virtual IReadOnlyList<IExecutionBuilderConfigurator> DiscoverExecutionBuilderConfigurators()
+    {
+        return ExecutionBuilderConfiguratorLoader.Load(Logger);
+    }
+
+    private bool ShouldLoadConfigurationFile()
+    {
+        if (string.IsNullOrWhiteSpace(Options.ConfigurationFile))
+            return false;
+
+        if (PathUtils.IsPathHttpUrl(Options.ConfigurationFile))
+            return true;
+
+        var configurationFilePath = Path.Combine(Environment.CurrentDirectory, Options.ConfigurationFile);
+        if (File.Exists(configurationFilePath))
+            return true;
+
+        if (_executionBuilderConfigurators.Value.Count == 0)
+            return true;
+
+        if (!_missingConfigurationFileWarningLogged)
+        {
+            Logger.LogWarning(
+                "Configuration file {ConfigurationFile} was not found. Continuing with {ConfiguratorCount} discovered code configurator(s).",
+                Options.ConfigurationFile,
+                _executionBuilderConfigurators.Value.Count);
+            _missingConfigurationFileWarningLogged = true;
+        }
+
+        return false;
+    }
+}
+
+/// <summary>
+/// Loads CLI options into a custom <typeparamref name="TRunner" /> instance.
+/// </summary>
+public class MockerLoader<TRunner, TOptions> : MockerLoader<TOptions>
+    where TRunner : MockerRunner
+    where TOptions : MockerOptions
+{
+    /// <summary>
+    /// Initializes a new loader instance from parsed CLI options.
+    /// </summary>
+    public MockerLoader(TOptions options, string? executionId = null) : base(options, executionId)
+    {
+    }
+
+    /// <summary>
+    /// Creates the runner instance from current loader options.
+    /// </summary>
+    /// <returns>A runnable <typeparamref name="TRunner" /> instance.</returns>
+    public new TRunner GetLoadedRunner()
+    {
+        return Bootstrap.CreateRunner<TRunner>(LoadContextToExecutionBuilder(GetLoadedContext()));
     }
 }

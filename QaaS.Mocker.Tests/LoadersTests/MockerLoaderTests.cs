@@ -1,4 +1,5 @@
 using System.Reflection;
+using QaaS.Framework.Executions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
@@ -6,53 +7,62 @@ using QaaS.Framework.Configurations.CustomExceptions;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Mocker.Loaders;
 using QaaS.Mocker.Options;
+using QaaS.Mocker.Servers.ConfigurationObjects;
+using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 
 namespace QaaS.Mocker.Tests.LoadersTests;
 
 [TestFixture]
 public class MockerLoaderTests
 {
+    private sealed class ConfiguratorAwareMockerLoader<TOptions> : MockerLoader<TOptions>
+        where TOptions : MockerOptions
+    {
+        private readonly IReadOnlyList<IExecutionBuilderConfigurator> _configurators;
+
+        public ConfiguratorAwareMockerLoader(
+            TOptions options,
+            IReadOnlyList<IExecutionBuilderConfigurator>? configurators = null) : base(options)
+        {
+            _configurators = configurators ?? [];
+        }
+
+        protected override IReadOnlyList<IExecutionBuilderConfigurator> DiscoverExecutionBuilderConfigurators()
+        {
+            return _configurators;
+        }
+    }
+
+    private sealed class ServerConfigurator : IExecutionBuilderConfigurator
+    {
+        public void Configure(ExecutionBuilder executionBuilder)
+        {
+            executionBuilder.ReplaceServers(
+                new ServerConfig
+                {
+                    Http = new HttpServerConfig
+                    {
+                        Port = 8080
+                    }
+                });
+        }
+    }
+
+    private sealed class TrackingMockerRunner(ExecutionBuilder? executionBuilder, Action<int>? exitAction = null)
+        : MockerRunner(executionBuilder, exitAction)
+    {
+    }
+
     [Test]
     public void GetLoadedRunner_WithMissingConfigurationFile_ThrowsInvalidConfigurationsException()
     {
-        var exception = Assert.Throws<InvalidConfigurationsException>(() => new MockerLoader(new MockerOptions
+        var exception = Assert.Throws<InvalidConfigurationsException>(() => new MockerLoader<RunOptions>(new RunOptions
         {
             ConfigurationFile = null
         }));
 
         Assert.That(exception, Is.Not.Null);
         Assert.That(exception!.Message, Does.Contain("Given command arguments are not valid"));
-    }
-
-    [Test]
-    public void GetLoadedRunner_WithMissingExecutionMode_ThrowsArgumentException()
-    {
-        var tempDirectory = CreateTempDirectory();
-        try
-        {
-            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
-                Server:
-                  Http:
-                    Port: 8443
-                """);
-            var loader = new MockerLoader(new MockerOptions
-            {
-                ConfigurationFile = configFile,
-                ExecutionMode = null
-            });
-
-            var exception = Assert.Throws<ArgumentException>(() => loader.GetLoadedRunner());
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(exception, Is.Not.Null);
-                Assert.That(exception!.ParamName, Is.EqualTo("ExecutionMode"));
-            });
-        }
-        finally
-        {
-            DeleteDirectory(tempDirectory);
-        }
     }
 
     [Test]
@@ -72,7 +82,7 @@ public class MockerLoaderTests
                     Port: 18080
                 """);
 
-            var loader = new MockerLoader(new MockerOptions
+            var loader = new MockerLoader<RunOptions>(new RunOptions
             {
                 ConfigurationFile = configFile,
                 OverwriteFiles = [overwriteFile],
@@ -82,6 +92,58 @@ public class MockerLoaderTests
             var context = InvokeGetLoadedContext(loader);
 
             Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("5001"));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void GetLoadedContext_WithMissingConfigurationFileAndCodeConfigurators_LoadsEmptyContext()
+    {
+        var loader = new ConfiguratorAwareMockerLoader<RunOptions>(new RunOptions
+        {
+            ConfigurationFile = $"missing-{Guid.NewGuid():N}.qaas.yaml"
+        }, [new ServerConfigurator()]);
+
+        var context = InvokeGetLoadedContext(loader);
+
+        Assert.That(context.RootConfiguration.GetChildren(), Is.Empty);
+    }
+
+    [Test]
+    public void GetLoadedRunner_WithExecutionBuilderConfigurators_AppliesCodeConfiguration()
+    {
+        var loader = new ConfiguratorAwareMockerLoader<RunOptions>(new RunOptions
+        {
+            ConfigurationFile = $"missing-{Guid.NewGuid():N}.qaas.yaml"
+        }, [new ServerConfigurator()]);
+
+        var runner = loader.GetLoadedRunner();
+        var executionBuilder = ExtractExecutionBuilder(runner);
+        var server = executionBuilder.ReadServers().Single();
+
+        Assert.That(server.Http?.Port, Is.EqualTo(8080));
+    }
+
+    [Test]
+    public void GetLoadedRunner_WithEmptyConfigurationFileAndCodeConfigurators_AppliesCodeConfiguration()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", string.Empty);
+            var loader = new ConfiguratorAwareMockerLoader<RunOptions>(new RunOptions
+            {
+                ConfigurationFile = configFile
+            }, [new ServerConfigurator()]);
+
+            var runner = loader.GetLoadedRunner();
+            var executionBuilder = ExtractExecutionBuilder(runner);
+            var server = executionBuilder.ReadServers().Single();
+
+            Assert.That(server.Http?.Port, Is.EqualTo(8080));
         }
         finally
         {
@@ -100,16 +162,41 @@ public class MockerLoaderTests
                   Http:
                     Port: 8443
                 """);
-            var loader = new MockerLoader(new MockerOptions
+            var loader = new MockerLoader<TemplateOptions>(new TemplateOptions
             {
-                ConfigurationFile = configFile,
-                ExecutionMode = ExecutionMode.Lint
+                ConfigurationFile = configFile
             });
 
             var runner = loader.GetLoadedRunner();
 
             Assert.That(runner, Is.Not.Null);
             Assert.That(runner, Is.TypeOf<MockerRunner>());
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void GetLoadedRunner_WithCustomRunnerType_ReturnsCustomRunner()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+            var loader = new MockerLoader<TrackingMockerRunner, TemplateOptions>(new TemplateOptions
+            {
+                ConfigurationFile = configFile
+            });
+
+            var runner = loader.GetLoadedRunner();
+
+            Assert.That(runner, Is.TypeOf<TrackingMockerRunner>());
         }
         finally
         {
@@ -142,7 +229,7 @@ public class MockerLoaderTests
                 """);
             WriteFile(overwriteFolder, "readme.txt", "ignored");
 
-            var loader = new MockerLoader(new MockerOptions
+            var loader = new MockerLoader<RunOptions>(new RunOptions
             {
                 ConfigurationFile = configFile,
                 OverwriteFolders = [overwriteFolder]
@@ -172,7 +259,7 @@ public class MockerLoaderTests
                   Http:
                     Port: 8443
                 """);
-            var loader = new MockerLoader(new MockerOptions
+            var loader = new MockerLoader<RunOptions>(new RunOptions
             {
                 ConfigurationFile = configFile
             });
@@ -202,7 +289,7 @@ public class MockerLoaderTests
                   Http:
                     Port: 8443
                 """);
-            var loader = new MockerLoader(new MockerOptions
+            var loader = new MockerLoader<RunOptions>(new RunOptions
             {
                 ConfigurationFile = configFile
             });
@@ -236,7 +323,7 @@ public class MockerLoaderTests
                   - Http:
                       Port: 8443
                 """);
-            var loader = new MockerLoader(new MockerOptions
+            var loader = new MockerLoader<RunOptions>(new RunOptions
             {
                 ConfigurationFile = configFile
             });
@@ -266,7 +353,7 @@ public class MockerLoaderTests
                   Http:
                     Port: 8443
                 """);
-            var loader = new MockerLoader(new MockerOptions
+            var loader = new MockerLoader<RunOptions>(new RunOptions
             {
                 ConfigurationFile = configFile,
                 DontResolveWithEnvironmentVariables = true
@@ -292,9 +379,9 @@ public class MockerLoaderTests
         bool expectedMapped,
         string expectedPath)
     {
-        var tryMapMethod = typeof(MockerLoader)
+        var tryMapMethod = typeof(MockerLoader<RunOptions>)
             .GetMethod("TryMapEnvironmentVariableToConfigurationPath", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new MissingMethodException(typeof(MockerLoader).FullName,
+            ?? throw new MissingMethodException(typeof(MockerLoader<RunOptions>).FullName,
                 "TryMapEnvironmentVariableToConfigurationPath");
         var arguments = new object?[] { variableName, null };
 
@@ -318,7 +405,7 @@ public class MockerLoaderTests
                   Http:
                     Port: 8443
                 """);
-            var loader = new MockerLoader(new MockerOptions
+            var loader = new MockerLoader<RunOptions>(new RunOptions
             {
                 ConfigurationFile = configFile,
                 OverwriteFiles = null!,
@@ -337,6 +424,52 @@ public class MockerLoaderTests
     }
 
     [Test]
+    public void GetLoadedContext_WithWhitespaceConfigurationFile_ThrowsArgumentException()
+    {
+        var exception = Assert.Throws<InvalidConfigurationsException>(() => new MockerLoader<RunOptions>(new RunOptions
+        {
+            ConfigurationFile = " "
+        }));
+
+        Assert.That(exception, Is.Not.Null);
+    }
+
+    [Test]
+    public void GetLoadedContext_WithWhitespaceConfigurationFileAfterConstruction_ThrowsArgumentException()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+            var loader = new MockerLoader<RunOptions>(new RunOptions
+            {
+                ConfigurationFile = configFile
+            });
+            var getLoadedContextMethod = loader.GetType()
+                .GetMethod("GetLoadedContext", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var optionsField = loader.GetType()
+                .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.FlattenHierarchy)
+                .Single(field => typeof(MockerOptions).IsAssignableFrom(field.FieldType));
+            var options = (RunOptions)optionsField.GetValue(loader)!;
+            var configurationFileField = typeof(MockerOptions)
+                .GetField("<ConfigurationFile>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            configurationFileField.SetValue(options, " ");
+
+            var exception = Assert.Throws<TargetInvocationException>(() => getLoadedContextMethod.Invoke(loader, null));
+
+            Assert.That(exception!.InnerException, Is.TypeOf<ArgumentException>());
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
     public void Dispose_ReleasesLoaderScopeWithoutThrowing()
     {
         var tempDirectory = CreateTempDirectory();
@@ -347,7 +480,7 @@ public class MockerLoaderTests
                   Http:
                     Port: 8443
                 """);
-            var loader = new MockerLoader(new MockerOptions
+            var loader = new MockerLoader<RunOptions>(new RunOptions
             {
                 ConfigurationFile = configFile
             });
@@ -375,7 +508,7 @@ public class MockerLoaderTests
             contextBuilder.SetLogger(NullLogger.Instance);
             contextBuilder.SetConfigurationFile(configFile);
 
-            MockerLoader.ApplyEnvironmentOverrides(
+            MockerLoader<RunOptions>.ApplyEnvironmentOverrides(
                 contextBuilder,
                 [
                     new KeyValuePair<string?, string?>(null, "ignored"),
@@ -401,14 +534,60 @@ public class MockerLoaderTests
         }
     }
 
-    private static InternalContext InvokeGetLoadedContext(MockerLoader loader)
+    [Test]
+    public void ApplyEnvironmentOverrides_WithNoSupportedMappings_LeavesConfigurationUnchanged()
     {
-        var getLoadedContextMethod = typeof(MockerLoader)
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+            var contextBuilder = new ContextBuilder(new ConfigurationBuilder());
+            contextBuilder.SetLogger(NullLogger.Instance);
+            contextBuilder.SetConfigurationFile(configFile);
+
+            MockerLoader<RunOptions>.ApplyEnvironmentOverrides(
+                contextBuilder,
+                [
+                    new KeyValuePair<string?, string?>("PATH", "ignored"),
+                    new KeyValuePair<string?, string?>("DOTNET_ENVIRONMENT", "Development")
+                ],
+                NullLogger.Instance);
+
+            var context = contextBuilder.BuildInternal();
+
+            Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    private static InternalContext InvokeGetLoadedContext<TOptions>(MockerLoader<TOptions> loader)
+        where TOptions : MockerOptions
+    {
+        var loaderType = typeof(MockerLoader<TOptions>);
+        var getLoadedContextMethod = loaderType
             .GetMethod("GetLoadedContext", BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new MissingMethodException(typeof(MockerLoader).FullName, "GetLoadedContext");
+            ?? throw new MissingMethodException(loaderType.FullName, "GetLoadedContext");
 
         return (InternalContext)(getLoadedContextMethod.Invoke(loader, null)
                                  ?? throw new InvalidOperationException("Context was not loaded."));
+    }
+
+    private static ExecutionBuilder ExtractExecutionBuilder(MockerRunner runner)
+    {
+        var executionBuilderField = typeof(MockerRunner)
+            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+            .FirstOrDefault(field => field.FieldType == typeof(ExecutionBuilder))
+            ?? throw new MissingFieldException(typeof(MockerRunner).FullName, nameof(ExecutionBuilder));
+
+        return (ExecutionBuilder)(executionBuilderField.GetValue(runner)
+                                 ?? throw new InvalidOperationException("Execution builder was not loaded."));
     }
 
     private static string CreateTempDirectory()
@@ -431,3 +610,4 @@ public class MockerLoaderTests
             Directory.Delete(directory, recursive: true);
     }
 }
+
