@@ -19,11 +19,16 @@
 
     <ItemGroup>
       <PackageReference Include="Autofac" Version="9.1.0" />
-      <PackageReference Include="QaaS.Framework.SDK" Version="1.2.5-alpha.4" />
+      <PackageReference Include="QaaS.Framework.SDK" Version="1.2.7" />
     </ItemGroup>
 
     <ItemGroup>
       <None Include="..\README.md" Pack="true" PackagePath="\" Link="README.md" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <InternalsVisibleTo Include="QaaS.Mocker" />
+      <InternalsVisibleTo Include="QaaS.Mocker.Stubs.Tests" />
     </ItemGroup>
 
 </Project>

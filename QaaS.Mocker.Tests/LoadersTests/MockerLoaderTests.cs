@@ -6,12 +6,47 @@ using QaaS.Framework.Configurations.CustomExceptions;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Mocker.Loaders;
 using QaaS.Mocker.Options;
+using QaaS.Mocker.Servers.ConfigurationObjects;
+using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 
 namespace QaaS.Mocker.Tests.LoadersTests;
 
 [TestFixture]
 public class MockerLoaderTests
 {
+    private sealed class ConfiguratorAwareMockerLoader<TOptions> : MockerLoader<TOptions>
+        where TOptions : MockerOptions
+    {
+        private readonly IReadOnlyList<IExecutionBuilderConfigurator> _configurators;
+
+        public ConfiguratorAwareMockerLoader(
+            TOptions options,
+            IReadOnlyList<IExecutionBuilderConfigurator>? configurators = null) : base(options)
+        {
+            _configurators = configurators ?? [];
+        }
+
+        protected override IReadOnlyList<IExecutionBuilderConfigurator> DiscoverExecutionBuilderConfigurators()
+        {
+            return _configurators;
+        }
+    }
+
+    private sealed class ServerConfigurator : IExecutionBuilderConfigurator
+    {
+        public void Configure(ExecutionBuilder executionBuilder)
+        {
+            executionBuilder.ReplaceServers(
+                new ServerConfig
+                {
+                    Http = new HttpServerConfig
+                    {
+                        Port = 8080
+                    }
+                });
+        }
+    }
+
     [Test]
     public void GetLoadedRunner_WithMissingConfigurationFile_ThrowsInvalidConfigurationsException()
     {
@@ -51,6 +86,58 @@ public class MockerLoaderTests
             var context = InvokeGetLoadedContext(loader);
 
             Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("5001"));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void GetLoadedContext_WithMissingConfigurationFileAndCodeConfigurators_LoadsEmptyContext()
+    {
+        var loader = new ConfiguratorAwareMockerLoader<RunOptions>(new RunOptions
+        {
+            ConfigurationFile = $"missing-{Guid.NewGuid():N}.qaas.yaml"
+        }, [new ServerConfigurator()]);
+
+        var context = InvokeGetLoadedContext(loader);
+
+        Assert.That(context.RootConfiguration.GetChildren(), Is.Empty);
+    }
+
+    [Test]
+    public void GetLoadedRunner_WithExecutionBuilderConfigurators_AppliesCodeConfiguration()
+    {
+        var loader = new ConfiguratorAwareMockerLoader<RunOptions>(new RunOptions
+        {
+            ConfigurationFile = $"missing-{Guid.NewGuid():N}.qaas.yaml"
+        }, [new ServerConfigurator()]);
+
+        var runner = loader.GetLoadedRunner();
+        var executionBuilder = ExtractExecutionBuilder(runner);
+        var server = executionBuilder.ReadServers().Single();
+
+        Assert.That(server.Http?.Port, Is.EqualTo(8080));
+    }
+
+    [Test]
+    public void GetLoadedRunner_WithEmptyConfigurationFileAndCodeConfigurators_AppliesCodeConfiguration()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", string.Empty);
+            var loader = new ConfiguratorAwareMockerLoader<RunOptions>(new RunOptions
+            {
+                ConfigurationFile = configFile
+            }, [new ServerConfigurator()]);
+
+            var runner = loader.GetLoadedRunner();
+            var executionBuilder = ExtractExecutionBuilder(runner);
+            var server = executionBuilder.ReadServers().Single();
+
+            Assert.That(server.Http?.Port, Is.EqualTo(8080));
         }
         finally
         {
@@ -458,6 +545,17 @@ public class MockerLoaderTests
 
         return (InternalContext)(getLoadedContextMethod.Invoke(loader, null)
                                  ?? throw new InvalidOperationException("Context was not loaded."));
+    }
+
+    private static ExecutionBuilder ExtractExecutionBuilder(MockerRunner runner)
+    {
+        var executionBuilderField = typeof(MockerRunner)
+            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+            .FirstOrDefault(field => field.FieldType == typeof(ExecutionBuilder))
+            ?? throw new MissingFieldException(typeof(MockerRunner).FullName, nameof(ExecutionBuilder));
+
+        return (ExecutionBuilder)(executionBuilderField.GetValue(runner)
+                                 ?? throw new InvalidOperationException("Execution builder was not loaded."));
     }
 
     private static string CreateTempDirectory()

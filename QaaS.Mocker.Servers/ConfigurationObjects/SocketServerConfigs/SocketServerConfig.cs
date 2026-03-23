@@ -20,7 +20,9 @@ public record SocketServerConfig
     [Required, UniquePropertyInEnumerable(nameof(SocketEndpointConfig.Port)), MinLength(1),
      UniqueActionNameInAllEndpoints, BroadcastOverUdpNotSupported, SocketTypeMatchesProtocol,
      Description("All socket endpoint-implementation which handled by the socket server")]
-    public SocketEndpointConfig[]? Endpoints { get; set; }
+    internal SocketEndpointConfig[]? Endpoints { get; set; }
+
+    public IReadOnlyList<SocketEndpointConfig> ReadEndpoints() => Endpoints ?? [];
 }
 
 /// <summary>

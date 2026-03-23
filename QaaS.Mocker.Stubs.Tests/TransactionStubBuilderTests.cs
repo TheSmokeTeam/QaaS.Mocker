@@ -80,7 +80,10 @@ public class TransactionStubBuilderTests
                 ["ProcessorConfiguration:Nested:Enabled"] = "true"
             })
             .Build()
-            .BindToObject<TransactionStubConfig>(new BinderOptions());
+            .BindToObject<TransactionStubConfig>(new BinderOptions
+            {
+                BindNonPublicProperties = true
+            });
 
         Assert.That(configuration, Is.Not.Null);
         Assert.That(configuration!.ProcessorConfiguration["Nested:Enabled"], Is.EqualTo("true"));

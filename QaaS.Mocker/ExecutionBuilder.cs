@@ -51,25 +51,25 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     [UniquePropertyInEnumerable(nameof(TransactionStubConfig.Name)),
      Description("List of transaction stubs that can be used for server actions." +
                  "They provide processing functionality to exercise transaction data.")]
-    public TransactionStubConfig[] Stubs { get; internal set; } = [];
+    internal TransactionStubConfig[] Stubs { get; set; } = [];
 
     /// <summary>
     /// Gets the legacy single-server configuration.
     /// </summary>
     [Description("The legacy single server mocker instance to run.")]
-    public ServerConfig? Server { get; internal set; }
+    internal ServerConfig? Server { get; set; }
 
     /// <summary>
     /// Gets the multi-server configuration used for composite runtimes.
     /// </summary>
     [Description("List of server mocker instances to run concurrently.")]
-    public ServerConfig[] Servers { get; internal set; } = [];
+    internal ServerConfig[] Servers { get; set; } = [];
 
     /// <summary>
     /// Gets the optional controller configuration.
     /// </summary>
     [Description("The server mocker controller configuration")]
-    public ControllerConfig? Controller { get; internal set; }
+    internal ControllerConfig? Controller { get; set; }
 
     private ILifetimeScope _scope;
     private readonly List<ValidationResult> _validationResults;
@@ -651,7 +651,8 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
 
         LoadContextScopeDependencies();
 
-        _ = ValidationUtils.TryValidateObjectRecursive(this, _validationResults);
+        _ = ValidationUtils.TryValidateObjectRecursive(this, _validationResults,
+            bindingFlags: BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         _validationResults.AddRange(Validate(new ValidationContext(this)));
         if (_validationResults.Any())
         {

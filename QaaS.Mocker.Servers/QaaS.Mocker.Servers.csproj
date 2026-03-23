@@ -31,4 +31,10 @@
       <None Include="..\README.md" Pack="true" PackagePath="\" Link="README.md" />
     </ItemGroup>
 
+    <ItemGroup>
+      <InternalsVisibleTo Include="QaaS.Mocker" />
+      <InternalsVisibleTo Include="QaaS.Mocker.Servers.Tests" />
+      <InternalsVisibleTo Include="QaaS.Mocker.Tests" />
+    </ItemGroup>
+
 </Project>
