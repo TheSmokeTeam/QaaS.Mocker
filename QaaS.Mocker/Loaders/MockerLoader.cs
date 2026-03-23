@@ -2,6 +2,7 @@ using System.Collections;
 using Autofac;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using QaaS.Framework.Configurations;
 using QaaS.Framework.Executions.Loaders;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Mocker.Options;
@@ -16,6 +17,8 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
 {
     private readonly ILifetimeScope _runScope;
     private static readonly string[] SupportedEnvironmentSeparators = [":", "__"];
+    private readonly Lazy<IReadOnlyList<IExecutionBuilderConfigurator>> _executionBuilderConfigurators;
+    private bool _missingConfigurationFileWarningLogged;
 
     /// <summary>
     /// Initializes a new loader instance from parsed CLI options.
@@ -25,6 +28,8 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
     public MockerLoader(TOptions options, string? executionId = null) : base(options, executionId)
     {
         _runScope = InitializeScope();
+        _executionBuilderConfigurators = new Lazy<IReadOnlyList<IExecutionBuilderConfigurator>>(
+            DiscoverExecutionBuilderConfigurators);
     }
 
     /// <summary>
@@ -39,7 +44,8 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
         var contextBuilder = new ContextBuilder(_runScope.Resolve<IConfigurationBuilder>());
 
         contextBuilder.SetLogger(Logger);
-        contextBuilder.SetConfigurationFile(Options.ConfigurationFile);
+        if (ShouldLoadConfigurationFile())
+            contextBuilder.SetConfigurationFile(Options.ConfigurationFile);
         foreach (var overwriteFile in Options.OverwriteFiles ?? [])
             contextBuilder.WithOverwriteFile(overwriteFile);
         foreach (var overwriteFolder in Options.OverwriteFolders ?? [])
@@ -60,6 +66,15 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
     {
         var runBuilder = new ExecutionBuilder(context, Options.GetExecutionMode(), Options.RunLocally,
             Options.TemplatesOutputFolder);
+
+        foreach (var configurator in _executionBuilderConfigurators.Value)
+        {
+            Logger.LogDebug(
+                "Applying mocker execution configurator {ConfiguratorType}",
+                configurator.GetType().FullName);
+            configurator.Configure(runBuilder);
+        }
+
         return runBuilder;
     }
 
@@ -148,6 +163,38 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
         }
 
         configurationPath = string.Empty;
+        return false;
+    }
+
+    protected virtual IReadOnlyList<IExecutionBuilderConfigurator> DiscoverExecutionBuilderConfigurators()
+    {
+        return ExecutionBuilderConfiguratorLoader.Load(Logger);
+    }
+
+    private bool ShouldLoadConfigurationFile()
+    {
+        if (string.IsNullOrWhiteSpace(Options.ConfigurationFile))
+            return false;
+
+        if (PathUtils.IsPathHttpUrl(Options.ConfigurationFile))
+            return true;
+
+        var configurationFilePath = Path.Combine(Environment.CurrentDirectory, Options.ConfigurationFile);
+        if (File.Exists(configurationFilePath))
+            return true;
+
+        if (_executionBuilderConfigurators.Value.Count == 0)
+            return true;
+
+        if (!_missingConfigurationFileWarningLogged)
+        {
+            Logger.LogWarning(
+                "Configuration file {ConfigurationFile} was not found. Continuing with {ConfiguratorCount} discovered code configurator(s).",
+                Options.ConfigurationFile,
+                _executionBuilderConfigurators.Value.Count);
+            _missingConfigurationFileWarningLogged = true;
+        }
+
         return false;
     }
 }
