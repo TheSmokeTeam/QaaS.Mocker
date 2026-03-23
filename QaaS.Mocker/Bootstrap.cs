@@ -12,8 +12,12 @@ namespace QaaS.Mocker;
 public static class Bootstrap
 {
     /// <summary>
-    /// Creates a new <see cref="MockerRunner"/> from command-line arguments.
+    /// Creates a new MockerRunner instance from the supplied bootstrap inputs.
     /// </summary>
+    /// <remarks>
+    /// This is the primary code-first entry point for bootstrapping the product from command-line style arguments so library startup and CLI startup stay aligned.
+    /// </remarks>
+    /// <qaas-docs group="Getting Started" subgroup="Bootstrap" />
     public static MockerRunner New(IEnumerable<string>? args = null)
     {
         var normalizedArguments = NormalizeArguments(args ?? []);

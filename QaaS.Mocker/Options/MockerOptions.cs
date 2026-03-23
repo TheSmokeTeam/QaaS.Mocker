@@ -16,7 +16,7 @@ public abstract record MockerOptions : LoggerOptions
     /// </summary>
     [Required, ValidPath, Value(0, Default = Constants.DefaultMockerConfigurationFileName,
          HelpText = """
-                    Path to a mocker yaml configuration file to use with the command."
+                    Path to a mocker yaml configuration file to use with the command.
                     """)]
     public string? ConfigurationFile { get; init; }
 

@@ -10,6 +10,13 @@ public class MockerRunner(ExecutionBuilder? executionBuilder, Action<int>? exitA
     private readonly Action<int> _exitAction = exitAction ?? Environment.Exit;
     private int? BootstrapHandledExitCode { get; set; }
 
+    /// <summary>
+    /// Runs the configured QaaS.Mocker execution.
+    /// </summary>
+    /// <remarks>
+    /// Call this after the mocker execution has been configured and resolved. The method delegates to the underlying execution host.
+    /// </remarks>
+    /// <qaas-docs group="Runtime" subgroup="Mocker Runner" />
     public void Run()
     {
         if (BootstrapHandledExitCode.HasValue)
