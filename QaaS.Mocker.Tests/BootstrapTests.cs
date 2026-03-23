@@ -1,5 +1,6 @@
 using CommandLine;
 using NUnit.Framework;
+using QaaS.Framework.Executions;
 using QaaS.Mocker.CommandLineBuilders;
 using QaaS.Mocker.Options;
 using System.IO;
@@ -262,6 +263,65 @@ public class BootstrapTests
         }
     }
 
+    [Test]
+    public void New_WithCustomRunner_ReturnsCustomRunnerAndUsesCustomLifecycle()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+
+            var runner = Bootstrap.New<TrackingMockerRunner>(["template", configFile]);
+            var customRunner = runner as TrackingMockerRunner;
+
+            Assert.That(customRunner, Is.Not.Null);
+
+            customRunner!.Run();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(runner, Is.TypeOf<TrackingMockerRunner>());
+                Assert.That(customRunner.BuildExecutionCalled, Is.True);
+                Assert.That(customRunner.StartExecutionCalled, Is.True);
+                Assert.That(customRunner.ExitProcessCalled, Is.True);
+                Assert.That(customRunner.ObservedExitCode, Is.Zero);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void New_WithNullArgsAndCustomRunner_WritesHelpWithoutInvokingExecutionLifecycle()
+    {
+        var output = CaptureConsoleOut(() =>
+        {
+            var runner = Bootstrap.New<TrackingMockerRunner>(null);
+            var customRunner = runner as TrackingMockerRunner;
+
+            Assert.That(customRunner, Is.Not.Null);
+
+            customRunner!.Run();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(runner, Is.TypeOf<TrackingMockerRunner>());
+                Assert.That(customRunner.BuildExecutionCalled, Is.False);
+                Assert.That(customRunner.StartExecutionCalled, Is.False);
+                Assert.That(customRunner.ExitProcessCalled, Is.False);
+                Assert.That(customRunner.BootstrapExitCode, Is.Zero);
+            });
+        });
+
+        Assert.That(output, Does.Contain("Usage:"));
+    }
+
     private static string CaptureConsoleOut(Action action)
     {
         var originalOut = Console.Out;
@@ -298,5 +358,39 @@ public class BootstrapTests
     {
         if (Directory.Exists(directory))
             Directory.Delete(directory, recursive: true);
+    }
+
+    private sealed class TrackingMockerRunner(ExecutionBuilder? executionBuilder, Action<int>? exitAction = null)
+        : MockerRunner(executionBuilder, exitAction)
+    {
+        public bool BuildExecutionCalled { get; private set; }
+        public bool StartExecutionCalled { get; private set; }
+        public bool ExitProcessCalled { get; private set; }
+        public int? ObservedExitCode { get; private set; }
+        public int? BootstrapExitCode { get; private set; }
+
+        protected override BaseExecution BuildExecution(ExecutionBuilder executionBuilder)
+        {
+            BuildExecutionCalled = true;
+            return base.BuildExecution(executionBuilder);
+        }
+
+        protected override int StartExecution(BaseExecution execution)
+        {
+            StartExecutionCalled = true;
+            return base.StartExecution(execution);
+        }
+
+        protected override void ExitProcess(int exitCode)
+        {
+            ExitProcessCalled = true;
+            ObservedExitCode = exitCode;
+        }
+
+        protected override void SetProcessExitCode(int exitCode)
+        {
+            BootstrapExitCode = exitCode;
+            base.SetProcessExitCode(exitCode);
+        }
     }
 }

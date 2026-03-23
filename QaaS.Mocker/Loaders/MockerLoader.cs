@@ -36,7 +36,7 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
     /// Builds an <see cref="InternalContext"/> from configuration file, overwrites, and environment resolution.
     /// </summary>
     /// <returns>The loaded internal context.</returns>
-    private InternalContext GetLoadedContext()
+    protected virtual InternalContext GetLoadedContext()
     {
         if (string.IsNullOrWhiteSpace(Options.ConfigurationFile))
             throw new ArgumentException("Configuration file path is required.", nameof(Options.ConfigurationFile));
@@ -62,7 +62,7 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
     /// </summary>
     /// <param name="context">Loaded context.</param>
     /// <returns>Configured execution builder.</returns>
-    private ExecutionBuilder LoadContextToExecutionBuilder(InternalContext context)
+    protected virtual ExecutionBuilder LoadContextToExecutionBuilder(InternalContext context)
     {
         var runBuilder = new ExecutionBuilder(context, Options.GetExecutionMode(), Options.RunLocally,
             Options.TemplatesOutputFolder);
@@ -196,5 +196,29 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
         }
 
         return false;
+    }
+}
+
+/// <summary>
+/// Loads CLI options into a custom <typeparamref name="TRunner" /> instance.
+/// </summary>
+public class MockerLoader<TRunner, TOptions> : MockerLoader<TOptions>
+    where TRunner : MockerRunner
+    where TOptions : MockerOptions
+{
+    /// <summary>
+    /// Initializes a new loader instance from parsed CLI options.
+    /// </summary>
+    public MockerLoader(TOptions options, string? executionId = null) : base(options, executionId)
+    {
+    }
+
+    /// <summary>
+    /// Creates the runner instance from current loader options.
+    /// </summary>
+    /// <returns>A runnable <typeparamref name="TRunner" /> instance.</returns>
+    public new TRunner GetLoadedRunner()
+    {
+        return Bootstrap.CreateRunner<TRunner>(LoadContextToExecutionBuilder(GetLoadedContext()));
     }
 }

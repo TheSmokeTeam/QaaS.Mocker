@@ -20,25 +20,52 @@ public static class Bootstrap
     /// <qaas-docs group="Getting Started" subgroup="Bootstrap" />
     public static MockerRunner New(IEnumerable<string>? args = null)
     {
+        return GetRunner<MockerRunner>(args);
+    }
+
+    /// <summary>
+    /// Creates a new runner instance from the supplied bootstrap inputs.
+    /// </summary>
+    /// <remarks>
+    /// Use this overload when the mocker run should be represented by a custom <typeparamref name="TRunner" />
+    /// implementation while keeping the same command-line bootstrap flow.
+    /// </remarks>
+    /// <qaas-docs group="Getting Started" subgroup="Bootstrap" />
+    public static MockerRunner New<TRunner>(IEnumerable<string>? args = null) where TRunner : MockerRunner
+    {
+        return GetRunner<TRunner>(args);
+    }
+
+    /// <summary>
+    /// Creates a new runner instance with custom logic.
+    /// </summary>
+    /// <param name="args">Command-line arguments.</param>
+    /// <returns>A configured <typeparamref name="TRunner" /> instance.</returns>
+    internal static TRunner GetRunner<TRunner>(IEnumerable<string>? args)
+        where TRunner : MockerRunner
+    {
         var normalizedArguments = NormalizeArguments(args ?? []);
         var effectiveTopLevelArguments = RemoveTopLevelIgnorableOptions(normalizedArguments);
         using var cliParser = CommandLineBuilders.ParserBuilder.BuildParser();
         if (effectiveTopLevelArguments.Length == 0)
         {
             var emptyArgsResult = ParseSupportedArguments(cliParser, ["--help"]);
-            return WriteHelpAndCreateBootstrapHandledRunner(cliParser, emptyArgsResult, includeCommandHelp: true);
+            return WriteHelpAndCreateBootstrapHandledRunner<TRunner>(cliParser, emptyArgsResult,
+                includeCommandHelp: true);
         }
 
         if (IsTopLevelHelpRequest(effectiveTopLevelArguments))
         {
             var topLevelHelpResult = ParseSupportedArguments(cliParser, ["--help"]);
-            return WriteHelpAndCreateBootstrapHandledRunner(cliParser, topLevelHelpResult, includeCommandHelp: true);
+            return WriteHelpAndCreateBootstrapHandledRunner<TRunner>(cliParser, topLevelHelpResult,
+                includeCommandHelp: true);
         }
 
         if (IsCommandHelpRequest(normalizedArguments))
         {
             var commandHelpResult = ParseSupportedArguments(cliParser, normalizedArguments);
-            return WriteHelpAndCreateBootstrapHandledRunner(cliParser, commandHelpResult, includeCommandHelp: false);
+            return WriteHelpAndCreateBootstrapHandledRunner<TRunner>(cliParser, commandHelpResult,
+                includeCommandHelp: false);
         }
 
         var cliParserResult = ParseSupportedArguments(cliParser, normalizedArguments);
@@ -47,15 +74,15 @@ public static class Bootstrap
             .MapResult(
                 (RunOptions options) =>
                 {
-                    using var loader = new MockerLoader<RunOptions>(options);
+                    using var loader = new MockerLoader<TRunner, RunOptions>(options);
                     return loader.GetLoadedRunner();
                 },
                 (TemplateOptions options) =>
                 {
-                    using var loader = new MockerLoader<TemplateOptions>(options);
+                    using var loader = new MockerLoader<TRunner, TemplateOptions>(options);
                     return loader.GetLoadedRunner();
                 },
-                errors => HandleParseError(cliParser, cliParserResult, errors));
+                errors => HandleParseError<TRunner>(cliParser, cliParserResult, errors));
     }
 
     /// <summary>
@@ -71,10 +98,11 @@ public static class Bootstrap
         return ["run", .. arguments];
     }
 
-    private static MockerRunner HandleParseError(
+    private static TRunner HandleParseError<TRunner>(
         Parser cliParser,
         ParserResult<object> cliParserResult,
         IEnumerable<Error> errors)
+        where TRunner : MockerRunner
     {
         var errorsArray = errors.ToArray();
 
@@ -86,11 +114,11 @@ public static class Bootstrap
                 $"\nQaaS Framework Versions:\n" +
                 $"{qaasFrameworkAssemblyName} {GetAssemblyVersionFromName(qaasFrameworkAssemblyName)}\n" +
                 $"{qaasMockerAssemblyName} {GetAssemblyVersionFromName(qaasMockerAssemblyName)}\n");
-            return CreateBootstrapHandledRunner(0);
+            return CreateBootstrapHandledRunner<TRunner>(0);
         }
 
         WriteHelpText(cliParser, cliParserResult, includeCommandHelp: false);
-        return CreateBootstrapHandledRunner(1);
+        return CreateBootstrapHandledRunner<TRunner>(1);
     }
 
     private static string GetAssemblyVersionFromName(string assemblyName) =>
@@ -111,19 +139,27 @@ public static class Bootstrap
         Console.Out.WriteLine(HelpTextBuilder.BuildHelpText(cliParser, cliParserResult, includeCommandHelp));
     }
 
-    private static MockerRunner WriteHelpAndCreateBootstrapHandledRunner(
+    internal static TRunner CreateRunner<TRunner>(ExecutionBuilder? executionBuilder, Action<int>? exitAction = null)
+        where TRunner : MockerRunner
+    {
+        return (TRunner)Activator.CreateInstance(typeof(TRunner), executionBuilder, exitAction)!;
+    }
+
+    private static TRunner WriteHelpAndCreateBootstrapHandledRunner<TRunner>(
         Parser cliParser,
         ParserResult<object> cliParserResult,
         bool includeCommandHelp,
         int exitCode = 0)
+        where TRunner : MockerRunner
     {
         WriteHelpText(cliParser, cliParserResult, includeCommandHelp);
-        return CreateBootstrapHandledRunner(exitCode);
+        return CreateBootstrapHandledRunner<TRunner>(exitCode);
     }
 
-    private static MockerRunner CreateBootstrapHandledRunner(int exitCode)
+    private static TRunner CreateBootstrapHandledRunner<TRunner>(int exitCode)
+        where TRunner : MockerRunner
     {
-        return new MockerRunner(null).WithBootstrapHandledExitCode(exitCode);
+        return (TRunner)CreateRunner<TRunner>(null).WithBootstrapHandledExitCode(exitCode);
     }
 
     private static bool IsExecutionModeAlias(string argument)

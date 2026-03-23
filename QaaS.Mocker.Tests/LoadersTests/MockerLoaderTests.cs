@@ -1,4 +1,5 @@
 using System.Reflection;
+using QaaS.Framework.Executions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
@@ -45,6 +46,11 @@ public class MockerLoaderTests
                     }
                 });
         }
+    }
+
+    private sealed class TrackingMockerRunner(ExecutionBuilder? executionBuilder, Action<int>? exitAction = null)
+        : MockerRunner(executionBuilder, exitAction)
+    {
     }
 
     [Test]
@@ -165,6 +171,32 @@ public class MockerLoaderTests
 
             Assert.That(runner, Is.Not.Null);
             Assert.That(runner, Is.TypeOf<MockerRunner>());
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
+    public void GetLoadedRunner_WithCustomRunnerType_ReturnsCustomRunner()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configFile = WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+            var loader = new MockerLoader<TrackingMockerRunner, TemplateOptions>(new TemplateOptions
+            {
+                ConfigurationFile = configFile
+            });
+
+            var runner = loader.GetLoadedRunner();
+
+            Assert.That(runner, Is.TypeOf<TrackingMockerRunner>());
         }
         finally
         {
