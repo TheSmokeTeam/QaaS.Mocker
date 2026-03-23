@@ -21,7 +21,6 @@ public record GrpcServiceConfig
 
     [Required, MinLength(1), UniquePropertyInEnumerable(nameof(GrpcEndpointActionConfig.RpcName)),
      Description("The rpc actions for this grpc service")]
-    internal GrpcEndpointActionConfig[] Actions { get; set; } = [];
-
+    public GrpcEndpointActionConfig[] Actions { get; internal set; } = [];
     public IReadOnlyList<GrpcEndpointActionConfig> ReadActions() => Actions;
 }

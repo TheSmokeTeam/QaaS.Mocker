@@ -13,8 +13,7 @@ public record HttpEndpointConfig
 {
     [Required, UniquePropertyInEnumerable(nameof(HttpEndpointActionConfig.Method)),
      Description("The http endpoint method actions")]
-    internal HttpEndpointActionConfig[] Actions { get; set; } = [];
-
+    public HttpEndpointActionConfig[] Actions { get; internal set; } = [];
     public IReadOnlyList<HttpEndpointActionConfig> ReadActions() => Actions;
 
     [Required, Description("The http endpoint Path")]

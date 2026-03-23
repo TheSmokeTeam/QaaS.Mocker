@@ -35,8 +35,7 @@ public class TransactionStubBuilder
     /// Gets the processor-specific configuration.
     /// </summary>
     [Description("Implementation configuration for the processor; the configuration given here is loaded dynamically into the resolved processor.")]
-    internal IConfiguration ProcessorConfiguration { get; set; } = new ConfigurationBuilder().Build();
-
+    public IConfiguration ProcessorConfiguration { get; internal set; } = new ConfigurationBuilder().Build();
     /// <summary>
     /// Gets the obsolete alias for <see cref="ProcessorConfiguration"/>.
     /// </summary>
@@ -48,14 +47,12 @@ public class TransactionStubBuilder
     /// Gets the optional request deserializer configuration.
     /// </summary>
     [Description("Deserializer to use on the request body before invoking the processor.")]
-    internal DeserializeConfig? RequestBodyDeserialization { get; set; }
-
+    public DeserializeConfig? RequestBodyDeserialization { get; internal set; }
     /// <summary>
     /// Gets the optional response serializer configuration.
     /// </summary>
     [Description("Serializer to use on the response body after processor execution.")]
-    internal SerializeConfig? ResponseBodySerialization { get; set; }
-
+    public SerializeConfig? ResponseBodySerialization { get; internal set; }
     /// <summary>
     /// Sets the name used for the current Mocker transaction stub builder instance.
     /// </summary>

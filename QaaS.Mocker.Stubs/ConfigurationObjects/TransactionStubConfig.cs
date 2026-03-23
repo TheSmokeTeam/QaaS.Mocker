@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Configuration;
 using QaaS.Framework.Configurations.ConfigurationBindingUtils;
@@ -40,8 +40,7 @@ public record TransactionStubConfig : IYamlConvertible
     /// </summary>
     [Description("Implementation configuration for the processor, " +
                  "the configuration given here is loaded into the provided processor dynamically.")]
-    internal IConfiguration ProcessorConfiguration { get; set; } = new ConfigurationBuilder().Build();
-
+    public IConfiguration ProcessorConfiguration { get; internal set; } = new ConfigurationBuilder().Build();
     [Obsolete("Use ProcessorConfiguration instead.")]
     [EditorBrowsable(EditorBrowsableState.Never)]
     internal IConfiguration ProcessorSpecificConfiguration
@@ -54,14 +53,12 @@ public record TransactionStubConfig : IYamlConvertible
     /// Gets or sets the optional request-body deserialization behavior.
     /// </summary>
     [Description("Deserialize to use on the request body"), DefaultValue(null)]
-    internal DeserializeConfig? RequestBodyDeserialization { get; set; } = null;
-    
+    public DeserializeConfig? RequestBodyDeserialization { get; internal set; } = null;
     /// <summary>
     /// Gets or sets the optional response-body serialization behavior.
     /// </summary>
     [Description("Serialize to use on the response body"), DefaultValue(null)]
-    internal SerializeConfig? ResponseBodySerialization { get; set; } = null;
-
+    public SerializeConfig? ResponseBodySerialization { get; internal set; } = null;
     public IConfiguration ReadProcessorConfiguration() => ProcessorConfiguration;
 
     public DeserializeConfig? ReadRequestBodyDeserialization() => RequestBodyDeserialization;

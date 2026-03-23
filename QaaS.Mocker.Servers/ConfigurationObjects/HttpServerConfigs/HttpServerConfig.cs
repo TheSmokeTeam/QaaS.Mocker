@@ -17,8 +17,7 @@ public record HttpServerConfig : IValidatableObject
     [UniquePropertyInEnumerable(nameof(HttpEndpointConfig.Path)),
      ValidAndUniquePathRegexEndpoints, UniqueActionNameEndpoints,
      Description("All endpints which handled by the http server")]
-    internal HttpEndpointConfig[]? Endpoints { get; set; }
-
+    public HttpEndpointConfig[]? Endpoints { get; internal set; }
     public IReadOnlyList<HttpEndpointConfig> ReadEndpoints() => Endpoints ?? [];
 
     [Description("To run the server with a secured schema. This is for mainly for local testing."), DefaultValue(false)]

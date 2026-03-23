@@ -38,11 +38,11 @@ namespace QaaS.Mocker;
 public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionData>, IValidatableObject
 {
     private static readonly PropertyInfo DataSourceGeneratorProperty =
-        typeof(DataSourceBuilder).GetProperty("Generator", BindingFlags.Instance | BindingFlags.NonPublic) ??
+        typeof(DataSourceBuilder).GetProperty("Generator", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) ??
         throw new InvalidOperationException("Could not resolve DataSourceBuilder.Generator property.");
 
     private static readonly PropertyInfo DataSourceGeneratorConfigurationProperty =
-        typeof(DataSourceBuilder).GetProperty("GeneratorConfiguration", BindingFlags.Instance | BindingFlags.NonPublic) ??
+        typeof(DataSourceBuilder).GetProperty("GeneratorConfiguration", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) ??
         throw new InvalidOperationException("Could not resolve DataSourceBuilder.GeneratorConfiguration property.");
 
     /// <summary>
@@ -51,26 +51,22 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     [UniquePropertyInEnumerable(nameof(TransactionStubConfig.Name)),
      Description("List of transaction stubs that can be used for server actions." +
                  "They provide processing functionality to exercise transaction data.")]
-    internal TransactionStubConfig[] Stubs { get; set; } = [];
-
+    public TransactionStubConfig[] Stubs { get; internal set; } = [];
     /// <summary>
     /// Gets the legacy single-server configuration.
     /// </summary>
     [Description("The legacy single server mocker instance to run.")]
-    internal ServerConfig? Server { get; set; }
-
+    public ServerConfig? Server { get; internal set; }
     /// <summary>
     /// Gets the multi-server configuration used for composite runtimes.
     /// </summary>
     [Description("List of server mocker instances to run concurrently.")]
-    internal ServerConfig[] Servers { get; set; } = [];
-
+    public ServerConfig[] Servers { get; internal set; } = [];
     /// <summary>
     /// Gets the optional controller configuration.
     /// </summary>
     [Description("The server mocker controller configuration")]
-    internal ControllerConfig? Controller { get; set; }
-
+    public ControllerConfig? Controller { get; internal set; }
     private ILifetimeScope _scope;
     private readonly List<ValidationResult> _validationResults;
 

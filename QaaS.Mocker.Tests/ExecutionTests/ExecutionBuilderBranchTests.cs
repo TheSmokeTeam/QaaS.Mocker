@@ -155,7 +155,7 @@ public class ExecutionBuilderBranchTests
             .Named("SourceA")
             .HookNamed("DummyGenerator");
         typeof(DataSourceBuilder)
-            .GetProperty("GeneratorConfiguration", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetProperty("GeneratorConfiguration", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
             .SetValue(dataSourceBuilder, generatorConfiguration);
 
         var configuration = (IConfiguration)typeof(ExecutionBuilder)
