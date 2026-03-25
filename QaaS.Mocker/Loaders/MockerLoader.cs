@@ -211,13 +211,19 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
         if (Path.IsPathRooted(Options.ConfigurationFile))
             return Options.ConfigurationFile;
 
-        if (string.Equals(Options.ConfigurationFile, Constants.DefaultMockerConfigurationFileName,
+        var currentDirectoryConfigurationFilePath =
+            Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, Options.ConfigurationFile));
+
+        if (!string.Equals(Options.ConfigurationFile, Constants.DefaultMockerConfigurationFileName,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, Options.ConfigurationFile));
+            return currentDirectoryConfigurationFilePath;
         }
 
-        return Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, Options.ConfigurationFile));
+        if (File.Exists(currentDirectoryConfigurationFilePath))
+            return currentDirectoryConfigurationFilePath;
+
+        return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, Options.ConfigurationFile));
     }
 }
 

@@ -113,6 +113,36 @@ public class MockerLoaderTests
     }
 
     [Test]
+    public void GetLoadedContext_WithExplicitRelativeDefaultConfigurationFile_ResolvesFromCurrentDirectory()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var originalDirectory = Environment.CurrentDirectory;
+        try
+        {
+            Environment.CurrentDirectory = tempDirectory;
+            WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+
+            var loader = new ConfiguratorAwareMockerLoader<RunOptions>(new RunOptions
+            {
+                ConfigurationFile = "mocker.qaas.yaml"
+            }, [new ServerConfigurator()]);
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalDirectory;
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Test]
     public void GetLoadedRunner_WithExecutionBuilderConfigurators_AppliesCodeConfiguration()
     {
         var loader = new ConfiguratorAwareMockerLoader<RunOptions>(new RunOptions
