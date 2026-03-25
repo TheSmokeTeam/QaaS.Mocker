@@ -4,6 +4,7 @@ This file is generated automatically from CI from git history.
 
 ## Unreleased
 
+- fix(mocker): remove grpc test build warnings
 - chore(deps): bump framework and communication packages
 - docs(changelog): add automated changelog
 - feat(mocker): support custom bootstrap runner types
@@ -18,6 +19,19 @@ This file is generated automatically from CI from git history.
 ## 2.0.6-alpha.1 - 2026-03-22
 
 - No changes recorded.
+
+## 2.0.6 - 2026-03-23
+
+- chore(deps): bump framework and communication packages
+- docs(changelog): add automated changelog
+- feat(mocker): support custom bootstrap runner types
+- refactor(config): expose mocker configuration getters
+- test(stubs): reflect internal serializer config access
+- chore(deps): update framework packages to 1.2.7
+- fix(configuration): consume framework 1.2.6
+- docs(mocker): annotate public configuration functions
+- fix(configuration): internalize mocker builder configs
+- feat(mocker): support discovered code configurators
 
 ## 2.0.5-alpha.4 - 2026-03-22
 
