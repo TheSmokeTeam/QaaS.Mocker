@@ -11,6 +11,13 @@ namespace QaaS.Mocker.CommandLineBuilders;
 /// </summary>
 public static class HelpTextBuilder
 {
+    private const string NoArgsGuidance =
+        """
+        No-args guidance:
+          Empty arguments only work for code-only hosts that choose a no-args path in Program.cs.
+          If a YAML file is part of the scenario, pass it explicitly: dotnet run -- run <config-file>.
+        """;
+
     private static readonly string[] CommandHelpSections =
     [
         BuildCommandHelpSection("run"),
@@ -27,7 +34,8 @@ public static class HelpTextBuilder
 
         var sections = new List<string>
         {
-            FrameworkHelpTextBuilder.BuildHelpText(parserResult).ToString().TrimEnd()
+            FrameworkHelpTextBuilder.BuildHelpText(parserResult).ToString().TrimEnd(),
+            NoArgsGuidance.TrimEnd()
         };
 
         if (includeCommandHelp)

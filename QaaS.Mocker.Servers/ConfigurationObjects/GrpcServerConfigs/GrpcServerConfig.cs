@@ -15,7 +15,7 @@ public record GrpcServerConfig : IValidatableObject
 
     [Required, MinLength(1), UniquePropertyInEnumerable(nameof(GrpcServiceConfig.ServiceName)),
      Description("The grpc services and rpc actions that are handled by the mocker")]
-    public GrpcServiceConfig[] Services { get; internal set; } = [];
+    public GrpcServiceConfig[] Services { get; set; } = [];
     public IReadOnlyList<GrpcServiceConfig> ReadServices() => Services;
 
     [Description("To run the server with TLS credentials"), DefaultValue(false)]

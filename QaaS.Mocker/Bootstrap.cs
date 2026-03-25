@@ -89,9 +89,16 @@ public static class Bootstrap
     /// Preserves the original argument sequence while restoring the legacy
     /// "config path implies run" startup path.
     /// </summary>
-    internal static string[] NormalizeArguments(IEnumerable<string> args)
+    internal static string[] NormalizeArguments(
+        IEnumerable<string> args,
+        string? appBaseDirectory = null,
+        Func<string, bool>? fileExists = null,
+        Func<bool>? hasCodeConfiguration = null)
     {
         var arguments = args.ToArray();
+        if (arguments.Length == 0)
+            return arguments;
+
         if (!ShouldAssumeRunMode(arguments))
             return arguments;
 

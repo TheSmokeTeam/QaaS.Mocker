@@ -62,7 +62,7 @@ public class MockerLoaderTests
         }));
 
         Assert.That(exception, Is.Not.Null);
-        Assert.That(exception!.Message, Does.Contain("Given command arguments are not valid"));
+        Assert.That(exception!.Message, Does.Contain("Command arguments are invalid for RunOptions."));
     }
 
     [Test]
@@ -110,6 +110,36 @@ public class MockerLoaderTests
         var context = InvokeGetLoadedContext(loader);
 
         Assert.That(context.RootConfiguration.GetChildren(), Is.Empty);
+    }
+
+    [Test]
+    public void GetLoadedContext_WithExplicitRelativeDefaultConfigurationFile_ResolvesFromCurrentDirectory()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var originalDirectory = Environment.CurrentDirectory;
+        try
+        {
+            Environment.CurrentDirectory = tempDirectory;
+            WriteFile(tempDirectory, "mocker.qaas.yaml", """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+
+            var loader = new ConfiguratorAwareMockerLoader<RunOptions>(new RunOptions
+            {
+                ConfigurationFile = "mocker.qaas.yaml"
+            }, [new ServerConfigurator()]);
+
+            var context = InvokeGetLoadedContext(loader);
+
+            Assert.That(context.RootConfiguration["Server:Http:Port"], Is.EqualTo("8443"));
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalDirectory;
+            DeleteDirectory(tempDirectory);
+        }
     }
 
     [Test]

@@ -42,10 +42,11 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
             throw new ArgumentException("Configuration file path is required.", nameof(Options.ConfigurationFile));
 
         var contextBuilder = new ContextBuilder(_runScope.Resolve<IConfigurationBuilder>());
+        var resolvedConfigurationFilePath = ResolveConfigurationFilePath();
 
         contextBuilder.SetLogger(Logger);
         if (ShouldLoadConfigurationFile())
-            contextBuilder.SetConfigurationFile(Options.ConfigurationFile);
+            contextBuilder.SetConfigurationFile(resolvedConfigurationFilePath);
         foreach (var overwriteFile in Options.OverwriteFiles ?? [])
             contextBuilder.WithOverwriteFile(overwriteFile);
         foreach (var overwriteFolder in Options.OverwriteFolders ?? [])
@@ -179,8 +180,8 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
         if (PathUtils.IsPathHttpUrl(Options.ConfigurationFile))
             return true;
 
-        var configurationFilePath = Path.Combine(Environment.CurrentDirectory, Options.ConfigurationFile);
-        if (File.Exists(configurationFilePath))
+        var resolvedConfigurationFilePath = ResolveConfigurationFilePath();
+        if (File.Exists(resolvedConfigurationFilePath))
             return true;
 
         if (_executionBuilderConfigurators.Value.Count == 0)
@@ -189,13 +190,40 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
         if (!_missingConfigurationFileWarningLogged)
         {
             Logger.LogWarning(
-                "Configuration file {ConfigurationFile} was not found. Continuing with {ConfiguratorCount} discovered code configurator(s).",
+                "Configuration file {ConfigurationFile} was not found at {ResolvedConfigurationFilePath}. Continuing with {ConfiguratorCount} discovered code configurator(s).",
                 Options.ConfigurationFile,
+                resolvedConfigurationFilePath,
                 _executionBuilderConfigurators.Value.Count);
             _missingConfigurationFileWarningLogged = true;
         }
 
         return false;
+    }
+
+    private string ResolveConfigurationFilePath()
+    {
+        if (string.IsNullOrWhiteSpace(Options.ConfigurationFile))
+            throw new ArgumentException("Configuration file path is required.", nameof(Options.ConfigurationFile));
+
+        if (PathUtils.IsPathHttpUrl(Options.ConfigurationFile))
+            return Options.ConfigurationFile;
+
+        if (Path.IsPathRooted(Options.ConfigurationFile))
+            return Options.ConfigurationFile;
+
+        var currentDirectoryConfigurationFilePath =
+            Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, Options.ConfigurationFile));
+
+        if (!string.Equals(Options.ConfigurationFile, Constants.DefaultMockerConfigurationFileName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return currentDirectoryConfigurationFilePath;
+        }
+
+        if (File.Exists(currentDirectoryConfigurationFilePath))
+            return currentDirectoryConfigurationFilePath;
+
+        return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, Options.ConfigurationFile));
     }
 }
 

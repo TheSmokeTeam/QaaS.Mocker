@@ -13,11 +13,11 @@ public class BootstrapTests
     [Test]
     public void New_WithNullArgs_WritesTopLevelHelpAndReturnsBootstrapHandledRunner()
     {
-        var output = CaptureConsoleOut(() =>
+        var output = WithDefaultConfigurationFileInAppBaseDirectory(null, () => CaptureConsoleOut(() =>
         {
             var mocker = Bootstrap.New(null);
             Assert.DoesNotThrow(() => mocker.Run());
-        });
+        }));
 
         Assert.Multiple(() =>
         {
@@ -25,6 +25,7 @@ public class BootstrapTests
             Assert.That(output, Does.Contain("Command Details:"));
             Assert.That(output, Does.Contain("run:"));
             Assert.That(output, Does.Contain("template:"));
+            Assert.That(output, Does.Contain("Empty arguments only work for code-only hosts"));
         });
     }
 
@@ -184,7 +185,47 @@ public class BootstrapTests
     [Test]
     public void NormalizeArguments_WithNoArguments_ReturnsEmptyArray()
     {
-        var normalizedArguments = Bootstrap.NormalizeArguments([]);
+        var normalizedArguments = Bootstrap.NormalizeArguments(
+            [],
+            @"C:\missing",
+            _ => false,
+            () => false);
+
+        Assert.That(normalizedArguments, Is.Empty);
+    }
+
+    [Test]
+    public void NormalizeArguments_WithNoArgumentsAndDefaultConfigurationFileAvailable_UsesRunModeWithAbsolutePath()
+    {
+        var normalizedArguments = Bootstrap.NormalizeArguments(
+            [],
+            @"C:\temp",
+            _ => true,
+            () => false);
+
+        Assert.That(normalizedArguments, Is.Empty);
+    }
+
+    [Test]
+    public void NormalizeArguments_WithNoArgumentsAndCodeConfigurationAvailable_ReturnsEmptyArray()
+    {
+        var normalizedArguments = Bootstrap.NormalizeArguments(
+            [],
+            @"C:\temp",
+            _ => false,
+            () => true);
+
+        Assert.That(normalizedArguments, Is.Empty);
+    }
+
+    [Test]
+    public void NormalizeArguments_WithNoArgumentsAndNoAvailableConfiguration_ReturnsEmptyArray()
+    {
+        var normalizedArguments = Bootstrap.NormalizeArguments(
+            [],
+            @"C:\missing",
+            _ => false,
+            () => false);
 
         Assert.That(normalizedArguments, Is.Empty);
     }
@@ -264,6 +305,98 @@ public class BootstrapTests
     }
 
     [Test]
+    public void New_WithNullArgsAndDefaultConfigurationInAppBaseDirectory_WritesHelpWithoutRunning()
+    {
+        var defaultConfigurationPath = Path.Combine(AppContext.BaseDirectory, Constants.DefaultMockerConfigurationFileName);
+        var hadExistingFile = File.Exists(defaultConfigurationPath);
+        var existingContent = hadExistingFile ? File.ReadAllText(defaultConfigurationPath) : null;
+
+        try
+        {
+            File.WriteAllText(defaultConfigurationPath, """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+
+            var output = CaptureConsoleOut(() =>
+            {
+                var runner = Bootstrap.New<TrackingMockerRunner>(null);
+                var customRunner = runner as TrackingMockerRunner;
+
+                Assert.That(customRunner, Is.Not.Null);
+
+                customRunner!.Run();
+
+                Assert.Multiple(() =>
+                {
+                    Assert.That(customRunner.BuildExecutionCalled, Is.False);
+                    Assert.That(customRunner.StartExecutionCalled, Is.False);
+                    Assert.That(customRunner.ExitProcessCalled, Is.False);
+                    Assert.That(customRunner.BootstrapExitCode, Is.Zero);
+                });
+            });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(output, Does.Contain("Usage:"));
+                Assert.That(output, Does.Contain("dotnet run -- run <config-file>"));
+            });
+        }
+        finally
+        {
+            if (hadExistingFile)
+                File.WriteAllText(defaultConfigurationPath, existingContent!);
+            else if (File.Exists(defaultConfigurationPath))
+                File.Delete(defaultConfigurationPath);
+        }
+    }
+
+    [Test]
+    public void New_WithRunVerbOnly_UsesDefaultConfigurationFromAppBaseDirectory()
+    {
+        var defaultConfigurationPath = Path.Combine(AppContext.BaseDirectory, Constants.DefaultMockerConfigurationFileName);
+        var hadExistingFile = File.Exists(defaultConfigurationPath);
+        var existingContent = hadExistingFile ? File.ReadAllText(defaultConfigurationPath) : null;
+
+        try
+        {
+            File.WriteAllText(defaultConfigurationPath, """
+                Server:
+                  Http:
+                    Port: 8443
+                """);
+
+            var output = CaptureConsoleOut(() =>
+            {
+                var runner = Bootstrap.New<TrackingMockerRunner>(["run"]);
+                var customRunner = runner as TrackingMockerRunner;
+
+                Assert.That(customRunner, Is.Not.Null);
+
+                customRunner!.Run();
+
+                Assert.Multiple(() =>
+                {
+                    Assert.That(customRunner.BuildExecutionCalled, Is.True);
+                    Assert.That(customRunner.StartExecutionCalled, Is.True);
+                    Assert.That(customRunner.ExitProcessCalled, Is.True);
+                    Assert.That(customRunner.ObservedExitCode, Is.Zero);
+                });
+            });
+
+            Assert.That(output, Does.Not.Contain("Usage:"));
+        }
+        finally
+        {
+            if (hadExistingFile)
+                File.WriteAllText(defaultConfigurationPath, existingContent!);
+            else if (File.Exists(defaultConfigurationPath))
+                File.Delete(defaultConfigurationPath);
+        }
+    }
+
+    [Test]
     public void New_WithCustomRunner_ReturnsCustomRunnerAndUsesCustomLifecycle()
     {
         var tempDirectory = CreateTempDirectory();
@@ -300,7 +433,7 @@ public class BootstrapTests
     [Test]
     public void New_WithNullArgsAndCustomRunner_WritesHelpWithoutInvokingExecutionLifecycle()
     {
-        var output = CaptureConsoleOut(() =>
+        var output = WithDefaultConfigurationFileInAppBaseDirectory(null, () => CaptureConsoleOut(() =>
         {
             var runner = Bootstrap.New<TrackingMockerRunner>(null);
             var customRunner = runner as TrackingMockerRunner;
@@ -317,7 +450,7 @@ public class BootstrapTests
                 Assert.That(customRunner.ExitProcessCalled, Is.False);
                 Assert.That(customRunner.BootstrapExitCode, Is.Zero);
             });
-        });
+        }));
 
         Assert.That(output, Does.Contain("Usage:"));
     }
@@ -337,6 +470,35 @@ public class BootstrapTests
         {
             Console.SetOut(originalOut);
             Environment.ExitCode = 0;
+        }
+    }
+
+    private static T WithDefaultConfigurationFileInAppBaseDirectory<T>(string? content, Func<T> action)
+    {
+        var defaultConfigurationPath = Path.Combine(AppContext.BaseDirectory, Constants.DefaultMockerConfigurationFileName);
+        var hadExistingFile = File.Exists(defaultConfigurationPath);
+        var existingContent = hadExistingFile ? File.ReadAllText(defaultConfigurationPath) : null;
+
+        try
+        {
+            if (content == null)
+            {
+                if (File.Exists(defaultConfigurationPath))
+                    File.Delete(defaultConfigurationPath);
+            }
+            else
+            {
+                File.WriteAllText(defaultConfigurationPath, content);
+            }
+
+            return action();
+        }
+        finally
+        {
+            if (hadExistingFile)
+                File.WriteAllText(defaultConfigurationPath, existingContent!);
+            else if (File.Exists(defaultConfigurationPath))
+                File.Delete(defaultConfigurationPath);
         }
     }
 
@@ -378,7 +540,7 @@ public class BootstrapTests
         protected override int StartExecution(BaseExecution execution)
         {
             StartExecutionCalled = true;
-            return base.StartExecution(execution);
+            return 0;
         }
 
         protected override void ExitProcess(int exitCode)
