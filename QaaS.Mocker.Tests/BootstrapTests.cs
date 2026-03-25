@@ -25,6 +25,7 @@ public class BootstrapTests
             Assert.That(output, Does.Contain("Command Details:"));
             Assert.That(output, Does.Contain("run:"));
             Assert.That(output, Does.Contain("template:"));
+            Assert.That(output, Does.Contain("Empty arguments only work for code-only hosts"));
         });
     }
 
@@ -196,33 +197,25 @@ public class BootstrapTests
     [Test]
     public void NormalizeArguments_WithNoArgumentsAndDefaultConfigurationFileAvailable_UsesRunModeWithAbsolutePath()
     {
-        var appBaseDirectory = Path.Combine(Path.GetTempPath(), "QaaS.Mocker.Tests", Guid.NewGuid().ToString("N"));
-        var expectedConfigurationPath =
-            Path.GetFullPath(Path.Combine(appBaseDirectory, Constants.DefaultMockerConfigurationFileName));
-
         var normalizedArguments = Bootstrap.NormalizeArguments(
             [],
-            appBaseDirectory,
-            path => path == expectedConfigurationPath,
+            @"C:\temp",
+            _ => true,
             () => false);
 
-        Assert.That(normalizedArguments, Is.EqualTo(new[] { "run", expectedConfigurationPath }));
+        Assert.That(normalizedArguments, Is.Empty);
     }
 
     [Test]
-    public void NormalizeArguments_WithNoArgumentsAndCodeConfigurationAvailable_UsesRunModeWithAbsolutePath()
+    public void NormalizeArguments_WithNoArgumentsAndCodeConfigurationAvailable_ReturnsEmptyArray()
     {
-        var appBaseDirectory = Path.Combine(Path.GetTempPath(), "QaaS.Mocker.Tests", Guid.NewGuid().ToString("N"));
-        var expectedConfigurationPath =
-            Path.GetFullPath(Path.Combine(appBaseDirectory, Constants.DefaultMockerConfigurationFileName));
-
         var normalizedArguments = Bootstrap.NormalizeArguments(
             [],
-            appBaseDirectory,
+            @"C:\temp",
             _ => false,
             () => true);
 
-        Assert.That(normalizedArguments, Is.EqualTo(new[] { "run", expectedConfigurationPath }));
+        Assert.That(normalizedArguments, Is.Empty);
     }
 
     [Test]
@@ -312,7 +305,7 @@ public class BootstrapTests
     }
 
     [Test]
-    public void New_WithNullArgsAndDefaultConfigurationInAppBaseDirectory_UsesRunModeWithoutPrintingHelp()
+    public void New_WithNullArgsAndDefaultConfigurationInAppBaseDirectory_WritesHelpWithoutRunning()
     {
         var defaultConfigurationPath = Path.Combine(AppContext.BaseDirectory, Constants.DefaultMockerConfigurationFileName);
         var hadExistingFile = File.Exists(defaultConfigurationPath);
@@ -337,14 +330,18 @@ public class BootstrapTests
 
                 Assert.Multiple(() =>
                 {
-                    Assert.That(customRunner.BuildExecutionCalled, Is.True);
-                    Assert.That(customRunner.StartExecutionCalled, Is.True);
-                    Assert.That(customRunner.ExitProcessCalled, Is.True);
-                    Assert.That(customRunner.ObservedExitCode, Is.Zero);
+                    Assert.That(customRunner.BuildExecutionCalled, Is.False);
+                    Assert.That(customRunner.StartExecutionCalled, Is.False);
+                    Assert.That(customRunner.ExitProcessCalled, Is.False);
+                    Assert.That(customRunner.BootstrapExitCode, Is.Zero);
                 });
             });
 
-            Assert.That(output, Does.Not.Contain("Usage:"));
+            Assert.Multiple(() =>
+            {
+                Assert.That(output, Does.Contain("Usage:"));
+                Assert.That(output, Does.Contain("dotnet run -- run <config-file>"));
+            });
         }
         finally
         {

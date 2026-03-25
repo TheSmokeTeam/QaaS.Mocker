@@ -1,6 +1,5 @@
 using System.Reflection;
 using CommandLine;
-using Microsoft.Extensions.Logging.Abstractions;
 using QaaS.Mocker.CommandLineBuilders;
 using QaaS.Mocker.Loaders;
 using QaaS.Mocker.Options;
@@ -98,7 +97,7 @@ public static class Bootstrap
     {
         var arguments = args.ToArray();
         if (arguments.Length == 0)
-            return TryGetImplicitDefaultRunArguments(appBaseDirectory, fileExists, hasCodeConfiguration) ?? arguments;
+            return arguments;
 
         if (!ShouldAssumeRunMode(arguments))
             return arguments;
@@ -191,31 +190,6 @@ public static class Bootstrap
     {
         return string.Equals(argument, "--help", StringComparison.OrdinalIgnoreCase) ||
                string.Equals(argument, "-h", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string[]? TryGetImplicitDefaultRunArguments(
-        string? appBaseDirectory,
-        Func<string, bool>? fileExists,
-        Func<bool>? hasCodeConfiguration)
-    {
-        var resolvedDefaultConfigurationPath = ResolveDefaultConfigurationPath(appBaseDirectory);
-        var configurationFileExists = (fileExists ?? File.Exists)(resolvedDefaultConfigurationPath);
-        var codeConfigurationAvailable = hasCodeConfiguration?.Invoke() ?? HasDiscoveredCodeConfiguration();
-
-        return configurationFileExists || codeConfigurationAvailable
-            ? ["run", resolvedDefaultConfigurationPath]
-            : null;
-    }
-
-    private static string ResolveDefaultConfigurationPath(string? appBaseDirectory)
-    {
-        var resolvedAppBaseDirectory = appBaseDirectory ?? AppContext.BaseDirectory;
-        return Path.GetFullPath(Path.Combine(resolvedAppBaseDirectory, Constants.DefaultMockerConfigurationFileName));
-    }
-
-    private static bool HasDiscoveredCodeConfiguration()
-    {
-        return ExecutionBuilderConfiguratorLoader.Load(NullLogger.Instance).Count > 0;
     }
 
     private static bool ShouldAssumeRunMode(IReadOnlyList<string> arguments)
