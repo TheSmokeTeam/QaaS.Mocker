@@ -572,11 +572,13 @@ public class GrpcServerTests
     private sealed class NamedGrpcService
     {
         private static readonly string __ServiceName = "tests.NamedGrpcService";
+        private static string ServiceName => __ServiceName;
     }
 
     private sealed class NullNamedGrpcService
     {
         private static readonly string? __ServiceName = null;
+        private static string? ServiceName => __ServiceName;
     }
 
     private sealed class MissingServiceNameType;
@@ -586,6 +588,7 @@ public class GrpcServerTests
 public sealed class EchoGrpcService
 {
     private static readonly string __ServiceName = "tests.EchoGrpcService";
+    private static string ServiceName => __ServiceName;
 
     public sealed class EchoGrpcServiceClient
     {
@@ -596,4 +599,5 @@ public sealed class EchoGrpcService
 public sealed class ServiceWithoutClient
 {
     private static readonly string __ServiceName = "tests.ServiceWithoutClient";
+    private static string ServiceName => __ServiceName;
 }
