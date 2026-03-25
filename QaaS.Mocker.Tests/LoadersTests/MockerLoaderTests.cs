@@ -62,7 +62,7 @@ public class MockerLoaderTests
         }));
 
         Assert.That(exception, Is.Not.Null);
-        Assert.That(exception!.Message, Does.Contain("Given command arguments are not valid"));
+        Assert.That(exception!.Message, Does.Contain("Command arguments are invalid for RunOptions."));
     }
 
     [Test]
