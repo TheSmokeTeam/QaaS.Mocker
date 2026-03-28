@@ -222,6 +222,58 @@ public class HttpServerConfigValidationTests
     }
 
     [Test]
+    public void Validate_WithEndpointMissingPath_DoesNotThrowAndReturnsValidationFailure()
+    {
+        var config = new HttpServerConfig
+        {
+            Port = 8080,
+            Endpoints =
+            [
+                new HttpEndpointConfig
+                {
+                    Path = null!,
+                    Actions =
+                    [
+                        new HttpEndpointActionConfig
+                        {
+                            Name = "GetUser",
+                            Method = HttpMethod.Get,
+                            TransactionStubName = "StubA"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        Assert.DoesNotThrow(() => Validate(config));
+
+        var results = Validate(config);
+
+        Assert.That(results.Any(result => result.ErrorMessage != null &&
+                                          result.ErrorMessage.Contains("not valid", StringComparison.OrdinalIgnoreCase)),
+            Is.True);
+    }
+
+    [Test]
+    public void Validate_WithEndpointMissingActions_DoesNotThrow()
+    {
+        var config = new HttpServerConfig
+        {
+            Port = 8080,
+            Endpoints =
+            [
+                new HttpEndpointConfig
+                {
+                    Path = "/users",
+                    Actions = null!
+                }
+            ]
+        };
+
+        Assert.DoesNotThrow(() => Validate(config));
+    }
+
+    [Test]
     public void ValidAndUniquePathRegexEndpointsAttribute_WithNonEndpointValue_ReturnsSuccess()
     {
         var attribute = new ValidAndUniquePathRegexEndpointsAttribute();

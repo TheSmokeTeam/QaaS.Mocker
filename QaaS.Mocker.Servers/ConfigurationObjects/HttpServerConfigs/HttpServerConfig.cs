@@ -91,31 +91,34 @@ internal class ValidAndUniquePathRegexEndpointsAttribute : ValidationAttribute
 
         var invalidEndpointPaths = (
             from endpoint in configuration.Endpoints
-            where !endpoint.IsPathValid()
-            select endpoint.Path
+            where endpoint == null || string.IsNullOrWhiteSpace(endpoint.Path) || !endpoint.IsPathValid()
+            select endpoint?.Path ?? "<null>"
         ).ToList();
 
         if (invalidEndpointPaths.Count > 0)
             return new ValidationResult($"The following Endpoint Paths are not valid:\n\t- " +
                                         $"{string.Join("\n\t- ", invalidEndpointPaths)}");
 
+        var validEndpoints = configuration.Endpoints
+            .Where(endpoint => endpoint != null && !string.IsNullOrWhiteSpace(endpoint.Path))
+            .ToArray();
         var endpointPathsToRegexMapping = new Dictionary<string, Regex>();
         var endpointPathsToDummyMapping = new Dictionary<string, string>();
 
-        foreach (var endpoint in configuration.Endpoints)
+        foreach (var endpoint in validEndpoints)
         {
-            endpointPathsToRegexMapping[endpoint.Path] = endpoint.GeneratePathRegex();
+            endpointPathsToRegexMapping[endpoint!.Path] = endpoint.GeneratePathRegex();
             endpointPathsToDummyMapping[endpoint.Path] = endpoint.GenerateDummyPath();
         }
 
         var conflictingEndpointPaths = new List<KeyValuePair<string, string>>();
 
-        for (var endpointIndex = 0; endpointIndex < configuration.Endpoints.Length; endpointIndex++)
+        for (var endpointIndex = 0; endpointIndex < validEndpoints.Length; endpointIndex++)
         {
-            var path = configuration.Endpoints[endpointIndex].Path;
-            for (var otherEndpointIndex = endpointIndex + 1; otherEndpointIndex < configuration.Endpoints.Length; otherEndpointIndex++)
+            var path = validEndpoints[endpointIndex]!.Path;
+            for (var otherEndpointIndex = endpointIndex + 1; otherEndpointIndex < validEndpoints.Length; otherEndpointIndex++)
             {
-                var otherPath = configuration.Endpoints[otherEndpointIndex].Path;
+                var otherPath = validEndpoints[otherEndpointIndex]!.Path;
                 var pathsConflict =
                     endpointPathsToRegexMapping[otherPath].IsMatch(endpointPathsToDummyMapping[path]) ||
                     endpointPathsToRegexMapping[path].IsMatch(endpointPathsToDummyMapping[otherPath]);
@@ -152,6 +155,9 @@ internal class UniqueActionNameEndpointsAttribute : ValidationAttribute
 
         foreach (var endpoint in configuration.Endpoints)
         {
+            if (endpoint?.Actions == null)
+                continue;
+
             foreach (var action in endpoint.Actions)
             {
                 if (action.Name != null)

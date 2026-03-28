@@ -26,7 +26,7 @@ public record HttpEndpointConfig
     {
         get
         {
-            var path = Path.ToLowerInvariant();
+            var path = (Path ?? string.Empty).ToLowerInvariant();
             if (path.Length != 1)
                 path = path.TrimEnd(Slash);
             return path;
