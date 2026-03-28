@@ -236,6 +236,25 @@ public class ExecutionBuilderCrudTests
     }
 
     [Test]
+    public void ServerCrud_AddServerToExistingServers_AppendsToServerList()
+    {
+        var builder = new ExecutionBuilder()
+            .ReplaceServers(
+                BuildHttpServer("ActionA"),
+                BuildSocketServer("ActionB"));
+
+        builder.AddServer(BuildHttpServer("ActionC"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(builder.ReadServer(), Is.Null);
+            Assert.That(builder.ReadServers(), Has.Count.EqualTo(3));
+            Assert.That(builder.ReadServers().Select(server => server.ResolveType()),
+                Is.EqualTo(new[] { ServerType.Http, ServerType.Socket, ServerType.Http }));
+        });
+    }
+
+    [Test]
     public void ServerCrud_ReplaceServersWithNullArray_ThrowsArgumentNullException()
     {
         var builder = new ExecutionBuilder();
