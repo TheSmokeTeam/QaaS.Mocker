@@ -1,95 +1,10 @@
-DataSources:
-  - Name: support-data-source
-    Generator: QaaS.Common.Generators.FromExternalSourceGenerators.FromFileSystem
-    GeneratorConfiguration:
-      DataArrangeOrder: AsciiAsc
-      FileSystem:
-        Path: Data/file.txt
+DataSources: []
 
 Stubs:
-  - Name: StaticResponseStub
-    Processor: QaaS.Common.Processors.StaticResponseProcessor
-    ProcessorConfiguration:
-      StatusCode: 200
-      ContentType: text/plain; charset=utf-8
-      Body: healthy
-
-  - Name: RequestEchoStub
-    Processor: QaaS.Common.Processors.RequestEchoProcessor
-    ProcessorConfiguration:
-      StatusCode: 200
-      ContentType: application/json
-      IncludeRequestHeaders: true
-      IncludePathParameters: true
-      IncludeUri: true
-
-  - Name: PassThroughStub
-    Processor: QaaS.Common.Processors.PassThroughProcessor
-    ProcessorConfiguration:
-      StatusCode: 200
-      ContentType: application/octet-stream
-      PreserveMetaData: true
-
-  - Name: JsonEnvelopeStub
-    Processor: QaaS.Common.Processors.JsonEnvelopeProcessor
-    ProcessorConfiguration:
-      StatusCode: 200
-      ContentType: application/json
-      BodyPropertyName: payload
-      IncludeBodyType: true
-      IncludeUri: true
-      IncludeRequestHeaders: true
-      IncludePathParameters: true
-
-  - Name: ProblemDetailsStub
-    Processor: QaaS.Common.Processors.ProblemDetailsProcessor
-    ProcessorConfiguration:
-      StatusCode: 422
-      Title: Validation failure
-      Detail: The request did not satisfy the configured mock validation rules.
-      Type: https://example.local/problem/validation
-      Instance: /problems/mock-validation
-      UseRequestUriAsInstance: false
-      ContentType: application/problem+json
-
-  - Name: TextTransformStub
-    Processor: QaaS.Common.Processors.TextTransformProcessor
-    ProcessorConfiguration:
-      StatusCode: 200
-      ContentType: text/plain; charset=utf-8
-      Prefix: "prefix:"
-      Suffix: ":suffix"
-      SearchText: foo
-      ReplacementText: bar
-      TrimWhitespace: true
-
-  - Name: DataSourceResponseStub
-    Processor: QaaS.Common.Processors.DataSourceResponseProcessor
-    ProcessorConfiguration:
-      DataSourceName: support-data-source
-      SelectionMode: First
-      Index: 0
-      StatusCode: 200
-      ContentType: text/plain; charset=utf-8
-      FallbackBody: fallback
-
-  - Name: ConditionalResponseStub
-    Processor: QaaS.Common.Processors.ConditionalResponseProcessor
-    ProcessorConfiguration:
-      Rules:
-        - RequestHeaderName: X-Mode
-          ExpectedValue: special
-          ResponseBody: special-response
-          StatusCode: 201
-          ContentType: text/plain; charset=utf-8
-      DefaultBody: default-response
-      DefaultStatusCode: 200
-      DefaultContentType: text/plain; charset=utf-8
-
-  - Name: StatusCodeOnlyStub
-    Processor: QaaS.Common.Processors.StatusCodeTransactionProcessor
-    ProcessorConfiguration:
-      StatusCode: 204
+  - Name: ExampleStub
+    Processor: ExampleProcessor
+  - Name: GrpcEchoStub
+    Processor: GrpcEchoProcessor
 
 Servers:
   - Http:
@@ -103,17 +18,7 @@ Servers:
           Actions:
             - Name: HealthAction
               Method: Get
-              TransactionStubName: StaticResponseStub
-        - Path: /echo/{id}
-          Actions:
-            - Name: EchoAction
-              Method: Post
-              TransactionStubName: RequestEchoStub
-        - Path: /problems
-          Actions:
-            - Name: ProblemAction
-              Method: Get
-              TransactionStubName: ProblemDetailsStub
+              TransactionStubName: ExampleStub
 
   - Grpc:
       Port: 50051
@@ -126,9 +31,9 @@ Servers:
           ProtoNamespace: QaaS.Mocker.Example.Grpc
           AssemblyName: QaaS.Mocker.Example
           Actions:
-            - Name: EchoRpcAction
+            - Name: EchoAction
               RpcName: Echo
-              TransactionStubName: JsonEnvelopeStub
+              TransactionStubName: GrpcEchoStub
 
   - Socket:
       BindingIpAddress: 127.0.0.1
@@ -141,4 +46,4 @@ Servers:
           Action:
             Name: SocketCollectAction
             Method: Collect
-            TransactionStubName: PassThroughStub
+            TransactionStubName: ExampleStub
