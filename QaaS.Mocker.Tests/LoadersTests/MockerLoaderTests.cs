@@ -37,7 +37,7 @@ public class MockerLoaderTests
     {
         public void Configure(ExecutionBuilder executionBuilder)
         {
-            executionBuilder.ReplaceServers(
+            executionBuilder.CreateServers(
                 new ServerConfig
                 {
                     Http = new HttpServerConfig

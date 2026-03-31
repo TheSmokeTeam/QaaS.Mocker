@@ -383,20 +383,36 @@ jobs:
         if: steps.stable_tag.outputs.is_stable_tag == 'true'
         shell: pwsh
         run: |
+          # -c Release: Enables compiler optimizations for maximum runtime performance.
+          # --no-restore: Skips the restore phase to speed up the CI job.
+          # --no-build: Uses existing binaries to ensure the package matches the tested build.
+          # --output ${{ env.PACKAGE_OUTPUT_DIRECTORY }}: Specifies the destination for the .nupkg.
+          # -p:PackageVersion=${{ steps.stable_tag.outputs.tag }}: Maps the Git tag to the NuGet version.
+          # -p:DebugType=embedded: Bakes the PDB symbols directly into the DLL.
+          # -p:EmbedAllSources=true: Bakes the actual C# source code into the DLL for air-gapped debugging.
+          # -p:EmbedUntrackedSources=true: Includes generated code like Source Generators in the embedded source.
+          # -p:PublishRepositoryUrl=true: Injects the Git repository URL into the package metadata.
+          # -p:ContinuousIntegrationBuild=true: Normalizes file paths so the debugger works on any machine.
+          # -p:Deterministic=true: Ensures the build produces the exact same binary hash every time.
+          # -p:IncludeSymbols=false: Prevents the creation of redundant/empty .snupkg files.
           $projects = Get-Content "${{ env.PACKABLE_PROJECTS_MANIFEST_PATH }}" | Where-Object {
             -not [string]::IsNullOrWhiteSpace($_)
           }
 
           foreach ($project in $projects) {
             dotnet pack $project `
+              -c Release `
               --no-restore `
               --no-build `
-              --configuration ${{ env.CONFIGURATION }} `
-              --include-symbols `
-              -p:DebugType=portable `
-              -p:SymbolPackageFormat=snupkg `
+              --output ${{ env.PACKAGE_OUTPUT_DIRECTORY }} `
               -p:PackageVersion=${{ steps.stable_tag.outputs.tag }} `
-              --output ${{ env.PACKAGE_OUTPUT_DIRECTORY }}
+              -p:DebugType=embedded `
+              -p:EmbedAllSources=true `
+              -p:EmbedUntrackedSources=true `
+              -p:PublishRepositoryUrl=true `
+              -p:ContinuousIntegrationBuild=true `
+              -p:Deterministic=true `
+              -p:IncludeSymbols=false
 
             if ($LASTEXITCODE -ne 0) {
               throw "Packing failed for '$project'."
@@ -440,22 +456,6 @@ jobs:
             dotnet nuget push $package.FullName -k ${{ secrets.NUGET_AUTH_TOKEN }} -s https://api.nuget.org/v3/index.json --skip-duplicate
             if ($LASTEXITCODE -ne 0) {
               throw "NuGet push failed for '$($package.Name)'."
-            }
-          }
-
-      - name: Push symbol package
-        if: steps.stable_tag.outputs.is_stable_tag == 'true'
-        shell: pwsh
-        run: |
-          $symbolPackages = Get-ChildItem "${{ env.PACKAGE_OUTPUT_DIRECTORY }}" -Filter "*.snupkg" -File
-          if (@($symbolPackages).Count -eq 0) {
-            throw "No symbol packages were found to publish."
-          }
-
-          foreach ($package in $symbolPackages) {
-            dotnet nuget push $package.FullName -k ${{ secrets.NUGET_AUTH_TOKEN }} -s https://api.nuget.org/v3/index.json --skip-duplicate
-            if ($LASTEXITCODE -ne 0) {
-              throw "NuGet symbol push failed for '$($package.Name)'."
             }
           }
 

@@ -18,7 +18,7 @@ public class TransactionStubBuilderTests
         var built = new TransactionStubBuilder()
             .Named("StubA")
             .HookNamed("MyProcessor")
-            .CreateConfiguration(config)
+            .Configure(config)
             .Build();
 
         Assert.Multiple(() =>
@@ -43,7 +43,7 @@ public class TransactionStubBuilderTests
         var built = new TransactionStubBuilder()
             .Named("StubA")
             .HookNamed("MyProcessor")
-            .CreateConfiguration(configuration)
+            .Configure(configuration)
             .Build();
 
         Assert.That(built.ProcessorConfiguration["Nested:Enabled"], Is.EqualTo("true"));
@@ -55,7 +55,7 @@ public class TransactionStubBuilderTests
         var built = new TransactionStubBuilder()
             .Named("StubA")
             .HookNamed("MyProcessor")
-            .CreateConfiguration(new { Prefix = "value" })
+            .Configure(new { Prefix = "value" })
             .Build();
 
         var yaml = new SerializerBuilder().Build().Serialize(built);
@@ -131,7 +131,7 @@ public class TransactionStubBuilderTests
     public void ConfigurationCrud_ReadUpdateAndDelete_WorkAsExpected()
     {
         var builder = new TransactionStubBuilder()
-            .CreateConfiguration(new
+            .Configure(new
             {
                 Existing = "value",
                 Nested = new
@@ -150,29 +150,30 @@ public class TransactionStubBuilderTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(builder.ReadConfiguration()["Existing"], Is.EqualTo("value"));
-            Assert.That(builder.ReadConfiguration()["Nested:Before"], Is.EqualTo("keep"));
-            Assert.That(builder.ReadConfiguration()["Nested:Added"], Is.EqualTo("new"));
+            Assert.That(builder.Configuration["Existing"], Is.EqualTo("value"));
+            Assert.That(builder.Configuration["Nested:Before"], Is.EqualTo("keep"));
+            Assert.That(builder.Configuration["Nested:Added"], Is.EqualTo("new"));
         });
 
         builder.DeleteConfiguration();
-        Assert.That(builder.ReadConfiguration().AsEnumerable().Any(), Is.False);
+        Assert.That(builder.Configuration.AsEnumerable().Any(), Is.False);
     }
 
     [Test]
     public void DataSourceCrud_AddWithReplaceAndClear_WorksAsExpected()
     {
         var builder = new TransactionStubBuilder()
-            .AddDataSourceName("source-a")
-            .AddDataSourceName("source-b");
+            .CreateDataSourceName("source-a")
+            .CreateDataSourceName("source-b");
 
-        Assert.That(builder.DataSourceNames, Is.EqualTo(new[] { "source-a", "source-b" }));
+        Assert.That(builder.ReadDataSourceNames(), Is.EqualTo(new[] { "source-a", "source-b" }));
 
-        builder.WithDataSourceNames(["source-c"]);
-        Assert.That(builder.DataSourceNames, Is.EqualTo(new[] { "source-c" }));
+        builder.UpdateDataSourceName("source-a", "source-c");
+        builder.DeleteDataSourceName("source-b");
+        Assert.That(builder.ReadDataSourceNames(), Is.EqualTo(new[] { "source-c" }));
 
-        builder.ClearDataSourceNames();
-        Assert.That(builder.DataSourceNames, Is.Empty);
+        builder.DeleteDataSourceName("source-c");
+        Assert.That(builder.ReadDataSourceNames(), Is.Empty);
     }
 
     [Test]
@@ -183,9 +184,9 @@ public class TransactionStubBuilderTests
             .GetProperty(nameof(TransactionStubBuilder.DataSourceNames))!
             .SetValue(builder, null);
 
-        builder.AddDataSourceName("source-a");
+        builder.CreateDataSourceName("source-a");
 
-        Assert.That(builder.DataSourceNames, Is.EqualTo(new[] { "source-a" }));
+        Assert.That(builder.ReadDataSourceNames(), Is.EqualTo(new[] { "source-a" }));
     }
 
     [Test]
@@ -202,11 +203,11 @@ public class TransactionStubBuilderTests
         var builder = new TransactionStubBuilder()
             .Named("StubA")
             .HookNamed("MyProcessor")
-            .Create(new ConfigurationBuilder()
+            .Configure(new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?> { ["Feature:Enabled"] = "true" })
                 .Build())
-            .DeserializeRequestBodyWith(requestDeserialization)
-            .SerializeResponseBodyWith(responseSerialization);
+            .WithRequestBodyDeserialization(requestDeserialization)
+            .WithResponseBodySerialization(responseSerialization);
 
         var built = builder.Build();
 
@@ -258,7 +259,7 @@ public class TransactionStubBuilderTests
     public void Create_WithObjectAlias_LoadsProcessorConfiguration()
     {
         var builder = new TransactionStubBuilder()
-            .Create(new
+            .Configure(new
             {
                 Feature = new
                 {
@@ -266,6 +267,6 @@ public class TransactionStubBuilderTests
                 }
             });
 
-        Assert.That(builder.ReadConfiguration()["Feature:Enabled"], Is.EqualTo("True"));
+        Assert.That(builder.Configuration["Feature:Enabled"], Is.EqualTo("True"));
     }
 }
