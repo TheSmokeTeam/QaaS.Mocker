@@ -86,7 +86,7 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder AddDataSourceName(string dataSourceName)
+    internal TransactionStubBuilder AddDataSourceName(string dataSourceName)
     {
         DataSourceNames = (DataSourceNames ?? []).Append(dataSourceName).ToArray();
         return this;
@@ -99,22 +99,54 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder WithDataSourceNames(IEnumerable<string> dataSourceNames)
+    public TransactionStubBuilder CreateDataSourceName(string dataSourceName)
     {
-        DataSourceNames = dataSourceNames.ToArray();
+        return AddDataSourceName(dataSourceName);
+    }
+
+    /// <summary>
+    /// Returns the configured data source names currently stored on the Mocker transaction stub builder instance.
+    /// </summary>
+    /// <remarks>
+    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. Use it to inspect the current configured state without rebuilding the surrounding collection or runtime object graph.
+    /// </remarks>
+    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
+    public IReadOnlyList<string> ReadDataSourceNames()
+    {
+        return DataSourceNames ?? [];
+    }
+
+    /// <summary>
+    /// Updates the configured data source name stored on the current Mocker transaction stub builder instance.
+    /// </summary>
+    /// <remarks>
+    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
+    /// </remarks>
+    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
+    public TransactionStubBuilder UpdateDataSourceName(string existingValue, string newValue)
+    {
+        var dataSourceNames = (DataSourceNames ?? []).ToArray();
+        var index = Array.IndexOf(dataSourceNames, existingValue);
+        if (index < 0)
+        {
+            return this;
+        }
+
+        dataSourceNames[index] = newValue;
+        DataSourceNames = dataSourceNames;
         return this;
     }
 
     /// <summary>
-    /// Clears all configured data source names from the current Mocker transaction stub builder instance.
+    /// Removes the configured data source name from the current Mocker transaction stub builder instance.
     /// </summary>
     /// <remarks>
-    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The behavior exposed here is part of the public surface that the generated function documentation groups under 'Configuration as Code / Transaction Stubs'.
+    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder ClearDataSourceNames()
+    public TransactionStubBuilder DeleteDataSourceName(string dataSourceName)
     {
-        DataSourceNames = [];
+        DataSourceNames = (DataSourceNames ?? []).Where(value => value != dataSourceName).ToArray();
         return this;
     }
 
@@ -138,7 +170,7 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder CreateConfiguration(IConfiguration configuration)
+    internal TransactionStubBuilder CreateConfiguration(IConfiguration configuration)
     {
         return Configure(configuration);
     }
@@ -164,7 +196,7 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder CreateConfiguration(object configuration)
+    internal TransactionStubBuilder CreateConfiguration(object configuration)
     {
         return Configure(configuration);
     }
@@ -176,7 +208,7 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder Create(IConfiguration configuration)
+    internal TransactionStubBuilder Create(IConfiguration configuration)
     {
         return CreateConfiguration(configuration);
     }
@@ -188,7 +220,7 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder Create(object configuration)
+    internal TransactionStubBuilder Create(object configuration)
     {
         return CreateConfiguration(configuration);
     }
@@ -248,10 +280,15 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder DeserializeRequestBodyWith(DeserializeConfig config)
+    public TransactionStubBuilder WithRequestBodyDeserialization(DeserializeConfig config)
     {
         RequestBodyDeserialization = config;
         return this;
+    }
+
+    internal TransactionStubBuilder DeserializeRequestBodyWith(DeserializeConfig config)
+    {
+        return WithRequestBodyDeserialization(config);
     }
 
     /// <summary>
@@ -261,10 +298,15 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder SerializeResponseBodyWith(SerializeConfig config)
+    public TransactionStubBuilder WithResponseBodySerialization(SerializeConfig config)
     {
         ResponseBodySerialization = config;
         return this;
+    }
+
+    internal TransactionStubBuilder SerializeResponseBodyWith(SerializeConfig config)
+    {
+        return WithResponseBodySerialization(config);
     }
 
     /// <summary>
@@ -304,19 +346,25 @@ public class TransactionStubBuilder
         return new TransactionStubBuilder()
             .Named(config.Name!)
             .HookNamed(config.Processor!)
-            .WithDataSourceNames(config.DataSourceNames)
+            .ApplyDataSourceNames(config.DataSourceNames)
             .Configure(config.ProcessorConfiguration)
-            .WithRequestBodyDeserialization(config.RequestBodyDeserialization)
-            .WithResponseBodySerialization(config.ResponseBodySerialization);
+            .ApplyRequestBodyDeserialization(config.RequestBodyDeserialization)
+            .ApplyResponseBodySerialization(config.ResponseBodySerialization);
     }
 
-    private TransactionStubBuilder WithRequestBodyDeserialization(DeserializeConfig? config)
+    private TransactionStubBuilder ApplyDataSourceNames(IEnumerable<string>? dataSourceNames)
+    {
+        DataSourceNames = dataSourceNames?.ToArray() ?? [];
+        return this;
+    }
+
+    private TransactionStubBuilder ApplyRequestBodyDeserialization(DeserializeConfig? config)
     {
         RequestBodyDeserialization = config;
         return this;
     }
 
-    private TransactionStubBuilder WithResponseBodySerialization(SerializeConfig? config)
+    private TransactionStubBuilder ApplyResponseBodySerialization(SerializeConfig? config)
     {
         ResponseBodySerialization = config;
         return this;

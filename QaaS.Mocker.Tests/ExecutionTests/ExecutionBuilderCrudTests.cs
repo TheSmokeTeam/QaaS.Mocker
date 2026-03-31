@@ -176,7 +176,7 @@ public class ExecutionBuilderCrudTests
     }
 
     [Test]
-    public void ServerCrud_CreateServerReadReplaceAddAndUpdate_Works()
+    public void ServerCrud_CreateServerReadUpdateAndIndexedServerCrud_Works()
     {
         var builder = new ExecutionBuilder();
         var first = BuildHttpServer("ActionA");
@@ -190,16 +190,23 @@ public class ExecutionBuilderCrudTests
             server.Http = null;
             server.Socket = BuildSocketServer("ActionA").Socket;
         });
-        builder.ReplaceServer(replacement);
-        builder.AddServer(added);
+        builder.UpdateServer(replacement);
+        var updatedSingle = builder.ReadServer();
+        builder.DeleteServer();
+        builder.CreateServers(replacement, added);
+        var createdIndexed = builder.ReadServerAt(1);
+        builder.UpdateServerAt(1, BuildSocketServer("ActionC"));
+        builder.DeleteServerAt(1);
 
         Assert.Multiple(() =>
         {
             Assert.That(created, Is.SameAs(first));
+            Assert.That(updatedSingle, Is.SameAs(replacement));
             Assert.That(builder.ReadServer(), Is.Null);
-            Assert.That(builder.ReadServers(), Has.Count.EqualTo(2));
-            Assert.That(builder.ReadServers().Select(server => server.ResolveType()),
-                Is.EqualTo(new[] { ServerType.Socket, ServerType.Http }));
+            Assert.That(createdIndexed, Is.SameAs(added));
+            Assert.That(builder.ReadServers(), Has.Count.EqualTo(1));
+            Assert.That(builder.ReadServerAt(0)?.ResolveType(), Is.EqualTo(ServerType.Socket));
+            Assert.That(builder.ReadServerAt(1), Is.Null);
         });
     }
 
@@ -220,46 +227,44 @@ public class ExecutionBuilderCrudTests
     }
 
     [Test]
-    public void ServerCrud_ReplaceServerWithNullConfig_ThrowsArgumentNullException()
+    public void ServerCrud_UpdateServerWithNullConfig_ThrowsArgumentNullException()
     {
-        var builder = new ExecutionBuilder();
+        var builder = new ExecutionBuilder().CreateServer(BuildHttpServer("ActionA"));
 
-        Assert.Throws<ArgumentNullException>(() => builder.ReplaceServer(null!));
+        Assert.Throws<ArgumentNullException>(() => builder.UpdateServer((ServerConfig)null!));
     }
 
     [Test]
-    public void ServerCrud_AddServerWithNullConfig_ThrowsArgumentNullException()
+    public void ServerCrud_CreateServersWithNullConfigArray_ThrowsArgumentNullException()
     {
         var builder = new ExecutionBuilder();
 
-        Assert.Throws<ArgumentNullException>(() => builder.AddServer(null!));
+        Assert.Throws<ArgumentNullException>(() => builder.CreateServers(null!));
     }
 
     [Test]
-    public void ServerCrud_AddServerToExistingServers_AppendsToServerList()
+    public void ServerCrud_CreateServers_StoresMultipleServerList()
     {
         var builder = new ExecutionBuilder()
-            .ReplaceServers(
+            .CreateServers(
                 BuildHttpServer("ActionA"),
                 BuildSocketServer("ActionB"));
-
-        builder.AddServer(BuildHttpServer("ActionC"));
 
         Assert.Multiple(() =>
         {
             Assert.That(builder.ReadServer(), Is.Null);
-            Assert.That(builder.ReadServers(), Has.Count.EqualTo(3));
+            Assert.That(builder.ReadServers(), Has.Count.EqualTo(2));
             Assert.That(builder.ReadServers().Select(server => server.ResolveType()),
-                Is.EqualTo(new[] { ServerType.Http, ServerType.Socket, ServerType.Http }));
+                Is.EqualTo(new[] { ServerType.Http, ServerType.Socket }));
         });
     }
 
     [Test]
-    public void ServerCrud_ReplaceServersWithNullArray_ThrowsArgumentNullException()
+    public void ServerCrud_UpdateServerAtWithNullConfig_ThrowsArgumentNullException()
     {
-        var builder = new ExecutionBuilder();
+        var builder = new ExecutionBuilder().CreateServers(BuildHttpServer("ActionA"));
 
-        Assert.Throws<ArgumentNullException>(() => builder.ReplaceServers(null!));
+        Assert.Throws<ArgumentNullException>(() => builder.UpdateServerAt(0, null!));
     }
 
     [Test]
@@ -279,13 +284,15 @@ public class ExecutionBuilderCrudTests
         builder.CreateController(controller);
         var created = builder.ReadController();
         builder.UpdateController(config => config.ServerName = "server-b");
-        builder.ReplaceController(new ControllerConfig { ServerName = "server-c" });
+        builder.UpdateController(new ControllerConfig { ServerName = "server-c" });
+        var updated = builder.ReadController();
         builder.DeleteController();
 
         Assert.Multiple(() =>
         {
             Assert.That(created, Is.SameAs(controller));
             Assert.That(created!.ServerName, Is.EqualTo("server-b"));
+            Assert.That(updated!.ServerName, Is.EqualTo("server-c"));
             Assert.That(builder.ReadController(), Is.Null);
         });
     }
@@ -312,7 +319,7 @@ public class ExecutionBuilderCrudTests
     {
         var builder = new ExecutionBuilder().CreateController(new ControllerConfig { ServerName = "server-a" });
 
-        Assert.Throws<ArgumentNullException>(() => builder.UpdateController(null!));
+        Assert.Throws<ArgumentNullException>(() => builder.UpdateController((ControllerConfig)null!));
     }
 
     [Test]
@@ -362,7 +369,7 @@ public class ExecutionBuilderCrudTests
             .CreateStub(new TransactionStubBuilder()
                 .Named("StubA")
                 .HookNamed(nameof(CodeFirstProcessor)))
-            .ReplaceServer(new ServerConfig
+            .CreateServer(new ServerConfig
             {
                 Http = new HttpServerConfig
                 {
@@ -405,7 +412,7 @@ public class ExecutionBuilderCrudTests
             .CreateStub(new TransactionStubBuilder()
                 .Named("StubA")
                 .HookNamed(nameof(CodeFirstProcessor)))
-            .ReplaceServers(
+            .CreateServers(
                 BuildHttpServer("HealthAction"),
                 BuildSocketServer("CollectAction"));
 
@@ -427,7 +434,7 @@ public class ExecutionBuilderCrudTests
             .CreateStub(new TransactionStubBuilder()
                 .Named("StubA")
                 .HookNamed(nameof(CodeFirstProcessor)))
-            .ReplaceServers(
+            .CreateServers(
                 BuildHttpServer("SharedAction"),
                 BuildSocketServer("SharedAction"));
 
