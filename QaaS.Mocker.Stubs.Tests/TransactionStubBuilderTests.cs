@@ -150,13 +150,13 @@ public class TransactionStubBuilderTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(builder.ReadConfiguration()["Existing"], Is.EqualTo("value"));
-            Assert.That(builder.ReadConfiguration()["Nested:Before"], Is.EqualTo("keep"));
-            Assert.That(builder.ReadConfiguration()["Nested:Added"], Is.EqualTo("new"));
+            Assert.That(builder.Configuration["Existing"], Is.EqualTo("value"));
+            Assert.That(builder.Configuration["Nested:Before"], Is.EqualTo("keep"));
+            Assert.That(builder.Configuration["Nested:Added"], Is.EqualTo("new"));
         });
 
         builder.DeleteConfiguration();
-        Assert.That(builder.ReadConfiguration().AsEnumerable().Any(), Is.False);
+        Assert.That(builder.Configuration.AsEnumerable().Any(), Is.False);
     }
 
     [Test]
@@ -267,6 +267,6 @@ public class TransactionStubBuilderTests
                 }
             });
 
-        Assert.That(builder.ReadConfiguration()["Feature:Enabled"], Is.EqualTo("True"));
+        Assert.That(builder.Configuration["Feature:Enabled"], Is.EqualTo("True"));
     }
 }

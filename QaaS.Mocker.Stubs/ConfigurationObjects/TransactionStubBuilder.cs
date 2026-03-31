@@ -36,6 +36,11 @@ public class TransactionStubBuilder
     /// </summary>
     [Description("Implementation configuration for the processor; the configuration given here is loaded dynamically into the resolved processor.")]
     public IConfiguration ProcessorConfiguration { get; internal set; } = new ConfigurationBuilder().Build();
+    public IConfiguration Configuration
+    {
+        get => ProcessorConfiguration;
+        internal set => ProcessorConfiguration = value ?? new ConfigurationBuilder().Build();
+    }
     /// <summary>
     /// Gets the obsolete alias for <see cref="ProcessorConfiguration"/>.
     /// </summary>
@@ -170,7 +175,7 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    internal TransactionStubBuilder CreateConfiguration(IConfiguration configuration)
+    internal TransactionStubBuilder AddConfiguration(IConfiguration configuration)
     {
         return Configure(configuration);
     }
@@ -196,7 +201,7 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    internal TransactionStubBuilder CreateConfiguration(object configuration)
+    internal TransactionStubBuilder AddConfiguration(object configuration)
     {
         return Configure(configuration);
     }
@@ -210,7 +215,7 @@ public class TransactionStubBuilder
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
     internal TransactionStubBuilder Create(IConfiguration configuration)
     {
-        return CreateConfiguration(configuration);
+        return AddConfiguration(configuration);
     }
 
     /// <summary>
@@ -222,19 +227,7 @@ public class TransactionStubBuilder
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
     internal TransactionStubBuilder Create(object configuration)
     {
-        return CreateConfiguration(configuration);
-    }
-
-    /// <summary>
-    /// Returns the configuration currently stored on the Mocker transaction stub builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. Use it to inspect the current configured state without rebuilding the surrounding collection or runtime object graph.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public IConfiguration ReadConfiguration()
-    {
-        return ProcessorConfiguration;
+        return AddConfiguration(configuration);
     }
 
     public DeserializeConfig? ReadRequestBodyDeserialization()
