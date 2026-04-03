@@ -149,7 +149,7 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder DeleteDataSourceName(string dataSourceName)
+    public TransactionStubBuilder RemoveDataSourceName(string dataSourceName)
     {
         DataSourceNames = (DataSourceNames ?? []).Where(value => value != dataSourceName).ToArray();
         return this;
@@ -250,19 +250,6 @@ public class TransactionStubBuilder
     public TransactionStubBuilder UpdateConfiguration(object configuration)
     {
         ProcessorConfiguration = ProcessorConfiguration.UpdateConfiguration(configuration);
-        return this;
-    }
-
-    /// <summary>
-    /// Clears the configuration currently stored on the Mocker transaction stub builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder DeleteConfiguration()
-    {
-        ProcessorConfiguration = new ConfigurationBuilder().Build();
         return this;
     }
 

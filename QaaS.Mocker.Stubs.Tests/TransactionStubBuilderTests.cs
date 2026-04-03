@@ -128,7 +128,7 @@ public class TransactionStubBuilderTests
     }
 
     [Test]
-    public void ConfigurationCrud_ReadUpdateAndDelete_WorkAsExpected()
+    public void ConfigurationCrud_ReadAndUpdate_WorkAsExpected()
     {
         var builder = new TransactionStubBuilder()
             .Configure(new
@@ -155,8 +155,11 @@ public class TransactionStubBuilderTests
             Assert.That(builder.Configuration["Nested:Added"], Is.EqualTo("new"));
         });
 
-        builder.DeleteConfiguration();
-        Assert.That(builder.Configuration.AsEnumerable().Any(), Is.False);
+        builder.Configure(new
+        {
+            Replaced = "value"
+        });
+        Assert.That(builder.Configuration["Replaced"], Is.EqualTo("value"));
     }
 
     [Test]
@@ -169,10 +172,10 @@ public class TransactionStubBuilderTests
         Assert.That(builder.ReadDataSourceNames(), Is.EqualTo(new[] { "source-a", "source-b" }));
 
         builder.UpdateDataSourceName("source-a", "source-c");
-        builder.DeleteDataSourceName("source-b");
+        builder.RemoveDataSourceName("source-b");
         Assert.That(builder.ReadDataSourceNames(), Is.EqualTo(new[] { "source-c" }));
 
-        builder.DeleteDataSourceName("source-c");
+        builder.RemoveDataSourceName("source-c");
         Assert.That(builder.ReadDataSourceNames(), Is.Empty);
     }
 

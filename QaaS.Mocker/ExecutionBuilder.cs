@@ -290,7 +290,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder DeleteDataSource(string dataSourceName)
+    public ExecutionBuilder RemoveDataSource(string dataSourceName)
     {
         var dataSources = (DataSources ?? []).ToList();
         var removedCount = dataSources.RemoveAll(builder =>
@@ -415,7 +415,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder DeleteStub(string stubName)
+    public ExecutionBuilder RemoveStub(string stubName)
     {
         var stubs = Stubs.ToList();
         var removedCount = stubs.RemoveAll(stubConfig =>
@@ -605,7 +605,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder DeleteServer()
+    public ExecutionBuilder RemoveServer()
     {
         Server = null;
         return this;
@@ -618,7 +618,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder DeleteServerAt(int index)
+    public ExecutionBuilder RemoveServerAt(int index)
     {
         var configuredServers = ResolveConfiguredServers().ToList();
         if (index < 0 || index >= configuredServers.Count)
@@ -711,7 +711,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder DeleteController()
+    public ExecutionBuilder RemoveController()
     {
         Controller = null;
         return this;

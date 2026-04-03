@@ -30,7 +30,7 @@ public class ExecutionBuilderCrudTests
         var readCreated = builder.ReadDataSource("sourcea");
         builder.UpdateDataSource("sourcea", replacement);
         var readUpdated = builder.ReadDataSource("sourceb");
-        builder.DeleteDataSource("sourceb");
+        builder.RemoveDataSource("sourceb");
 
         Assert.Multiple(() =>
         {
@@ -93,7 +93,7 @@ public class ExecutionBuilderCrudTests
     {
         var builder = new ExecutionBuilder();
 
-        Assert.Throws<KeyNotFoundException>(() => builder.DeleteDataSource("missing"));
+        Assert.Throws<KeyNotFoundException>(() => builder.RemoveDataSource("missing"));
     }
 
     [Test]
@@ -109,7 +109,7 @@ public class ExecutionBuilderCrudTests
             .Named("StubB")
             .HookNamed("DummyProcessor"));
         var readUpdated = builder.ReadStub("stubb");
-        builder.DeleteStub("stubb");
+        builder.RemoveStub("stubb");
 
         Assert.Multiple(() =>
         {
@@ -125,7 +125,7 @@ public class ExecutionBuilderCrudTests
     {
         var builder = new ExecutionBuilder();
 
-        Assert.Throws<KeyNotFoundException>(() => builder.DeleteStub("missing"));
+        Assert.Throws<KeyNotFoundException>(() => builder.RemoveStub("missing"));
     }
 
     [Test]
@@ -192,11 +192,11 @@ public class ExecutionBuilderCrudTests
         });
         builder.UpdateServer(replacement);
         var updatedSingle = builder.ReadServer();
-        builder.DeleteServer();
+        builder.RemoveServer();
         builder.CreateServers(replacement, added);
         var createdIndexed = builder.ReadServerAt(1);
         builder.UpdateServerAt(1, BuildSocketServer("ActionC"));
-        builder.DeleteServerAt(1);
+        builder.RemoveServerAt(1);
 
         Assert.Multiple(() =>
         {
@@ -286,7 +286,7 @@ public class ExecutionBuilderCrudTests
         builder.UpdateController(config => config.ServerName = "server-b");
         builder.UpdateController(new ControllerConfig { ServerName = "server-c" });
         var updated = builder.ReadController();
-        builder.DeleteController();
+        builder.RemoveController();
 
         Assert.Multiple(() =>
         {

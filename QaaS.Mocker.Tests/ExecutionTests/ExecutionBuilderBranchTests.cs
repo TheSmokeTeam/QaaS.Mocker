@@ -37,7 +37,7 @@ public class ExecutionBuilderBranchTests
         Assert.Multiple(() =>
         {
             Assert.That(builder.ReadDataSource("missing"), Is.Null);
-            Assert.Throws<KeyNotFoundException>(() => builder.DeleteDataSource("missing"));
+            Assert.Throws<KeyNotFoundException>(() => builder.RemoveDataSource("missing"));
         });
     }
 
