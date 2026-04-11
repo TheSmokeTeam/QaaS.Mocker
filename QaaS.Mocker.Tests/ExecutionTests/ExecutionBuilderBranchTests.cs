@@ -131,12 +131,12 @@ public class ExecutionBuilderBranchTests
     }
 
     [Test]
-    public void StubCrud_UpdateWithConfigureAction_UpdatesExistingStub()
+    public void StubCrud_UpdateWithBuilder_UpdatesExistingStub()
     {
         var builder = new ExecutionBuilder();
         builder.AddStub(new TransactionStubBuilder().Named("StubA").HookNamed("DummyProcessor"));
 
-        builder.UpdateStub("StubA", update => update.Named("StubB"));
+        builder.UpdateStub("StubA", new TransactionStubBuilder().Named("StubB").HookNamed("DummyProcessor"));
 
         Assert.Multiple(() =>
         {
