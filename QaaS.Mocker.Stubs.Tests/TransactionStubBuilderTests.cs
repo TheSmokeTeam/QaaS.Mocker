@@ -166,17 +166,21 @@ public class TransactionStubBuilderTests
     public void DataSourceCrud_AddWithReplaceAndClear_WorksAsExpected()
     {
         var builder = new TransactionStubBuilder()
-            .CreateDataSourceName("source-a")
-            .CreateDataSourceName("source-b");
+            .AddDataSourceName("source-a")
+            .AddDataSourceName("source-b");
 
-        Assert.That(builder.ReadDataSourceNames(), Is.EqualTo(new[] { "source-a", "source-b" }));
+        Assert.That(builder.DataSourceNames, Is.EqualTo(new[] { "source-a", "source-b" }));
 
         builder.UpdateDataSourceName("source-a", "source-c");
         builder.RemoveDataSourceName("source-b");
-        Assert.That(builder.ReadDataSourceNames(), Is.EqualTo(new[] { "source-c" }));
+        Assert.That(builder.DataSourceNames, Is.EqualTo(new[] { "source-c" }));
+
+        builder.AddDataSourceName("source-indexed")
+            .RemoveDataSourceNameAt(1);
+        Assert.That(builder.DataSourceNames, Is.EqualTo(new[] { "source-c" }));
 
         builder.RemoveDataSourceName("source-c");
-        Assert.That(builder.ReadDataSourceNames(), Is.Empty);
+        Assert.That(builder.DataSourceNames, Is.Empty);
     }
 
     [Test]
@@ -187,9 +191,9 @@ public class TransactionStubBuilderTests
             .GetProperty(nameof(TransactionStubBuilder.DataSourceNames))!
             .SetValue(builder, null);
 
-        builder.CreateDataSourceName("source-a");
+        builder.AddDataSourceName("source-a");
 
-        Assert.That(builder.ReadDataSourceNames(), Is.EqualTo(new[] { "source-a" }));
+        Assert.That(builder.DataSourceNames, Is.EqualTo(new[] { "source-a" }));
     }
 
     [Test]
