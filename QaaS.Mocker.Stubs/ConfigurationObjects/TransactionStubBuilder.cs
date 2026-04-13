@@ -91,34 +91,10 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    internal TransactionStubBuilder AddDataSourceName(string dataSourceName)
+    public TransactionStubBuilder AddDataSourceName(string dataSourceName)
     {
         DataSourceNames = (DataSourceNames ?? []).Append(dataSourceName).ToArray();
         return this;
-    }
-
-    /// <summary>
-    /// Configures data source names on the current Mocker transaction stub builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder CreateDataSourceName(string dataSourceName)
-    {
-        return AddDataSourceName(dataSourceName);
-    }
-
-    /// <summary>
-    /// Returns the configured data source names currently stored on the Mocker transaction stub builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. Use it to inspect the current configured state without rebuilding the surrounding collection or runtime object graph.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public IReadOnlyList<string> ReadDataSourceNames()
-    {
-        return DataSourceNames ?? [];
     }
 
     /// <summary>
@@ -149,9 +125,28 @@ public class TransactionStubBuilder
     /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder DeleteDataSourceName(string dataSourceName)
+    public TransactionStubBuilder RemoveDataSourceName(string dataSourceName)
     {
         DataSourceNames = (DataSourceNames ?? []).Where(value => value != dataSourceName).ToArray();
+        return this;
+    }
+
+    /// <summary>
+    /// Removes the configured data source name at the specified index from the current Mocker transaction stub builder instance.
+    /// </summary>
+    /// <remarks>
+    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
+    /// </remarks>
+    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
+    public TransactionStubBuilder RemoveDataSourceNameAt(int index)
+    {
+        var dataSourceNames = DataSourceNames ?? [];
+        if (index < 0 || index >= dataSourceNames.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
+
+        DataSourceNames = dataSourceNames.Where((_, i) => i != index).ToArray();
         return this;
     }
 
@@ -164,20 +159,8 @@ public class TransactionStubBuilder
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
     public TransactionStubBuilder Configure(IConfiguration configuration)
     {
-        ProcessorConfiguration = configuration;
+        ProcessorConfiguration = configuration ?? new ConfigurationBuilder().Build();
         return this;
-    }
-
-    /// <summary>
-    /// Sets the configuration currently stored on the Mocker transaction stub builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    internal TransactionStubBuilder AddConfiguration(IConfiguration configuration)
-    {
-        return Configure(configuration);
     }
 
     /// <summary>
@@ -195,52 +178,6 @@ public class TransactionStubBuilder
     }
 
     /// <summary>
-    /// Sets the configuration currently stored on the Mocker transaction stub builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    internal TransactionStubBuilder AddConfiguration(object configuration)
-    {
-        return Configure(configuration);
-    }
-
-    /// <summary>
-    /// Sets the configuration currently stored on the Mocker transaction stub builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    internal TransactionStubBuilder Create(IConfiguration configuration)
-    {
-        return AddConfiguration(configuration);
-    }
-
-    /// <summary>
-    /// Sets the configuration currently stored on the Mocker transaction stub builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    internal TransactionStubBuilder Create(object configuration)
-    {
-        return AddConfiguration(configuration);
-    }
-
-    public DeserializeConfig? ReadRequestBodyDeserialization()
-    {
-        return RequestBodyDeserialization;
-    }
-
-    public SerializeConfig? ReadResponseBodySerialization()
-    {
-        return ResponseBodySerialization;
-    }
-
-    /// <summary>
     /// Updates the configuration currently stored on the Mocker transaction stub builder instance.
     /// </summary>
     /// <remarks>
@@ -249,20 +186,8 @@ public class TransactionStubBuilder
     /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
     public TransactionStubBuilder UpdateConfiguration(object configuration)
     {
-        ProcessorConfiguration = ProcessorConfiguration.UpdateConfiguration(configuration);
-        return this;
-    }
-
-    /// <summary>
-    /// Clears the configuration currently stored on the Mocker transaction stub builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker transaction stub builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Transaction Stubs" />
-    public TransactionStubBuilder DeleteConfiguration()
-    {
-        ProcessorConfiguration = new ConfigurationBuilder().Build();
+        ProcessorConfiguration = (ProcessorConfiguration ?? new ConfigurationBuilder().Build())
+            .UpdateConfiguration(configuration);
         return this;
     }
 

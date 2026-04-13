@@ -221,37 +221,24 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     }
 
     /// <summary>
-    /// Creates or adds the configured data source entry on the current Mocker execution builder instance.
+    /// Adds the supplied data source to the current Mocker execution builder instance.
     /// </summary>
     /// <remarks>
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder CreateDataSource(DataSourceBuilder dataSourceBuilder)
+    public ExecutionBuilder AddDataSource(DataSourceBuilder dataSourceBuilder)
     {
         ArgumentNullException.ThrowIfNull(dataSourceBuilder);
 
         var dataSourceName = dataSourceBuilder.Name
                              ?? throw new ArgumentException("Data source name is required", nameof(dataSourceBuilder));
 
-        if (ReadDataSource(dataSourceName) != null)
+        if (FindDataSource(dataSourceName) != null)
             throw new InvalidOperationException($"Data source '{dataSourceName}' already exists.");
 
         DataSources = (DataSources ?? []).Append(dataSourceBuilder).ToArray();
         return this;
-    }
-
-    /// <summary>
-    /// Returns the configured data source currently stored on the Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. Use it to inspect the current configured state without rebuilding the surrounding collection or runtime object graph.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public DataSourceBuilder? ReadDataSource(string dataSourceName)
-    {
-        return (DataSources ?? []).FirstOrDefault(builder =>
-            string.Equals(builder.Name, dataSourceName, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -290,7 +277,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder DeleteDataSource(string dataSourceName)
+    public ExecutionBuilder RemoveDataSource(string dataSourceName)
     {
         var dataSources = (DataSources ?? []).ToList();
         var removedCount = dataSources.RemoveAll(builder =>
@@ -303,67 +290,59 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     }
 
     /// <summary>
-    /// Creates or adds the configured stub entry on the current Mocker execution builder instance.
+    /// Removes the configured data source at the specified index from the current Mocker execution builder instance.
     /// </summary>
     /// <remarks>
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder CreateStub(TransactionStubBuilder stubBuilder)
+    public ExecutionBuilder RemoveDataSourceAt(int index)
     {
-        ArgumentNullException.ThrowIfNull(stubBuilder);
-        return CreateStub(stubBuilder.Build());
+        var dataSources = DataSources ?? [];
+        if (index < 0 || index >= dataSources.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
+        DataSources = dataSources.Where((_, dataSourceIndex) => dataSourceIndex != index).ToArray();
+        return this;
+    }
+
+    private DataSourceBuilder? FindDataSource(string dataSourceName)
+    {
+        return (DataSources ?? []).FirstOrDefault(builder =>
+            string.Equals(builder.Name, dataSourceName, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
-    /// Creates or adds the configured stub entry on the current Mocker execution builder instance.
+    /// Adds the supplied stub to the current Mocker execution builder instance.
     /// </summary>
     /// <remarks>
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder CreateStub(TransactionStubConfig stubConfig)
+    public ExecutionBuilder AddStub(TransactionStubBuilder stubBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(stubBuilder);
+        return AddStub(stubBuilder.Build());
+    }
+
+    /// <summary>
+    /// Adds the supplied stub to the current Mocker execution builder instance.
+    /// </summary>
+    /// <remarks>
+    /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
+    /// </remarks>
+    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
+    public ExecutionBuilder AddStub(TransactionStubConfig stubConfig)
     {
         ArgumentNullException.ThrowIfNull(stubConfig);
 
         var stubName = stubConfig.Name
                        ?? throw new ArgumentException("Stub name is required", nameof(stubConfig));
-        if (ReadStub(stubName) != null)
+        if (FindStub(stubName) != null)
             throw new InvalidOperationException($"Stub '{stubName}' already exists.");
 
         Stubs = Stubs.Append(stubConfig).ToArray();
         return this;
-    }
-
-    /// <summary>
-    /// Returns the configured stub currently stored on the Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. Use it to inspect the current configured state without rebuilding the surrounding collection or runtime object graph.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public TransactionStubConfig? ReadStub(string stubName)
-    {
-        return Stubs.FirstOrDefault(stubConfig =>
-            string.Equals(stubConfig.Name, stubName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Updates the configured stub stored on the current Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder UpdateStub(string stubName, Action<TransactionStubBuilder> configureAction)
-    {
-        ArgumentNullException.ThrowIfNull(configureAction);
-
-        var existingStub = ReadStub(stubName)
-                           ?? throw new KeyNotFoundException($"Stub '{stubName}' was not found.");
-        var updateBuilder = TransactionStubBuilder.FromConfig(existingStub);
-        configureAction(updateBuilder);
-        return UpdateStub(stubName, updateBuilder.Build());
     }
 
     /// <summary>
@@ -409,13 +388,35 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     }
 
     /// <summary>
+    /// Removes the configured stub at the specified index from the current Mocker execution builder instance.
+    /// </summary>
+    /// <remarks>
+    /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
+    /// </remarks>
+    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
+    public ExecutionBuilder RemoveStubAt(int index)
+    {
+        if (index < 0 || index >= Stubs.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
+        Stubs = Stubs.Where((_, stubIndex) => stubIndex != index).ToArray();
+        return this;
+    }
+
+    private TransactionStubConfig? FindStub(string stubName)
+    {
+        return Stubs.FirstOrDefault(stubConfig =>
+            string.Equals(stubConfig.Name, stubName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Removes the configured stub from the current Mocker execution builder instance.
     /// </summary>
     /// <remarks>
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder DeleteStub(string stubName)
+    public ExecutionBuilder RemoveStub(string stubName)
     {
         var stubs = Stubs.ToList();
         var removedCount = stubs.RemoveAll(stubConfig =>
@@ -428,84 +429,36 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     }
 
     /// <summary>
-    /// Returns the configured server currently stored on the Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. Use it to inspect the current configured state without rebuilding the surrounding collection or runtime object graph.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ServerConfig? ReadServer() => Server;
-
-    /// <summary>
-    /// Returns the configured servers currently stored on the Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. Use it to inspect the current configured state without rebuilding the surrounding collection or runtime object graph.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public IReadOnlyList<ServerConfig> ReadServers() => ResolveConfiguredServers().ToArray();
-
-    /// <summary>
-    /// Returns the configured server currently stored at the specified index on the Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. Use it to inspect the current configured state without rebuilding the surrounding collection or runtime object graph.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ServerConfig? ReadServerAt(int index)
-    {
-        var configuredServers = ResolveConfiguredServers();
-        return index < 0 || index >= configuredServers.Count ? null : configuredServers[index];
-    }
-
-    /// <summary>
-    /// Creates or adds the configured server entry on the current Mocker execution builder instance.
+    /// Sets the single-server configuration used by the current Mocker execution builder instance.
     /// </summary>
     /// <remarks>
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder CreateServer(ServerConfig serverConfig)
+    public ExecutionBuilder WithServer(ServerConfig serverConfig)
     {
         ArgumentNullException.ThrowIfNull(serverConfig);
 
-        if (Server != null || Servers.Length > 0)
-            throw new InvalidOperationException("Server is already configured.");
-
         Server = serverConfig;
+        Servers = [];
         return this;
     }
 
     /// <summary>
-    /// Creates the configured server list on the current Mocker execution builder instance.
+    /// Adds the supplied servers to the current Mocker execution builder instance.
     /// </summary>
     /// <remarks>
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder CreateServers(params ServerConfig[] serverConfigs)
+    public ExecutionBuilder AddServers(params ServerConfig[] serverConfigs)
     {
         ArgumentNullException.ThrowIfNull(serverConfigs);
 
-        if (Server != null || Servers.Length > 0)
-            throw new InvalidOperationException("Server is already configured.");
-
         EnsureServerConfigsAreNotNull(serverConfigs);
-        Servers = serverConfigs.ToArray();
+        Servers = ResolveConfiguredServers().Concat(serverConfigs).ToArray();
         Server = null;
         return this;
-    }
-
-    /// <summary>
-    /// Replaces the configured single-server definition on the current Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. The behavior exposed here is part of the public surface that the generated function documentation groups under 'Configuration as Code / Executions'.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    internal ExecutionBuilder ReplaceServer(ServerConfig serverConfig)
-    {
-        return UpdateServer(serverConfig);
     }
 
     /// <summary>
@@ -534,28 +487,11 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    internal ExecutionBuilder AddServer(ServerConfig serverConfig)
+    public ExecutionBuilder AddServer(ServerConfig serverConfig)
     {
         ArgumentNullException.ThrowIfNull(serverConfig);
 
         Servers = ResolveConfiguredServers().Append(serverConfig).ToArray();
-        Server = null;
-        return this;
-    }
-
-    /// <summary>
-    /// Replaces the configured multi-server definitions on the current Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. The behavior exposed here is part of the public surface that the generated function documentation groups under 'Configuration as Code / Executions'.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    internal ExecutionBuilder ReplaceServers(params ServerConfig[] serverConfigs)
-    {
-        ArgumentNullException.ThrowIfNull(serverConfigs);
-
-        EnsureServerConfigsAreNotNull(serverConfigs);
-        Servers = serverConfigs.ToArray();
         Server = null;
         return this;
     }
@@ -582,30 +518,13 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     }
 
     /// <summary>
-    /// Updates the configured server stored on the current Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder UpdateServer(Action<ServerConfig> configureAction)
-    {
-        ArgumentNullException.ThrowIfNull(configureAction);
-        if (Server == null)
-            throw new InvalidOperationException("Single server configuration is not configured.");
-
-        configureAction(Server);
-        return this;
-    }
-
-    /// <summary>
     /// Removes the configured single-server definition from the current Mocker execution builder instance.
     /// </summary>
     /// <remarks>
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder DeleteServer()
+    public ExecutionBuilder RemoveServer()
     {
         Server = null;
         return this;
@@ -618,7 +537,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder DeleteServerAt(int index)
+    public ExecutionBuilder RemoveServerAt(int index)
     {
         var configuredServers = ResolveConfiguredServers().ToList();
         if (index < 0 || index >= configuredServers.Count)
@@ -631,41 +550,16 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     }
 
     /// <summary>
-    /// Returns the configured controller currently stored on the Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. Use it to inspect the current configured state without rebuilding the surrounding collection or runtime object graph.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ControllerConfig? ReadController() => Controller;
-
-    /// <summary>
-    /// Creates or adds the configured controller entry on the current Mocker execution builder instance.
+    /// Sets the controller configuration used by the current Mocker execution builder instance.
     /// </summary>
     /// <remarks>
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder CreateController(ControllerConfig controllerConfig)
+    public ExecutionBuilder WithController(ControllerConfig controllerConfig)
     {
         ArgumentNullException.ThrowIfNull(controllerConfig);
 
-        if (Controller != null)
-            throw new InvalidOperationException("Controller is already configured.");
-
-        Controller = controllerConfig;
-        return this;
-    }
-
-    /// <summary>
-    /// Replaces the configured controller on the current Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. The behavior exposed here is part of the public surface that the generated function documentation groups under 'Configuration as Code / Executions'.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    internal ExecutionBuilder ReplaceController(ControllerConfig? controllerConfig)
-    {
         Controller = controllerConfig;
         return this;
     }
@@ -688,30 +582,13 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     }
 
     /// <summary>
-    /// Updates the configured controller stored on the current Mocker execution builder instance.
-    /// </summary>
-    /// <remarks>
-    /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
-    /// </remarks>
-    /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder UpdateController(Action<ControllerConfig> configureAction)
-    {
-        ArgumentNullException.ThrowIfNull(configureAction);
-        if (Controller == null)
-            throw new InvalidOperationException("Controller is not configured.");
-
-        configureAction(Controller);
-        return this;
-    }
-
-    /// <summary>
     /// Removes the configured controller from the current Mocker execution builder instance.
     /// </summary>
     /// <remarks>
     /// Use this method when working with the documented Mocker execution builder API surface in code. The change is stored on the current builder instance and is consumed by later build, validation, or execution steps.
     /// </remarks>
     /// <qaas-docs group="Configuration as Code" subgroup="Executions" />
-    public ExecutionBuilder DeleteController()
+    public ExecutionBuilder RemoveController()
     {
         Controller = null;
         return this;

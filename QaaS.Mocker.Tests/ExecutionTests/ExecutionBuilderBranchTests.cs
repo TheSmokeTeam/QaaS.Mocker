@@ -36,8 +36,8 @@ public class ExecutionBuilderBranchTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(builder.ReadDataSource("missing"), Is.Null);
-            Assert.Throws<KeyNotFoundException>(() => builder.DeleteDataSource("missing"));
+            Assert.That((builder.DataSources ?? []).FirstOrDefault(dataSource => dataSource.Name == "missing"), Is.Null);
+            Assert.Throws<KeyNotFoundException>(() => builder.RemoveDataSource("missing"));
         });
     }
 
@@ -56,7 +56,7 @@ public class ExecutionBuilderBranchTests
         var builder = new ExecutionBuilder();
 
         Assert.Throws<ArgumentException>(() =>
-            builder.CreateStub(new TransactionStubConfig { Processor = "DummyProcessor" }));
+            builder.AddStub(new TransactionStubConfig { Processor = "DummyProcessor" }));
     }
 
     [Test]
@@ -113,9 +113,9 @@ public class ExecutionBuilderBranchTests
             DataSources = null!
         };
 
-        builder.CreateDataSource(new DataSourceBuilder().Named("SourceA").HookNamed("DummyGenerator"));
+        builder.AddDataSource(new DataSourceBuilder().Named("SourceA").HookNamed("DummyGenerator"));
 
-        Assert.That(builder.ReadDataSource("SourceA"), Is.Not.Null);
+        Assert.That(builder.DataSources!.FirstOrDefault(source => source.Name == "SourceA"), Is.Not.Null);
     }
 
     [Test]
@@ -131,17 +131,17 @@ public class ExecutionBuilderBranchTests
     }
 
     [Test]
-    public void StubCrud_UpdateWithConfigureAction_UpdatesExistingStub()
+    public void StubCrud_UpdateWithBuilder_UpdatesExistingStub()
     {
         var builder = new ExecutionBuilder();
-        builder.CreateStub(new TransactionStubBuilder().Named("StubA").HookNamed("DummyProcessor"));
+        builder.AddStub(new TransactionStubBuilder().Named("StubA").HookNamed("DummyProcessor"));
 
-        builder.UpdateStub("StubA", update => update.Named("StubB"));
+        builder.UpdateStub("StubA", new TransactionStubBuilder().Named("StubB").HookNamed("DummyProcessor"));
 
         Assert.Multiple(() =>
         {
-            Assert.That(builder.ReadStub("StubA"), Is.Null);
-            Assert.That(builder.ReadStub("StubB"), Is.Not.Null);
+            Assert.That(builder.Stubs.FirstOrDefault(stub => stub.Name == "StubA"), Is.Null);
+            Assert.That(builder.Stubs.FirstOrDefault(stub => stub.Name == "StubB"), Is.Not.Null);
         });
     }
 

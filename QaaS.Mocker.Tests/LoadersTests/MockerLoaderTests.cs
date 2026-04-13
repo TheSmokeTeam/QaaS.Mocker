@@ -37,7 +37,7 @@ public class MockerLoaderTests
     {
         public void Configure(ExecutionBuilder executionBuilder)
         {
-            executionBuilder.CreateServers(
+            executionBuilder.AddServers(
                 new ServerConfig
                 {
                     Http = new HttpServerConfig
@@ -152,7 +152,7 @@ public class MockerLoaderTests
 
         var runner = loader.GetLoadedRunner();
         var executionBuilder = ExtractExecutionBuilder(runner);
-        var server = executionBuilder.ReadServers().Single();
+        var server = executionBuilder.Servers.Single();
 
         Assert.That(server.Http?.Port, Is.EqualTo(8080));
     }
@@ -171,7 +171,7 @@ public class MockerLoaderTests
 
             var runner = loader.GetLoadedRunner();
             var executionBuilder = ExtractExecutionBuilder(runner);
-            var server = executionBuilder.ReadServers().Single();
+            var server = executionBuilder.Servers.Single();
 
             Assert.That(server.Http?.Port, Is.EqualTo(8080));
         }
