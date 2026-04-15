@@ -7,20 +7,30 @@ namespace QaaS.Mocker;
 /// </summary>
 public class MockerRunner : IRunner
 {
-    private readonly ExecutionBuilder? _executionBuilder;
     private readonly Action<int> _exitAction;
     private int? BootstrapHandledExitCode { get; set; }
 
-    public MockerRunner(ExecutionBuilder? executionBuilder, Action<int>? exitAction = null)
+    public MockerRunner(IEnumerable<ExecutionBuilder>? executionBuilders, Action<int>? exitAction = null)
     {
-        _executionBuilder = executionBuilder;
+        ExecutionBuilders = executionBuilders?.ToList() ?? [];
         _exitAction = exitAction ?? Environment.Exit;
     }
 
     /// <summary>
-    /// Gets the configured execution builder for custom runner implementations.
+    /// Gets the configured execution builders for custom runner implementations.
     /// </summary>
-    protected ExecutionBuilder? ExecutionBuilder => _executionBuilder;
+    public List<ExecutionBuilder> ExecutionBuilders { get; }
+
+    /// <summary>
+    /// Gets the configured execution builder when only one execution builder is present.
+    /// </summary>
+    protected ExecutionBuilder? ExecutionBuilder => ExecutionBuilders.Count switch
+    {
+        0 => null,
+        1 => ExecutionBuilders[0],
+        _ => throw new InvalidOperationException(
+            "Multiple execution builders are configured. Use ExecutionBuilders instead of ExecutionBuilder.")
+    };
 
     /// <summary>
     /// Runs the configured QaaS.Mocker execution.
@@ -37,10 +47,10 @@ public class MockerRunner : IRunner
             return;
         }
 
-        if (_executionBuilder == null)
+        if (ExecutionBuilders.Count == 0)
             return;
 
-        ExitProcess(StartExecution(BuildExecution(_executionBuilder)));
+        ExitProcess(StartExecutions(BuildExecutions()));
     }
 
     /// <summary>
@@ -52,11 +62,38 @@ public class MockerRunner : IRunner
     }
 
     /// <summary>
+    /// Builds the configured mocker executions from the configured execution builders.
+    /// </summary>
+    protected virtual List<BaseExecution> BuildExecutions()
+    {
+        return ExecutionBuilders.Select(BuildExecution).ToList();
+    }
+
+    /// <summary>
     /// Starts the built execution and returns its exit code.
     /// </summary>
     protected virtual int StartExecution(BaseExecution execution)
     {
         return execution.Start();
+    }
+
+    /// <summary>
+    /// Starts the built executions and returns the aggregated exit code.
+    /// </summary>
+    /// <remarks>
+    /// Executions are started concurrently so long-lived runtimes do not block later builders from
+    /// entering their own start sequence.
+    /// </remarks>
+    protected virtual int StartExecutions(IReadOnlyCollection<BaseExecution> executions)
+    {
+        var executionTasks = executions
+            .Select(execution => Task.Run(() => StartExecution(execution)))
+            .ToArray();
+
+        return Task.WhenAll(executionTasks)
+            .GetAwaiter()
+            .GetResult()
+            .Sum();
     }
 
     /// <summary>

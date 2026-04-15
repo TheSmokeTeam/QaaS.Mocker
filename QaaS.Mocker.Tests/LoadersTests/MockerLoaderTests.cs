@@ -48,8 +48,9 @@ public class MockerLoaderTests
         }
     }
 
-    private sealed class TrackingMockerRunner(ExecutionBuilder? executionBuilder, Action<int>? exitAction = null)
-        : MockerRunner(executionBuilder, exitAction)
+    private sealed class TrackingMockerRunner(IEnumerable<ExecutionBuilder>? executionBuilders,
+        Action<int>? exitAction = null)
+        : MockerRunner(executionBuilders, exitAction)
     {
     }
 
@@ -151,7 +152,7 @@ public class MockerLoaderTests
         }, [new ServerConfigurator()]);
 
         var runner = loader.GetLoadedRunner();
-        var executionBuilder = ExtractExecutionBuilder(runner);
+        var executionBuilder = ExtractExecutionBuilders(runner).Single();
         var server = executionBuilder.Servers.Single();
 
         Assert.That(server.Http?.Port, Is.EqualTo(8080));
@@ -170,7 +171,7 @@ public class MockerLoaderTests
             }, [new ServerConfigurator()]);
 
             var runner = loader.GetLoadedRunner();
-            var executionBuilder = ExtractExecutionBuilder(runner);
+            var executionBuilder = ExtractExecutionBuilders(runner).Single();
             var server = executionBuilder.Servers.Single();
 
             Assert.That(server.Http?.Port, Is.EqualTo(8080));
@@ -609,15 +610,16 @@ public class MockerLoaderTests
                                  ?? throw new InvalidOperationException("Context was not loaded."));
     }
 
-    private static ExecutionBuilder ExtractExecutionBuilder(MockerRunner runner)
+    private static IReadOnlyList<ExecutionBuilder> ExtractExecutionBuilders(MockerRunner runner)
     {
         var executionBuilderField = typeof(MockerRunner)
             .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
-            .FirstOrDefault(field => field.FieldType == typeof(ExecutionBuilder))
-            ?? throw new MissingFieldException(typeof(MockerRunner).FullName, nameof(ExecutionBuilder));
+            .FirstOrDefault(field => field.FieldType == typeof(List<ExecutionBuilder>))
+            ?? throw new MissingFieldException(typeof(MockerRunner).FullName, nameof(MockerRunner.ExecutionBuilders));
 
-        return (ExecutionBuilder)(executionBuilderField.GetValue(runner)
-                                 ?? throw new InvalidOperationException("Execution builder was not loaded."));
+        return (IReadOnlyList<ExecutionBuilder>)(executionBuilderField.GetValue(runner)
+                                                 ?? throw new InvalidOperationException(
+                                                     "Execution builders were not loaded."));
     }
 
     private static string CreateTempDirectory()

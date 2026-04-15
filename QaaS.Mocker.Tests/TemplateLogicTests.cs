@@ -51,6 +51,25 @@ public class TemplateLogicTests
     }
 
     [Test]
+    public void Run_WithRenderedTemplate_WritesSuppliedTemplate()
+    {
+        using var writer = new StringWriter();
+        var logic = new TemplateLogic(
+            CreateContext(),
+            writer: writer,
+            renderedTemplate: "Stubs:\n  - Name: CodeStub\n");
+
+        var result = logic.Run(new ExecutionData());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.Not.Null);
+            Assert.That(writer.ToString(), Does.Contain("CodeStub"));
+            Assert.That(writer.ToString(), Does.Not.Contain("Server:"));
+        });
+    }
+
+    [Test]
     public void Run_WithExistingOutputFolder_WritesTemplateFileWithoutRecreatingDirectory()
     {
         var fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>

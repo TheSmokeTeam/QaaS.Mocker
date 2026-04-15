@@ -29,6 +29,7 @@ using QaaS.Mocker.Servers.ConfigurationObjects;
 using QaaS.Mocker.Stubs;
 using QaaS.Mocker.Stubs.ConfigurationObjects;
 using QaaS.Mocker.Stubs.Stubs;
+using YamlDotNet.Serialization;
 
 namespace QaaS.Mocker;
 
@@ -677,7 +678,10 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
             controller != null);
 
         var serverLogic = new ServerLogic(server);
-        var templateLogic = new TemplateLogic(Context, _templateOutputFolder);
+        var templateLogic = new TemplateLogic(
+            Context,
+            _templateOutputFolder,
+            renderedTemplate: RenderConfigurationTemplate());
         var controllerLogic = controller == null ? null : new ControllerLogic(controller);
 
         Context.Logger.LogInformation(
@@ -838,6 +842,30 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
     private static string ResolveServerTypesSummary(IEnumerable<ServerConfig> serverConfigs)
     {
         return string.Join(", ", serverConfigs.Select(serverConfig => serverConfig.ResolveType()));
+    }
+
+    private string RenderConfigurationTemplate()
+    {
+        var configuredSections = new Dictionary<string, object?>();
+
+        if ((DataSources ?? []).Length > 0)
+            configuredSections[nameof(DataSources)] = DataSources;
+
+        if (Stubs.Length > 0)
+            configuredSections[nameof(Stubs)] = Stubs;
+
+        if (Server != null)
+            configuredSections[nameof(Server)] = Server;
+        else if (Servers.Length > 0)
+            configuredSections[nameof(Servers)] = Servers;
+
+        if (Controller != null)
+            configuredSections[nameof(Controller)] = Controller;
+
+        return new SerializerBuilder()
+            .WithIndentedSequences()
+            .Build()
+            .Serialize(configuredSections);
     }
 
     private void EnsureDefaultMetaData()

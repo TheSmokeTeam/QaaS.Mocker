@@ -522,8 +522,9 @@ public class BootstrapTests
             Directory.Delete(directory, recursive: true);
     }
 
-    private sealed class TrackingMockerRunner(ExecutionBuilder? executionBuilder, Action<int>? exitAction = null)
-        : MockerRunner(executionBuilder, exitAction)
+    private sealed class TrackingMockerRunner(IEnumerable<ExecutionBuilder>? executionBuilders,
+        Action<int>? exitAction = null)
+        : MockerRunner(executionBuilders, exitAction)
     {
         public bool BuildExecutionCalled { get; private set; }
         public bool StartExecutionCalled { get; private set; }

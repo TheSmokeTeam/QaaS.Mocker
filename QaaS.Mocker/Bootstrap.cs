@@ -146,10 +146,11 @@ public static class Bootstrap
         Console.Out.WriteLine(HelpTextBuilder.BuildHelpText(cliParser, cliParserResult, includeCommandHelp));
     }
 
-    internal static TRunner CreateRunner<TRunner>(ExecutionBuilder? executionBuilder, Action<int>? exitAction = null)
+    internal static TRunner CreateRunner<TRunner>(IEnumerable<ExecutionBuilder>? executionBuilders,
+        Action<int>? exitAction = null)
         where TRunner : MockerRunner
     {
-        return (TRunner)Activator.CreateInstance(typeof(TRunner), executionBuilder, exitAction)!;
+        return (TRunner)Activator.CreateInstance(typeof(TRunner), executionBuilders, exitAction)!;
     }
 
     private static TRunner WriteHelpAndCreateBootstrapHandledRunner<TRunner>(
