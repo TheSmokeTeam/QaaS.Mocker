@@ -80,9 +80,20 @@ public class MockerRunner : IRunner
     /// <summary>
     /// Starts the built executions and returns the aggregated exit code.
     /// </summary>
+    /// <remarks>
+    /// Executions are started concurrently so long-lived runtimes do not block later builders from
+    /// entering their own start sequence.
+    /// </remarks>
     protected virtual int StartExecutions(IReadOnlyCollection<BaseExecution> executions)
     {
-        return executions.Select(StartExecution).Sum();
+        var executionTasks = executions
+            .Select(execution => Task.Run(() => StartExecution(execution)))
+            .ToArray();
+
+        return Task.WhenAll(executionTasks)
+            .GetAwaiter()
+            .GetResult()
+            .Sum();
     }
 
     /// <summary>
