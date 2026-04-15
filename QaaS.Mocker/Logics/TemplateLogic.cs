@@ -14,7 +14,8 @@ public class TemplateLogic(
     Context context,
     string? templateOutputFolder = null,
     IFileSystem? fileSystem = null,
-    TextWriter? writer = null) : ILogic
+    TextWriter? writer = null,
+    string? renderedTemplate = null) : ILogic
 {
     private const string DefaultTemplateFileName = "template.qaas.yaml";
 
@@ -31,7 +32,7 @@ public class TemplateLogic(
     /// </summary>
     public ExecutionData Run(ExecutionData executionData)
     {
-        var template = context.RootConfiguration.BuildConfigurationAsYaml(Constants.ConfigurationSectionNames);
+        var template = renderedTemplate ?? context.RootConfiguration.BuildConfigurationAsYaml(Constants.ConfigurationSectionNames);
 
         if (!string.IsNullOrWhiteSpace(templateOutputFolder))
         {

@@ -96,7 +96,7 @@ public class MockerLoader<TOptions> : BaseLoader<TOptions, MockerRunner>, IDispo
     /// Creates the runner instance from current loader options.
     /// </summary>
     /// <returns>A runnable <see cref="MockerRunner"/> instance.</returns>
-    public override MockerRunner GetLoadedRunner() => new(LoadContextToExecutionBuilder(GetLoadedContext()));
+    public override MockerRunner GetLoadedRunner() => new([LoadContextToExecutionBuilder(GetLoadedContext())]);
 
     public void Dispose()
     {
@@ -247,6 +247,6 @@ public class MockerLoader<TRunner, TOptions> : MockerLoader<TOptions>
     /// <returns>A runnable <typeparamref name="TRunner" /> instance.</returns>
     public new TRunner GetLoadedRunner()
     {
-        return Bootstrap.CreateRunner<TRunner>(LoadContextToExecutionBuilder(GetLoadedContext()));
+        return Bootstrap.CreateRunner<TRunner>([LoadContextToExecutionBuilder(GetLoadedContext())]);
     }
 }

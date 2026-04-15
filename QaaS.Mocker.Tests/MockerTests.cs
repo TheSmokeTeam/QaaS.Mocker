@@ -19,7 +19,7 @@ public class MockerRunnerTests
     {
         var executionBuilder = new StubExecutionBuilder(new StubExecution(7));
         var exitCode = -1;
-        var runner = new MockerRunner(executionBuilder, code => exitCode = code);
+        var runner = new MockerRunner([executionBuilder], code => exitCode = code);
 
         runner.Run();
 
@@ -48,7 +48,7 @@ public class MockerRunnerTests
     public void Run_WithCustomRunner_UsesVirtualLifecycleHooks()
     {
         var executionBuilder = new StubExecutionBuilder(new StubExecution(11));
-        var runner = new TrackingMockerRunner(executionBuilder);
+        var runner = new TrackingMockerRunner([executionBuilder]);
 
         runner.Run();
 
@@ -75,8 +75,8 @@ public class MockerRunnerTests
         }
     }
 
-    private sealed class TrackingMockerRunner(ExecutionBuilder? executionBuilder)
-        : MockerRunner(executionBuilder)
+    private sealed class TrackingMockerRunner(IEnumerable<ExecutionBuilder>? executionBuilders)
+        : MockerRunner(executionBuilders)
     {
         public bool BuildExecutionCalled { get; private set; }
         public bool StartExecutionCalled { get; private set; }
