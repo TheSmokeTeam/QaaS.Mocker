@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using QaaS.Framework.Configurations;
+using QaaS.Framework.Infrastructure;
 using QaaS.Framework.SDK.ConfigurationObjects;
 using QaaS.Framework.Serialization;
 
@@ -11,8 +12,11 @@ namespace QaaS.Mocker.Stubs.ConfigurationObjects;
 /// <summary>
 /// Provides a fluent API for building <see cref="TransactionStubConfig"/> instances in code.
 /// </summary>
-public class TransactionStubBuilder
+public class TransactionStubBuilder : ICloneable<TransactionStubBuilder>
 {
+    public TransactionStubBuilder Clone() => BuilderCloner.DeepClone(this);
+
+
     /// <summary>
     /// Gets the stub name.
     /// </summary>
