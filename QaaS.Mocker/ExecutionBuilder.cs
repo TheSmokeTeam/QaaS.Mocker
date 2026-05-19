@@ -10,6 +10,7 @@ using QaaS.Framework.Configurations;
 using QaaS.Framework.Configurations.CustomExceptions;
 using QaaS.Framework.Configurations.CustomValidationAttributes;
 using QaaS.Framework.Executions;
+using QaaS.Framework.Infrastructure;
 using QaaS.Framework.Providers;
 using QaaS.Framework.Providers.Modules;
 using QaaS.Framework.Providers.ObjectCreation;
@@ -36,8 +37,25 @@ namespace QaaS.Mocker;
 /// <summary>
 /// Builds a complete QaaS.Mocker execution from code-first configuration or bound YAML input.
 /// </summary>
-public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionData>, IValidatableObject
+public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionData>, IValidatableObject, ICloneable<ExecutionBuilder>
 {
+    public ExecutionBuilder Clone()
+    {
+        var clone = new ExecutionBuilder
+        {
+            Context = Context,
+            DataSources = DataSources is null ? null : BuilderCloner.DeepClone(DataSources),
+            Stubs = BuilderCloner.DeepClone(Stubs),
+            Server = Server is null ? null : BuilderCloner.DeepClone(Server),
+            Servers = BuilderCloner.DeepClone(Servers),
+            Controller = Controller is null ? null : BuilderCloner.DeepClone(Controller),
+        };
+        clone._executionMode = _executionMode;
+        clone._runLocally = _runLocally;
+        clone._templateOutputFolder = _templateOutputFolder;
+        return clone;
+    }
+
     private static readonly PropertyInfo DataSourceGeneratorProperty =
         typeof(DataSourceBuilder).GetProperty("Generator", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) ??
         throw new InvalidOperationException("Could not resolve DataSourceBuilder.Generator property.");
