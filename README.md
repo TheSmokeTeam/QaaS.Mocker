@@ -175,8 +175,11 @@ The combined runtime exposes:
 The broadcast endpoint is disabled by default and becomes active only when the runner sends `TriggerAction` for `SocketBroadcastAction`.
 
 ## Build and Test
+Repository restores read `QAAS_NUGET_SOURCE_URL` from `NuGet.config`.
+
 ```bash
-dotnet restore QaaS.Mocker.sln
+export QAAS_NUGET_SOURCE_URL=https://api.nuget.org/v3/index.json
+dotnet restore QaaS.Mocker.sln --source "$QAAS_NUGET_SOURCE_URL"
 dotnet build QaaS.Mocker.sln -c Release --no-restore
 dotnet test QaaS.Mocker.sln -c Release --no-build
 ```
