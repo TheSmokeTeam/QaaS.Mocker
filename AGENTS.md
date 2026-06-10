@@ -1,4 +1,4 @@
-# AGENTS.md — QaaS.Mocker
+﻿# AGENTS.md — QaaS.Mocker
 Guidance for AI agents working in this repository.
 
 ## What this repo is
@@ -15,7 +15,6 @@ running QaaS.Runner mutate mocks mid-test via Redis command channels. Target: ne
 | QaaS.Mocker.Servers | Kestrel HTTP, ASP.NET Core gRPC, native TCP socket bindings |
 | QaaS.Mocker.Controller | Redis command plane → routes runtime mutations to stubs |
 | QaaS.Mocker.Example | Runnable example: mock endpoints, DevCert generators, TCP broadcasters |
-| QaaS.Mocker.CliExport | Exports mock schemas for the docs generator |
 
 ## Build & test
 ```shell
@@ -23,8 +22,8 @@ dotnet build -m QaaS.Mocker.sln
 dotnet test QaaS.Mocker.sln
 # Canonical run:
 dotnet run --project QaaS.Mocker -- run mocker.qaas.yaml
-# Lint/template check:
-dotnet run --project QaaS.Mocker -- -m Lint mocker.qaas.yaml
+# Template/validate check:
+dotnet run --project QaaS.Mocker -- template mocker.qaas.yaml
 ```
 Config overlays: `-w` ordered files, `-f` alphabetical folders, `-r` inline path overrides
 (e.g. `Servers:0:Http:Port=9000`), `--no-env` blocks env-var overrides.
@@ -46,22 +45,21 @@ Servers:
 ```
 
 ## Redis control plane
-- **Request channel**: `runner-to-mocker:{contentType}:{serverName}` (lowercase)
-- **Response channel**: `mocker-to-runner:{contentType}:{serverName}` (lowercase)
+- **Request channel**: `runner-to-mocker:{contentType}:{serverName}:{serverInstanceId}` (lowercase; ping uses a server-level channel without the instance suffix)
+- **Response channel**: `mocker-to-runner:{contentType}:{serverName}:{serverInstanceId}` (lowercase; ping uses a server-level channel without the instance suffix)
 - **Commands**: `ChangeActionStub` (swap active stub), `TriggerAction` (force-fire, e.g. socket
   broadcast), `Consume` (fetch buffered endpoint logs), `Ping`, `Status`
-- DTOs live in `Qaas.Mocker.CommunicationObjects` (separate Tier-1 repo).
+- DTOs live in the `QaaS.Mocker.CommunicationObjects` NuGet package (C# namespaces: `Qaas.*`; separate Tier-1 repo).
 
 ## Critical gotchas
 - **Tier-2, depends on QaaS.Framework.Executions 1.5.1** — pin this version; a Framework
   breaking change requires coordinating updates here.
-- **`ITransactionProcessor`** is the sole hook type used — implement it in an assembly
-  discoverable by Framework.Providers scan order (`QaaS.*` → `Common.*` → user libs).
+- **Hook types**: `ITransactionProcessor` (stub processing) and `IGenerator` (data-source generation) — both loaded via `HooksLoaderModule`; implement in assemblies discoverable by Framework.Providers scan order (`QaaS.*` → `Common.*` → user libs).
 - **Concurrent MockerExecutionBuilders run in separate Autofac scopes** (PR #27) — do NOT
   share mutable state across mocker instances.
 - **Redis channel names are lowercase** (despite PascalCase YAML keys) — case mismatch causes
   silent channel misses; Runner and Mocker must use identical channel strings.
-- **`Qaas.Mocker.CommunicationObjects`** (note lowercase 'aas', separate Tier-1 repo) holds
+- **`QaaS.Mocker.CommunicationObjects`** NuGet package (C# namespaces are `Qaas.*`; note lowercase 'aas', separate Tier-1 repo) holds
   DTOs shared with Runner — always keep both repos in sync when changing commands.
 - **`--run-locally` flag** attaches the process to the console with keypress stop — never use
   in unattended CI scripts.
