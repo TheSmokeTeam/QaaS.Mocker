@@ -19,7 +19,7 @@
 
     <ItemGroup>
       <PackageReference Include="Autofac" Version="9.1.0" />
-    <PackageReference Include="QaaS.Framework.SDK" Version="1.5.2" />
+    <PackageReference Include="QaaS.Framework.SDK" Version="1.5.3" />
     </ItemGroup>
 
     <ItemGroup>
