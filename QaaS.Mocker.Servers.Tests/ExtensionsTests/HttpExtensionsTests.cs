@@ -20,7 +20,10 @@ public class HttpExtensionsTests
     [TestCase("PATCH", HttpMethod.Patch)]
     [TestCase("TRACE", HttpMethod.Trace)]
     [TestCase("CONNECT", HttpMethod.Connect)]
-    public void ToHttpMethodEnum_WithSupportedMethod_ReturnsMappedEnum(string input, HttpMethod expected)
+    public void ToHttpMethodEnum_WithSupportedMethod_ReturnsMappedEnum(
+        string input,
+        HttpMethod expected
+    )
     {
         var result = input.ToHttpMethodEnum();
 
@@ -55,7 +58,9 @@ public class HttpExtensionsTests
     [TestCase("HEADS")]
     [TestCase("PATCHS")]
     [TestCase("TRACES")]
-    public void ToHttpMethodEnum_WithNearMatchUnsupportedMethod_ThrowsArgumentException(string input)
+    public void ToHttpMethodEnum_WithNearMatchUnsupportedMethod_ThrowsArgumentException(
+        string input
+    )
     {
         Assert.Throws<ArgumentException>(() => input.ToHttpMethodEnum());
     }
@@ -79,8 +84,106 @@ public class HttpExtensionsTests
             Assert.That(data.Body, Is.TypeOf<byte[]>());
             Assert.That(Encoding.UTF8.GetString((byte[])data.Body!), Is.EqualTo("payload"));
             Assert.That(data.MetaData?.Http?.RequestHeaders?["x-test"], Is.EqualTo("value"));
-            Assert.That(data.MetaData?.Http?.Uri?.ToString(), Is.EqualTo("https://localhost:8443/health?a=1"));
+            Assert.That(
+                data.MetaData?.Http?.Uri?.ToString(),
+                Is.EqualTo("https://localhost:8443/health?a=1")
+            );
         });
+    }
+
+    [TestCase(204)]
+    [TestCase(205)]
+    [TestCase(304)]
+    public async Task BodylessStatus_DoesNotWriteBody(int status)
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        await context.Response.HandleResponseDataAndCloseAsync(
+            new Data<object>
+            {
+                Body = Encoding.UTF8.GetBytes("ignored"),
+                MetaData = new MetaData { Http = new Http { StatusCode = status } },
+            },
+            HttpMethod.Get
+        );
+        Assert.That(context.Response.Body.Length, Is.Zero);
+    }
+
+    [Test]
+    public async Task ReasonPhrase_IsAppliedToResponseFeature()
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        await context.Response.HandleResponseDataAndCloseAsync(
+            new Data<object>
+            {
+                MetaData = new MetaData { Http = new Http { ReasonPhrase = "Custom" } },
+            },
+            HttpMethod.Get
+        );
+        Assert.That(
+            context
+                .Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>()
+                ?.ReasonPhrase,
+            Is.EqualTo("Custom")
+        );
+    }
+
+    [Test]
+    public void UnsupportedTrailers_FailExplicitlyInsteadOfBeingIgnored()
+    {
+        var context = new DefaultHttpContext();
+        Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await context.Response.HandleResponseDataAndCloseAsync(
+                new Data<object>
+                {
+                    MetaData = new MetaData
+                    {
+                        Http = new Http
+                        {
+                            TrailingHeaders = new Dictionary<string, string>
+                            {
+                                ["x-check"] = "value",
+                            },
+                        },
+                    },
+                },
+                HttpMethod.Get
+            )
+        );
+    }
+
+    private sealed class TrailersFeature
+        : Microsoft.AspNetCore.Http.Features.IHttpResponseTrailersFeature
+    {
+        public IHeaderDictionary Trailers { get; set; } = new HeaderDictionary();
+    }
+
+    [Test]
+    public async Task SupportedTrailers_AreDeclaredAndEmitted()
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        var trailers = new TrailersFeature();
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpResponseTrailersFeature>(
+            trailers
+        );
+        await context.Response.HandleResponseDataAndCloseAsync(
+            new Data<object>
+            {
+                Body = Encoding.UTF8.GetBytes("ok"),
+                MetaData = new MetaData
+                {
+                    Http = new Http
+                    {
+                        TrailingHeaders = new Dictionary<string, string> { ["x-check"] = "value" },
+                    },
+                },
+            },
+            HttpMethod.Get
+        );
+        Assert.That(trailers.Trailers["x-check"].ToString(), Is.EqualTo("value"));
+        Assert.That(context.Response.Headers.Trailer.ToString(), Does.Contain("x-check"));
     }
 
     [Test]
@@ -98,9 +201,9 @@ public class HttpExtensionsTests
                 {
                     StatusCode = 201,
                     ResponseHeaders = new Dictionary<string, string> { ["x-response"] = "one" },
-                    Headers = new Dictionary<string, string> { ["x-legacy"] = "two" }
-                }
-            }
+                    Headers = new Dictionary<string, string> { ["x-legacy"] = "two" },
+                },
+            },
         };
 
         await context.Response.HandleResponseDataAndCloseAsync(responseData, HttpMethod.Get);
@@ -131,9 +234,9 @@ public class HttpExtensionsTests
             {
                 Http = new Http
                 {
-                    ResponseHeaders = new Dictionary<string, string> { ["x-response"] = "one" }
-                }
-            }
+                    ResponseHeaders = new Dictionary<string, string> { ["x-response"] = "one" },
+                },
+            },
         };
 
         await context.Response.HandleResponseDataAndCloseAsync(responseData, HttpMethod.Get);
@@ -159,9 +262,9 @@ public class HttpExtensionsTests
             {
                 Http = new Http
                 {
-                    Headers = new Dictionary<string, string> { ["x-legacy"] = "two" }
-                }
-            }
+                    Headers = new Dictionary<string, string> { ["x-legacy"] = "two" },
+                },
+            },
         };
 
         await context.Response.HandleResponseDataAndCloseAsync(responseData, HttpMethod.Get);
@@ -183,7 +286,7 @@ public class HttpExtensionsTests
         var responseData = new Data<object>
         {
             Body = Encoding.UTF8.GetBytes("should-not-be-written"),
-            MetaData = new MetaData { Http = new Http { StatusCode = 204 } }
+            MetaData = new MetaData { Http = new Http { StatusCode = 204 } },
         };
 
         await context.Response.HandleResponseDataAndCloseAsync(responseData, HttpMethod.Head);
@@ -201,9 +304,10 @@ public class HttpExtensionsTests
             new Data<object>
             {
                 Body = Array.Empty<byte>(),
-                MetaData = new MetaData { Http = new Http() }
+                MetaData = new MetaData { Http = new Http() },
             },
-            HttpMethod.Get);
+            HttpMethod.Get
+        );
 
         Assert.Multiple(() =>
         {
@@ -223,9 +327,10 @@ public class HttpExtensionsTests
             new Data<object>
             {
                 Body = Array.Empty<byte>(),
-                MetaData = new MetaData { Http = null! }
+                MetaData = new MetaData { Http = null! },
             },
-            HttpMethod.Get);
+            HttpMethod.Get
+        );
 
         Assert.Multiple(() =>
         {
@@ -243,7 +348,8 @@ public class HttpExtensionsTests
 
         await context.Response.HandleResponseDataAndCloseAsync(
             new Data<object> { Body = "not-bytes" },
-            HttpMethod.Get);
+            HttpMethod.Get
+        );
 
         context.Response.Body.Position = 0;
         using var reader = new StreamReader(context.Response.Body, Encoding.UTF8, leaveOpen: true);
