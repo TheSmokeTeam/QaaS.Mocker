@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Http.Features;
 using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Framework.SDK.Session.MetaDataObjects;
 using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
@@ -29,14 +31,19 @@ public static class HttpExtensions
             "OPTIONS" => HttpMethod.Options,
             "TRACE" => HttpMethod.Trace,
             "CONNECT" => HttpMethod.Connect,
-            _ => throw new ArgumentException($"Http Method type '{stringHttpMethod}' is not supported.", nameof(stringHttpMethod))
+            _ => throw new ArgumentException(
+                $"Http Method type '{stringHttpMethod}' is not supported.",
+                nameof(stringHttpMethod)
+            ),
         };
     }
 
     /// <summary>
     /// Constructs request data from an <see cref="Microsoft.AspNetCore.Http.HttpRequest"/>.
     /// </summary>
-    public static async Task<Data<object>> ConstructRequestDataAsync(this Microsoft.AspNetCore.Http.HttpRequest request)
+    public static async Task<Data<object>> ConstructRequestDataAsync(
+        this Microsoft.AspNetCore.Http.HttpRequest request
+    )
     {
         await using var memoryStream = new MemoryStream();
         await request.Body.CopyToAsync(memoryStream);
@@ -48,12 +55,19 @@ public static class HttpExtensions
             {
                 Http = new Http
                 {
-                    Uri = request.GetEncodedUrl() == null ? null : new Uri(request.GetEncodedUrl()),
+                    Uri = new Uri(request.GetEncodedUrl()),
+                    Version = request.Protocol.StartsWith(
+                        "HTTP/",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                        ? request.Protocol[5..]
+                        : request.Protocol,
                     RequestHeaders = request.Headers.ToDictionary(
                         keyValuePair => keyValuePair.Key,
-                        keyValuePair => keyValuePair.Value.ToString())
-                }
-            }
+                        keyValuePair => keyValuePair.Value.ToString()
+                    ),
+                },
+            },
         };
     }
 
@@ -63,11 +77,31 @@ public static class HttpExtensions
     public static async Task HandleResponseDataAndCloseAsync(
         this Microsoft.AspNetCore.Http.HttpResponse response,
         Data<object> responseData,
-        HttpMethod method)
+        HttpMethod method
+    )
     {
         var responseDataBody = responseData.Body as byte[] ?? [];
 
-        response.StatusCode = responseData.MetaData?.Http?.StatusCode ?? DefaultStatusCode;
+        var metadata = responseData.MetaData?.Http;
+        response.StatusCode = metadata?.StatusCode ?? DefaultStatusCode;
+        var bodyAllowed =
+            method != HttpMethod.Head
+            && response.StatusCode >= 200
+            && response.StatusCode is not (204 or 205 or 304);
+        var trailers = metadata?.TrailingHeaders;
+        if (trailers is { Count: > 0 } && (!bodyAllowed || !response.SupportsTrailers()))
+            throw new NotSupportedException(
+                "HTTP response trailers require a body-capable response and server trailer support."
+            );
+        if (metadata?.ReasonPhrase is { } reason)
+        {
+            var feature =
+                response.HttpContext.Features.Get<IHttpResponseFeature>()
+                ?? throw new NotSupportedException(
+                    "The server does not expose HTTP response features."
+                );
+            feature.ReasonPhrase = reason;
+        }
 
         if (responseData.MetaData?.Http?.ResponseHeaders != null)
         {
@@ -81,9 +115,29 @@ public static class HttpExtensions
                 response.Headers[header.Key] = header.Value;
         }
 
-        if (method != HttpMethod.Head)
-            await response.Body.WriteAsync(responseDataBody);
+        // A payload supplied by a processor must not cause Kestrel to reject a bodyless response.
+        if (response.StatusCode < 200 || response.StatusCode == 204)
+        {
+            response.Headers.Remove("Content-Length");
+            response.Headers.Remove("Transfer-Encoding");
+        }
+        else if (response.StatusCode == 205)
+        {
+            response.Headers.Remove("Transfer-Encoding");
+            response.ContentLength = 0;
+        }
+        if (trailers is { Count: > 0 })
+        {
+            response.ContentLength = null;
+            foreach (var trailer in trailers)
+                response.DeclareTrailer(trailer.Key);
+        }
+        if (bodyAllowed)
+            await response.Body.WriteAsync(responseDataBody).ConfigureAwait(false);
+        if (trailers is { Count: > 0 })
+            foreach (var trailer in trailers)
+                response.AppendTrailer(trailer.Key, trailer.Value);
 
-        await response.CompleteAsync();
+        await response.CompleteAsync().ConfigureAwait(false);
     }
 }
