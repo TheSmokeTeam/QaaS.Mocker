@@ -255,6 +255,42 @@ public class BootstrapTests
     }
 
     [Test]
+    public void NormalizePathOptions_NormalizesOnlyLocalPathFields()
+    {
+        var options = new RunOptions
+        {
+            ConfigurationFile = @"configs\mocker.qaas.yaml",
+            OverwriteFiles = [@"overrides\first.yaml"],
+            OverwriteFolders = [@"overrides\folders"],
+            OverwriteArguments = [@"Variables:Path=content\file.json"],
+            TemplatesOutputFolder = @"output\templates",
+            LoggerConfigurationFilePath = @"logging\logger.yaml"
+        };
+
+        var normalized = Bootstrap.NormalizePathOptions(options);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(normalized.ConfigurationFile, Is.EqualTo(NativePath("configs/mocker.qaas.yaml")));
+            Assert.That(normalized.OverwriteFiles, Is.EqualTo(new[] { NativePath("overrides/first.yaml") }));
+            Assert.That(normalized.OverwriteFolders, Is.EqualTo(new[] { NativePath("overrides/folders") }));
+            Assert.That(normalized.OverwriteArguments, Is.EqualTo(new[] { @"Variables:Path=content\file.json" }));
+            Assert.That(normalized.TemplatesOutputFolder, Is.EqualTo(NativePath("output/templates")));
+            Assert.That(normalized.LoggerConfigurationFilePath, Is.EqualTo(NativePath("logging/logger.yaml")));
+        });
+    }
+
+    [Test]
+    public void NormalizePathOptions_PreservesHttpConfigurationUrl()
+    {
+        var options = new RunOptions { ConfigurationFile = "https://example.com/configs/mocker.qaas.yaml" };
+
+        var normalized = Bootstrap.NormalizePathOptions(options);
+
+        Assert.That(normalized.ConfigurationFile, Is.EqualTo(options.ConfigurationFile));
+    }
+
+    [Test]
     public void New_WithLegacyModeFlag_WritesTopLevelHelpAsInvalidCommandLine()
     {
         var output = CaptureConsoleOut(() =>
@@ -269,6 +305,9 @@ public class BootstrapTests
             Assert.That(output, Does.Contain("Usage:"));
         });
     }
+
+    private static string NativePath(string path) =>
+        path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
 
     [Test]
     public void NormalizeArguments_WithUnknownVerb_LeavesArgumentsUntouched()

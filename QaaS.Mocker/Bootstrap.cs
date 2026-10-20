@@ -74,15 +74,44 @@ public static class Bootstrap
             .MapResult(
                 (RunOptions options) =>
                 {
-                    using var loader = new MockerLoader<TRunner, RunOptions>(options);
+                    using var loader = new MockerLoader<TRunner, RunOptions>(NormalizePathOptions(options));
                     return loader.GetLoadedRunner();
                 },
                 (TemplateOptions options) =>
                 {
-                    using var loader = new MockerLoader<TRunner, TemplateOptions>(options);
+                    using var loader = new MockerLoader<TRunner, TemplateOptions>(NormalizePathOptions(options));
                     return loader.GetLoadedRunner();
                 },
                 errors => HandleParseError<TRunner>(cliParser, cliParserResult, errors));
+    }
+
+    internal static TOptions NormalizePathOptions<TOptions>(TOptions options) where TOptions : MockerOptions
+    {
+        var normalized = ((MockerOptions)options) with
+        {
+            ConfigurationFile = NormalizeLocalPath(options.ConfigurationFile),
+            OverwriteFiles = NormalizeLocalPaths(options.OverwriteFiles),
+            OverwriteFolders = NormalizeLocalPaths(options.OverwriteFolders),
+            TemplatesOutputFolder = NormalizeLocalPath(options.TemplatesOutputFolder),
+            LoggerConfigurationFilePath = NormalizeLocalPath(options.LoggerConfigurationFilePath)
+        };
+
+        return (TOptions)normalized;
+    }
+
+    private static IList<string> NormalizeLocalPaths(IEnumerable<string> paths) =>
+        paths.Select(path => NormalizeLocalPath(path)!).ToArray();
+
+    private static string? NormalizeLocalPath(string? path)
+    {
+        if (string.IsNullOrEmpty(path) ||
+            Uri.TryCreate(path, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            return path;
+        }
+
+        return path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
     }
 
     /// <summary>
