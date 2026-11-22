@@ -37,7 +37,7 @@ public class HttpServer : IServer
             httpServerConfig.InternalErrorTransactionStubName,
             httpServerConfig.Endpoints);
         State = _httpServerState;
-        _metrics = httpServerConfig.EnableHttpMetrics ? HttpRequestMetrics.Instance : null;
+        _metrics = httpServerConfig.EnableHttpMetrics ? HttpRequestMetrics.Register(httpServerConfig.HttpMetricsSlot) : null;
     }
 
     /// <summary>

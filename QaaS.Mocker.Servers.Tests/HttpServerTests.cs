@@ -258,7 +258,7 @@ public class HttpServerTests
     {
         const string meterName = "QaaS.Mocker.Http";
         var counters = new List<(string Name, long Value, KeyValuePair<string, object?>[] Tags)>();
-        var durations = new List<(string Name, string? Unit, double Value, int TagCount)>();
+        var durations = new List<(string Name, string? Unit, double Value, KeyValuePair<string, object?>[] Tags)>();
         using var listener = new MeterListener
         {
             InstrumentPublished = (instrument, owner) =>
@@ -269,7 +269,7 @@ public class HttpServerTests
         };
         listener.SetMeasurementEventCallback<long>((i, v, tags, _) => counters.Add((i.Name, v, tags.ToArray())));
         listener.SetMeasurementEventCallback<double>((i, v, tags, _) =>
-            durations.Add((i.Name, i.Unit, v, tags.Length)));
+            durations.Add((i.Name, i.Unit, v, tags.ToArray())));
         listener.Start();
 
         var server = new HttpServer(new HttpServerConfig
@@ -277,6 +277,7 @@ public class HttpServerTests
             Port = 0,
             IsLocalhost = true,
             EnableHttpMetrics = enabled,
+            HttpMetricsSlot = enabled ? 1 : 99,
             Endpoints =
             [
                 new HttpEndpointConfig
@@ -301,7 +302,8 @@ public class HttpServerTests
                 StatusCodes.Status202Accepted))
         ]);
         listener.RecordObservableInstruments();
-        var before = counters.ToDictionary(x => (x.Name, Outcome: x.Tags.FirstOrDefault().Value as string), x => x.Value);
+        var before = counters.ToDictionary(x => (x.Name, Slot: (int)x.Tags.Single(t => t.Key == "metric_slot").Value!,
+            Outcome: x.Tags.FirstOrDefault(t => t.Key == "outcome").Value as string), x => x.Value);
         counters.Clear();
 
         foreach (var (method, path, expected) in new[]
@@ -325,7 +327,8 @@ public class HttpServerTests
         }
 
         listener.RecordObservableInstruments();
-        var after = counters.ToDictionary(x => (x.Name, Outcome: x.Tags.FirstOrDefault().Value as string), x => x.Value);
+        var after = counters.ToDictionary(x => (x.Name, Slot: (int)x.Tags.Single(t => t.Key == "metric_slot").Value!,
+            Outcome: x.Tags.FirstOrDefault(t => t.Key == "outcome").Value as string), x => x.Value);
         if (!enabled)
         {
             Assert.That(after, Is.EqualTo(before));
@@ -333,25 +336,56 @@ public class HttpServerTests
             return;
         }
 
-        var accepted = counters.Where(x => x.Name == "qaas.mocker.requests.accepted").ToArray();
-        var completed = counters.Where(x => x.Name == "qaas.mocker.requests.completed").ToArray();
+        var slotCounters = counters.Where(x => x.Tags.Any(tag => tag is { Key: "metric_slot", Value: 1 })).ToArray();
+        var accepted = slotCounters.Where(x => x.Name == "qaas.mocker.requests.accepted").ToArray();
+        var completed = slotCounters.Where(x => x.Name == "qaas.mocker.requests.completed").ToArray();
         Assert.Multiple(() =>
         {
-            Assert.That(counters, Has.Count.EqualTo(4));
+            Assert.That(slotCounters, Has.Length.EqualTo(4));
             Assert.That(accepted, Has.Length.EqualTo(1));
-            Assert.That(accepted.Single().Tags, Is.Empty);
-            Assert.That(completed.All(x => x.Tags.Length == 1 && x.Tags[0].Key == "outcome"), Is.True);
-            Assert.That(completed.Select(x => x.Tags.Single().Value),
+            Assert.That(accepted.Single().Tags, Has.Length.EqualTo(1));
+            Assert.That(completed.All(x => x.Tags.Length == 2 && x.Tags.Any(tag => tag.Key == "outcome")), Is.True);
+            Assert.That(completed.Select(x => x.Tags.Single(tag => tag.Key == "outcome").Value),
                 Is.EquivalentTo(new[] { "hit", "miss", "error" }));
-            Assert.That(after[("qaas.mocker.requests.accepted", null)] - before[("qaas.mocker.requests.accepted", null)],
+            Assert.That(after[("qaas.mocker.requests.accepted", 1, null)] - before[("qaas.mocker.requests.accepted", 1, null)],
                 Is.EqualTo(5));
             foreach (var (key, increase) in new[] { ("hit", 1L), ("miss", 2L), ("error", 2L) })
-                Assert.That(after[("qaas.mocker.requests.completed", key)] -
-                    before[("qaas.mocker.requests.completed", key)], Is.EqualTo(increase), key);
+                Assert.That(after[("qaas.mocker.requests.completed", 1, key)] -
+                    before[("qaas.mocker.requests.completed", 1, key)], Is.EqualTo(increase), key);
             Assert.That(durations, Has.Count.EqualTo(5));
             Assert.That(durations.All(x => x.Name == "qaas.mocker.request.duration" &&
-                x.Unit == "s" && double.IsFinite(x.Value) && x.Value >= 0 && x.TagCount == 0), Is.True);
+                x.Unit == "s" && double.IsFinite(x.Value) && x.Value >= 0 &&
+                x.Tags is [{ Key: "metric_slot", Value: 1 }]), Is.True);
         });
+    }
+
+    [Test]
+    [NonParallelizable]
+    public async Task HttpMetrics_InvalidOrDuplicateOwnerLeavesExistingHandlerIntact()
+    {
+        static HttpServerConfig Config(int slot) => new()
+        {
+            IsLocalhost = true,
+            EnableHttpMetrics = true,
+            HttpMetricsSlot = slot,
+            Endpoints = CreateEndpoints()
+        };
+        var server = CreateServer(Config(2));
+        Assert.That(() => CreateServer(Config(2)),
+            Throws.TypeOf<InvalidOperationException>().With.Message.Contains("already assigned"));
+        Assert.That(() => CreateServer(Config(9)), Throws.TypeOf<ArgumentOutOfRangeException>());
+
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("localhost");
+        context.Request.Path = "/health";
+        await using var body = new MemoryStream();
+        context.Response.Body = body;
+        await InvokeHandleTransactionAsync(server, context);
+
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
+        Assert.That(Encoding.UTF8.GetString(body.ToArray()), Is.EqualTo("ok"));
     }
 
     [Test]
@@ -370,7 +404,7 @@ public class HttpServerTests
         listener.Start();
         throwOnNewInstrument = true;
 
-        Assert.That(HttpRequestMetrics.TryCreate(), Is.Null);
+        Assert.That(HttpRequestMetrics.TryCreatePublisher(), Is.Null);
     }
 
     private static HttpServer CreateServer()

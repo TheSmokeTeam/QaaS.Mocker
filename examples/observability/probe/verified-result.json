@@ -1,92 +1,188 @@
 {
-  "probe": "actual Mocker HttpServer and optional OpenTelemetry .NET Prometheus ASP.NET Core bridge, loopback-only",
-  "results": [
-    {
-      "enabled": false,
-      "http": [
-        [
-          "GET",
-          "/matched",
-          404
-        ],
-        [
-          "GET",
-          "/missing",
-          200
-        ],
-        [
-          "POST",
-          "/matched",
-          200
-        ],
-        [
-          "GET",
-          "/broken",
-          202
-        ],
-        [
-          "BREW",
-          "/matched",
-          500
-        ]
-      ],
-      "series": 0,
-      "initial": {},
-      "final_product_series": {}
-    },
-    {
-      "enabled": true,
-      "http": [
-        [
-          "GET",
-          "/matched",
-          404
-        ],
-        [
-          "GET",
-          "/missing",
-          200
-        ],
-        [
-          "POST",
-          "/matched",
-          200
-        ],
-        [
-          "GET",
-          "/broken",
-          202
-        ],
-        [
-          "BREW",
-          "/matched",
-          500
-        ]
-      ],
-      "series": 15,
-      "initial": {
-        "qaas_mocker_requests_accepted_total": 0.0,
-        "qaas_mocker_requests_completed_total{outcome=\"hit\"}": 0.0,
-        "qaas_mocker_requests_completed_total{outcome=\"miss\"}": 0.0,
-        "qaas_mocker_requests_completed_total{outcome=\"error\"}": 0.0
+  "fixture": "actual concurrent Mocker HTTP servers and optional .NET Prometheus bridge; loopback only",
+  "disabled_mode": {
+    "http": [
+      {
+        "fixture_server": "A",
+        "method": "GET",
+        "path": "/matched",
+        "status": 404,
+        "body": "404"
       },
-      "final_product_series": {
-        "qaas_mocker_request_duration_seconds_bucket{le=\"0.05\"}": 5.0,
-        "qaas_mocker_request_duration_seconds_bucket{le=\"0.1\"}": 5.0,
-        "qaas_mocker_request_duration_seconds_bucket{le=\"0.25\"}": 5.0,
-        "qaas_mocker_request_duration_seconds_bucket{le=\"0.5\"}": 5.0,
-        "qaas_mocker_request_duration_seconds_bucket{le=\"1\"}": 5.0,
-        "qaas_mocker_request_duration_seconds_bucket{le=\"2.5\"}": 5.0,
-        "qaas_mocker_request_duration_seconds_bucket{le=\"5\"}": 5.0,
-        "qaas_mocker_request_duration_seconds_bucket{le=\"15\"}": 5.0,
-        "qaas_mocker_request_duration_seconds_bucket{le=\"+Inf\"}": 5.0,
-        "qaas_mocker_request_duration_seconds_sum": 0.023387200000000004,
-        "qaas_mocker_request_duration_seconds_count": 5.0,
-        "qaas_mocker_requests_accepted_total": 5.0,
-        "qaas_mocker_requests_completed_total{outcome=\"hit\"}": 1.0,
-        "qaas_mocker_requests_completed_total{outcome=\"miss\"}": 2.0,
-        "qaas_mocker_requests_completed_total{outcome=\"error\"}": 2.0
+      {
+        "fixture_server": "A",
+        "method": "GET",
+        "path": "/matched",
+        "status": 404,
+        "body": "404"
+      },
+      {
+        "fixture_server": "B",
+        "method": "GET",
+        "path": "/missing",
+        "status": 200,
+        "body": "200"
+      },
+      {
+        "fixture_server": "B",
+        "method": "GET",
+        "path": "/broken",
+        "status": 202,
+        "body": "202"
+      },
+      {
+        "fixture_server": "B",
+        "method": "BREW",
+        "path": "/matched",
+        "status": 500,
+        "body": ""
+      },
+      {
+        "fixture_server": "C-disabled",
+        "method": "POST",
+        "path": "/matched",
+        "status": 200,
+        "body": "200"
+      },
+      {
+        "fixture_server": "C-disabled",
+        "method": "GET",
+        "path": "/matched",
+        "status": 404,
+        "body": "404"
+      },
+      {
+        "fixture_server": "A",
+        "method": "GET",
+        "path": "/matched",
+        "status": 404,
+        "body": "404"
       }
+    ],
+    "rejected_config": {},
+    "series": 0,
+    "initial_product_series": {},
+    "final_product_series": {}
+  },
+  "enabled_mode": {
+    "http": [
+      {
+        "fixture_server": "A",
+        "method": "GET",
+        "path": "/matched",
+        "status": 404,
+        "body": "404"
+      },
+      {
+        "fixture_server": "A",
+        "method": "GET",
+        "path": "/matched",
+        "status": 404,
+        "body": "404"
+      },
+      {
+        "fixture_server": "B",
+        "method": "GET",
+        "path": "/missing",
+        "status": 200,
+        "body": "200"
+      },
+      {
+        "fixture_server": "B",
+        "method": "GET",
+        "path": "/broken",
+        "status": 202,
+        "body": "202"
+      },
+      {
+        "fixture_server": "B",
+        "method": "BREW",
+        "path": "/matched",
+        "status": 500,
+        "body": ""
+      },
+      {
+        "fixture_server": "C-disabled",
+        "method": "POST",
+        "path": "/matched",
+        "status": 200,
+        "body": "200"
+      },
+      {
+        "fixture_server": "C-disabled",
+        "method": "GET",
+        "path": "/matched",
+        "status": 404,
+        "body": "404"
+      },
+      {
+        "fixture_server": "A",
+        "method": "GET",
+        "path": "/matched",
+        "status": 404,
+        "body": "404"
+      }
+    ],
+    "rejected_config": {
+      "duplicate_slot": 409,
+      "invalid_slot": 400
+    },
+    "series": 30,
+    "initial_product_series": {
+      "qaas_mocker_requests_accepted_total{metric_slot=\"1\"}": 0.0,
+      "qaas_mocker_requests_accepted_total{metric_slot=\"2\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"1\",outcome=\"hit\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"1\",outcome=\"miss\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"1\",outcome=\"error\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"2\",outcome=\"hit\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"2\",outcome=\"miss\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"2\",outcome=\"error\"}": 0.0
+    },
+    "final_product_series": {
+      "qaas_mocker_request_duration_seconds_bucket{le=\"0.05\",metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"0.1\",metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"0.25\",metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"0.5\",metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"1\",metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"2.5\",metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"5\",metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"15\",metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"+Inf\",metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_sum{metric_slot=\"2\"}": 0.0266222,
+      "qaas_mocker_request_duration_seconds_count{metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"0.05\",metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"0.1\",metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"0.25\",metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"0.5\",metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"1\",metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"2.5\",metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"5\",metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"15\",metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_bucket{le=\"+Inf\",metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_request_duration_seconds_sum{metric_slot=\"1\"}": 0.0249993,
+      "qaas_mocker_request_duration_seconds_count{metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_requests_accepted_total{metric_slot=\"1\"}": 3.0,
+      "qaas_mocker_requests_accepted_total{metric_slot=\"2\"}": 3.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"1\",outcome=\"hit\"}": 3.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"1\",outcome=\"miss\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"1\",outcome=\"error\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"2\",outcome=\"hit\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"2\",outcome=\"miss\"}": 1.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"2\",outcome=\"error\"}": 2.0
     }
-  ]
+  },
+  "new_process_can_reuse_slots_with_zero_counters": {
+    "initial_product_series": {
+      "qaas_mocker_requests_accepted_total{metric_slot=\"1\"}": 0.0,
+      "qaas_mocker_requests_accepted_total{metric_slot=\"2\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"1\",outcome=\"hit\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"1\",outcome=\"miss\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"1\",outcome=\"error\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"2\",outcome=\"hit\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"2\",outcome=\"miss\"}": 0.0,
+      "qaas_mocker_requests_completed_total{metric_slot=\"2\",outcome=\"error\"}": 0.0
+    }
+  },
+  "http_parity": true,
+  "owned_processes_stopped": true
 }

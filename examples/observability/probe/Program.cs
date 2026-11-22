@@ -19,12 +19,42 @@ builder.WebHost.UseUrls("http://127.0.0.1:" + args[1]);
 builder.Services.AddOpenTelemetry().WithMetrics(m => m.AddMeter("QaaS.Mocker.Http").AddPrometheusExporter());
 var app = builder.Build();
 app.MapPrometheusScrapingEndpoint();
+// These controls exist only on the test exporter host, never on a Mocker route.
+app.MapPost("/probe/duplicate", () => RejectedSlot(1, duplicate: true));
+app.MapPost("/probe/invalid", () => RejectedSlot(9, duplicate: false));
 await app.StartAsync();
-var mocker = new HttpServer(new HttpServerConfig
+
+var enabled = args.Length < 5;
+var mockerA = CreateServer(int.Parse(args[0]), enabled, 1);
+var mockerB = CreateServer(int.Parse(args[2]), enabled, 2);
+var disabled = CreateServer(int.Parse(args[3]), enabled: false, slot: 99);
+foreach (var server in new[] { mockerA, mockerB, disabled })
+    _ = Task.Factory.StartNew(server.Start, TaskCreationOptions.LongRunning);
+await app.WaitForShutdownAsync();
+
+static IResult RejectedSlot(int slot, bool duplicate)
 {
-    Port = int.Parse(args[0]),
+    try
+    {
+        _ = CreateServer(0, enabled: true, slot);
+        return Results.Problem("Invalid instrumentation configuration unexpectedly accepted.");
+    }
+    catch (InvalidOperationException) when (duplicate)
+    {
+        return Results.Conflict("Duplicate metrics slot rejected.");
+    }
+    catch (ArgumentOutOfRangeException) when (!duplicate)
+    {
+        return Results.BadRequest("Out-of-range metrics slot rejected.");
+    }
+}
+
+static HttpServer CreateServer(int port, bool enabled, int slot) => new(new HttpServerConfig
+{
+    Port = port,
     IsLocalhost = true,
-    EnableHttpMetrics = args.Length < 3,
+    EnableHttpMetrics = enabled,
+    HttpMetricsSlot = slot,
     Endpoints = [
        new HttpEndpointConfig { Path="/matched", Actions=[new HttpEndpointActionConfig {
            Method=Method.Get, Name="Matched", TransactionStubName="configured404" }] },
@@ -36,8 +66,6 @@ var mocker = new HttpServer(new HttpServerConfig
     Create(Constants.DefaultNotFoundTransactionStubLabel,200),
     Create(Constants.DefaultInternalErrorTransactionStubLabel,202)
 ]);
-_ = Task.Run(mocker.Start);
-await app.WaitForShutdownAsync();
 static TransactionStub Create(string name, int status) => new()
 {
     Name = name,

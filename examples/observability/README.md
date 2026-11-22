@@ -1,24 +1,50 @@
 # Optional Mocker HTTP metrics
 
-Set `EnableHttpMetrics: true` under an HTTP server (`Server.Http` or the corresponding
-item under `Servers`). The default is `false`. The switch affects only HTTP/HTTPS
-handlers for that server and does **not** add a route, open a metrics port, change
+Set `EnableHttpMetrics: true` and `HttpMetricsSlot: 1` under an HTTP server
+(`Server.Http` or the corresponding item under `Servers`). Metrics are off by
+default; a disabled server ignores its slot. For example:
+
+```yaml
+Server:
+  Http:
+    Port: 8080
+    EnableHttpMetrics: true
+    HttpMetricsSlot: 1
+    # Endpoints and stubs go here as usual.
+```
+
+The switch affects only HTTP/HTTPS handlers for that server and does **not** add
+a route, open a metrics port, change
 logging, or install/configure an exporter or observer. It does not emit from gRPC,
 sockets, or requests rejected by Kestrel before this handler. A configured mock
 readiness route still behaves like any other configured route; use a probe outside
 this handler if you need a denominator excluding probe traffic.
 
-The meter is `QaaS.Mocker.Http`. All opted-in HTTP servers within one process feed
-one common aggregate. Disabled servers never update it. Counters reset when the
-process restarts. A nonfatal observer failure during instrument publication
-disables this meter for the process rather than preventing a server from starting.
-Only the following values are exported to a consumer that elects
-to listen:
+The meter is `QaaS.Mocker.Http`. Each opted-in server owns its own counters;
+a common publisher emits them with a bounded numeric `metric_slot` label and
+tags each histogram observation with that same slot. Opted-in servers must use
+distinct slots **1–8 within one process**, including across concurrent execution
+builders. A missing, invalid, or already-reserved slot rejects the attempted
+configuration explicitly. This does not alter an already-running owner's state
+or responses.
+
+Reservation begins at successful HTTP server construction and lasts until
+process exit, even if a server is never started or is stopped. No slot is reused
+for another server in the same process: otherwise historic samples and
+cumulative resets could become indistinguishable. Rebuilding the server topology
+therefore needs a full process restart; new processes can reuse the same slots
+with zero counters. In the CLI all configured executions are built before their
+server tasks start. A control-plane action that swaps a stub on an existing server
+does not construct a new server or change its slot. The slot limit applies to
+opted-in servers only; use separately identified processes for more than eight.
+An observer that throws nonfatally during instrument publication disables this
+publisher rather than preventing a correctly configured server from starting.
+Only consumers that elect to listen receive the measurements:
 
 | .NET instrument | Type | Expected Prometheus name with suffix translation | Semantics |
 |---|---|---|---|
-| `qaas.mocker.requests.accepted` | Cumulative counter | `qaas_mocker_requests_accepted_total` | Requests entering the opted-in handler |
-| `qaas.mocker.requests.completed` | Cumulative counter | `qaas_mocker_requests_completed_total{outcome}` | Exactly one terminal handling outcome: `hit`, `miss`, or `error` |
+| `qaas.mocker.requests.accepted` | Cumulative counter | `qaas_mocker_requests_accepted_total{metric_slot}` | Requests entering the opted-in handler |
+| `qaas.mocker.requests.completed` | Cumulative counter | `qaas_mocker_requests_completed_total{metric_slot,outcome}` | Exactly one terminal handling outcome: `hit`, `miss`, or `error` |
 | `qaas.mocker.request.duration` | Histogram, seconds | `qaas_mocker_request_duration_seconds_{bucket,sum,count}` | Monotonic handling duration; includes failed handlers |
 
 A routed and successfully handled configured 404 is a **hit**. A route or known-method
@@ -30,9 +56,11 @@ actual dispatch path, do not rely on existing log messages, and expose no config
 route, stub, address, port, path, body, header, identity, status, or exception labels.
 Histogram advice asks for the common boundaries `0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 15`
 seconds (plus +Inf); verify an alternate SDK honors the advice or use a matching
-explicit-bucket view. This is 15 application series per scrape target with those
-buckets. Prometheus adds target topology; the host/exporter may itself publish
-other series.
+explicit-bucket view. This is 15 application series per active slot with those
+buckets, up to **120 application series per full eight-slot process**, plus
+scrape and exporter metadata. Disabled servers do not reserve, count or time any
+slots. Non-raw dimensions are only the explicit bounded slot and fixed outcome;
+Prometheus adds target topology.
 
 ## Attach an exporter separately
 
@@ -72,6 +100,18 @@ scrape identity and scrape budgets before deployment. The loopback example does 
 change or enable a production exporter. Check the names and buckets against the
 actual output of your selected bridge before importing a dashboard.
 
+The top-level Grafana queries can continue to sum across slots. Across scrape
+targets you need unique trusted ownership labels and each instance scraped once;
+otherwise totals can double count, and slot 1 in different processes is not a
+single owner. Within a process the slot is a local handle, not a project or user.
+For troubleshooting, retain the topology plus slot in PromQL, for example:
+
+```promql
+sum by (job, instance, metric_slot, outcome) (
+  rate(qaas_mocker_requests_completed_total{job="qaas_operational"}[5m])
+)
+```
+
 Expected Mocker panels: accepted and outcome rates (per second), hit share
 `hit/(hit+miss)`, internal-error share `error/accepted`, and p95 plus histogram
 sample rate. Missing or zero denominators should remain No data. The ingest/queue
@@ -87,9 +127,14 @@ The example [probe](probe) uses the real Mocker HTTP server and puts an optional
 OpenTelemetry ASP.NET Core Prometheus exporter only in a separate test host.
 The exporter is prerelease (1.21.0-beta.1) and is **not** a package dependency of
 Mocker, a default scrape endpoint, or the preferred production bridge. The
-[normalized readback](probe/verified-result.json) shows 15 Mocker series after
-five requests, zero Mocker series in a new disabled process, and identical HTTP
-statuses in both. For the scrape result, only the stable exporter-added
+[normalized readback](probe/verified-result.json) shows **30** Mocker series
+for two concurrent enabled servers with differing outcomes, no series for a third
+disabled server or in a clean all-disabled process, and identical HTTP status
+and payloads with metrics on or off. It rejects duplicate and out-of-range
+slots while an existing server is live, verifies that server still serves, and
+restarts the process to prove the same slots start at zero. The verification
+controls are routes on the separate test exporter, not product routes. For
+the scrape result, only the stable exporter-added
 `otel_scope_name` was removed; exporter target metadata is not part of the
 Mocker metrics. The example Collector configuration is separately provided for
 a host that chooses OTLP; the checked-in readback is from the direct test exporter.

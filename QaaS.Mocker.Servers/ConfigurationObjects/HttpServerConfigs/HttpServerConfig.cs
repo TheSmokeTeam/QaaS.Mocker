@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
 using QaaS.Framework.Configurations.CustomValidationAttributes;
+using QaaS.Mocker.Servers.Metrics;
 
 namespace QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 
@@ -50,10 +51,21 @@ public record HttpServerConfig : IValidatableObject
     public bool EnableHttpMetrics { get; set; }
 
     /// <summary>
-    /// Validates HTTPS-specific settings before server startup.
+    /// Required by opted-in HTTP servers; stable, unique metrics slot within this process.
+    /// </summary>
+    [Description("Required when EnableHttpMetrics is true. Assign a unique slot from 1 to 8 per process.")]
+    public int? HttpMetricsSlot { get; set; }
+
+    /// <summary>
+    /// Validates optional metrics and HTTPS settings before server startup.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
+        if (EnableHttpMetrics && HttpMetricsSlot is not (>= HttpRequestMetrics.MinSlot and <= HttpRequestMetrics.MaxSlot))
+            yield return new ValidationResult(
+                $"Server.Http.HttpMetricsSlot is required when EnableHttpMetrics is true and must be from {HttpRequestMetrics.MinSlot} to {HttpRequestMetrics.MaxSlot}.",
+                [nameof(HttpMetricsSlot)]);
+
         if (!IsSecuredSchema)
             yield break;
 

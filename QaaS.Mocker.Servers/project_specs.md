@@ -46,6 +46,8 @@ lifecycle reconciliation per protocol.
 
 ## Optional HTTP metrics
 
-Configured HTTP servers may opt in to the bounded `QaaS.Mocker.Http` meter.
-Match/fallback outcomes come from the dispatcher and are independent of status codes.
+Configured HTTP servers may opt in to the bounded `QaaS.Mocker.Http` meter using
+a lifecycle-stable slot from 1 through 8. Each server owns its counters; the
+process-scoped publisher reserves each slot once. Match/fallback outcomes come
+from the dispatcher and are independent of status codes.
 No exporter is part of this feature. See [HTTP metrics](../examples/observability/README.md).

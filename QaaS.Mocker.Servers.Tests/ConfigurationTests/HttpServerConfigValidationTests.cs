@@ -10,6 +10,23 @@ namespace QaaS.Mocker.Servers.Tests.ConfigurationTests;
 [TestFixture]
 public class HttpServerConfigValidationTests
 {
+    [TestCase(false, null, true)]
+    [TestCase(false, 99, true)]
+    [TestCase(true, null, false)]
+    [TestCase(true, 0, false)]
+    [TestCase(true, 1, true)]
+    [TestCase(true, 8, true)]
+    [TestCase(true, 9, false)]
+    public void Validate_OnlyEnabledHttpMetricsRequiresBoundedSlot(bool enabled, int? slot, bool valid)
+    {
+        var config = CreateValidConfig();
+        config.EnableHttpMetrics = enabled;
+        config.HttpMetricsSlot = slot;
+        var errors = Validate(config);
+        Assert.That(errors.Any(error => error.MemberNames.Contains(nameof(HttpServerConfig.HttpMetricsSlot))),
+            Is.EqualTo(!valid));
+    }
+
     [Test]
     public void Validate_WithValidEndpoints_ReturnsSuccess()
     {
