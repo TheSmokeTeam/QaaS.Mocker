@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 using QaaS.Mocker.Servers.Extensions;
+using QaaS.Mocker.Servers.Metrics;
 using QaaS.Mocker.Servers.ServerStates;
 using QaaS.Mocker.Stubs.Stubs;
 
@@ -21,6 +22,7 @@ public class HttpServer : IServer
     private readonly ILogger _logger;
     private readonly HttpServerConfig _configuration;
     private readonly HttpServerState _httpServerState;
+    private readonly HttpRequestMetrics? _metrics;
 
     public IServerState State { get; init; }
 
@@ -35,6 +37,7 @@ public class HttpServer : IServer
             httpServerConfig.InternalErrorTransactionStubName,
             httpServerConfig.Endpoints);
         State = _httpServerState;
+        _metrics = httpServerConfig.EnableHttpMetrics ? HttpRequestMetrics.Instance : null;
     }
 
     /// <summary>
@@ -89,19 +92,26 @@ public class HttpServer : IServer
 
     private async Task HandleTransactionAsync(HttpContext context)
     {
+        var started = _metrics?.Start() ?? 0;
+        var outcome = HttpRequestOutcome.Error;
         try
         {
             var path = context.Request.Path.Value ?? "/";
             var method = context.Request.Method.ToHttpMethodEnum();
             var requestData = await context.Request.ConstructRequestDataAsync();
-            var responseData = _httpServerState.Process(path, method, requestData);
+            var responseData = _httpServerState.Process(path, method, requestData, out var dispatchOutcome);
             await context.Response.HandleResponseDataAndCloseAsync(responseData, method);
+            outcome = dispatchOutcome;
         }
         catch (Exception exception)
         {
             _logger.LogCritical(exception, "Encountered critical HTTP server error, closing the server.");
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             await context.Response.CompleteAsync();
+        }
+        finally
+        {
+            _metrics?.Complete(outcome, started);
         }
     }
 

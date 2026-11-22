@@ -1,0 +1,92 @@
+{
+  "probe": "actual Mocker HttpServer and optional OpenTelemetry .NET Prometheus ASP.NET Core bridge, loopback-only",
+  "results": [
+    {
+      "enabled": false,
+      "http": [
+        [
+          "GET",
+          "/matched",
+          404
+        ],
+        [
+          "GET",
+          "/missing",
+          200
+        ],
+        [
+          "POST",
+          "/matched",
+          200
+        ],
+        [
+          "GET",
+          "/broken",
+          202
+        ],
+        [
+          "BREW",
+          "/matched",
+          500
+        ]
+      ],
+      "series": 0,
+      "initial": {},
+      "final_product_series": {}
+    },
+    {
+      "enabled": true,
+      "http": [
+        [
+          "GET",
+          "/matched",
+          404
+        ],
+        [
+          "GET",
+          "/missing",
+          200
+        ],
+        [
+          "POST",
+          "/matched",
+          200
+        ],
+        [
+          "GET",
+          "/broken",
+          202
+        ],
+        [
+          "BREW",
+          "/matched",
+          500
+        ]
+      ],
+      "series": 15,
+      "initial": {
+        "qaas_mocker_requests_accepted_total": 0.0,
+        "qaas_mocker_requests_completed_total{outcome=\"hit\"}": 0.0,
+        "qaas_mocker_requests_completed_total{outcome=\"miss\"}": 0.0,
+        "qaas_mocker_requests_completed_total{outcome=\"error\"}": 0.0
+      },
+      "final_product_series": {
+        "qaas_mocker_request_duration_seconds_bucket{le=\"0.05\"}": 5.0,
+        "qaas_mocker_request_duration_seconds_bucket{le=\"0.1\"}": 5.0,
+        "qaas_mocker_request_duration_seconds_bucket{le=\"0.25\"}": 5.0,
+        "qaas_mocker_request_duration_seconds_bucket{le=\"0.5\"}": 5.0,
+        "qaas_mocker_request_duration_seconds_bucket{le=\"1\"}": 5.0,
+        "qaas_mocker_request_duration_seconds_bucket{le=\"2.5\"}": 5.0,
+        "qaas_mocker_request_duration_seconds_bucket{le=\"5\"}": 5.0,
+        "qaas_mocker_request_duration_seconds_bucket{le=\"15\"}": 5.0,
+        "qaas_mocker_request_duration_seconds_bucket{le=\"+Inf\"}": 5.0,
+        "qaas_mocker_request_duration_seconds_sum": 0.023387200000000004,
+        "qaas_mocker_request_duration_seconds_count": 5.0,
+        "qaas_mocker_requests_accepted_total": 5.0,
+        "qaas_mocker_requests_completed_total{outcome=\"hit\"}": 1.0,
+        "qaas_mocker_requests_completed_total{outcome=\"miss\"}": 2.0,
+        "qaas_mocker_requests_completed_total{outcome=\"error\"}": 2.0
+      }
+    }
+  ]
+}

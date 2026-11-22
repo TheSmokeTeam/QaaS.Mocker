@@ -1,0 +1,7 @@
+# Scrape the optional Collector's local exporter, not a Mocker application route.
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: qaas_operational
+    static_configs:
+      - targets: ['127.0.0.1:19464']

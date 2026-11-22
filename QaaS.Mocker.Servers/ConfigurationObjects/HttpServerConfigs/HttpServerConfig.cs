@@ -43,6 +43,13 @@ public record HttpServerConfig : IValidatableObject
     public int ConnectionAcceptanceValue { get; set; } = 128;
 
     /// <summary>
+    /// Publishes aggregate in-process HTTP measurements to Meter listeners. This does not enable an exporter.
+    /// </summary>
+    [Description("Emit aggregate HTTP request metrics to in-process .NET Meter listeners; no exporter is enabled here."),
+     DefaultValue(false)]
+    public bool EnableHttpMetrics { get; set; }
+
+    /// <summary>
     /// Validates HTTPS-specific settings before server startup.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

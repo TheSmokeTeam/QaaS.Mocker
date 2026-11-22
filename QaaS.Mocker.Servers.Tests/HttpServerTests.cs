@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.Metrics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -15,6 +16,7 @@ using QaaS.Framework.SDK.Hooks.Processor;
 using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Framework.SDK.Session.MetaDataObjects;
 using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
+using QaaS.Mocker.Servers.Metrics;
 using QaaS.Mocker.Servers.Servers;
 using QaaS.Mocker.Stubs;
 using QaaS.Mocker.Stubs.Stubs;
@@ -249,6 +251,128 @@ public class HttpServerTests
         Assert.That(payload, Is.EqualTo("ok"));
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    [NonParallelizable]
+    public async Task HttpMetrics_UseDispatchOutcomeRatherThanStatus_OnlyWhenEnabled(bool enabled)
+    {
+        const string meterName = "QaaS.Mocker.Http";
+        var counters = new List<(string Name, long Value, KeyValuePair<string, object?>[] Tags)>();
+        var durations = new List<(string Name, string? Unit, double Value, int TagCount)>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, owner) =>
+            {
+                if (instrument.Meter.Name == meterName)
+                    owner.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((i, v, tags, _) => counters.Add((i.Name, v, tags.ToArray())));
+        listener.SetMeasurementEventCallback<double>((i, v, tags, _) =>
+            durations.Add((i.Name, i.Unit, v, tags.Length)));
+        listener.Start();
+
+        var server = new HttpServer(new HttpServerConfig
+        {
+            Port = 0,
+            IsLocalhost = true,
+            EnableHttpMetrics = enabled,
+            Endpoints =
+            [
+                new HttpEndpointConfig
+                {
+                    Path = "/matched",
+                    Actions = [new HttpEndpointActionConfig { Name = "Match", Method = HttpMethod.Get,
+                        TransactionStubName = "Configured404" }]
+                },
+                new HttpEndpointConfig
+                {
+                    Path = "/broken",
+                    Actions = [new HttpEndpointActionConfig { Name = "Broken", Method = HttpMethod.Get,
+                        TransactionStubName = "Throw" }]
+                }
+            ]
+        }, Globals.Logger,
+        [
+            CreateStub("Configured404", _ => CreateResponse("configured", StatusCodes.Status404NotFound)),
+            CreateStub("Throw", _ => throw new InvalidOperationException("synthetic failure")),
+            CreateStub(Constants.DefaultNotFoundTransactionStubLabel, _ => CreateResponse("miss")),
+            CreateStub(Constants.DefaultInternalErrorTransactionStubLabel, _ => CreateResponse("error",
+                StatusCodes.Status202Accepted))
+        ]);
+        listener.RecordObservableInstruments();
+        var before = counters.ToDictionary(x => (x.Name, Outcome: x.Tags.FirstOrDefault().Value as string), x => x.Value);
+        counters.Clear();
+
+        foreach (var (method, path, expected) in new[]
+        {
+            ("GET", "/matched", StatusCodes.Status404NotFound),
+            ("GET", "/unknown", StatusCodes.Status200OK),
+            ("POST", "/matched", StatusCodes.Status200OK),
+            ("GET", "/broken", StatusCodes.Status202Accepted),
+            ("BREW", "/matched", StatusCodes.Status500InternalServerError)
+        })
+        {
+            var context = new DefaultHttpContext();
+            context.Request.Method = method;
+            context.Request.Path = path;
+            context.Request.Scheme = "http";
+            context.Request.Host = new HostString("localhost", 8080);
+            await using var body = new MemoryStream();
+            context.Response.Body = body;
+            await InvokeHandleTransactionAsync(server, context);
+            Assert.That(context.Response.StatusCode, Is.EqualTo(expected), $"{method} {path}");
+        }
+
+        listener.RecordObservableInstruments();
+        var after = counters.ToDictionary(x => (x.Name, Outcome: x.Tags.FirstOrDefault().Value as string), x => x.Value);
+        if (!enabled)
+        {
+            Assert.That(after, Is.EqualTo(before));
+            Assert.That(durations, Is.Empty);
+            return;
+        }
+
+        var accepted = counters.Where(x => x.Name == "qaas.mocker.requests.accepted").ToArray();
+        var completed = counters.Where(x => x.Name == "qaas.mocker.requests.completed").ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(counters, Has.Count.EqualTo(4));
+            Assert.That(accepted, Has.Length.EqualTo(1));
+            Assert.That(accepted.Single().Tags, Is.Empty);
+            Assert.That(completed.All(x => x.Tags.Length == 1 && x.Tags[0].Key == "outcome"), Is.True);
+            Assert.That(completed.Select(x => x.Tags.Single().Value),
+                Is.EquivalentTo(new[] { "hit", "miss", "error" }));
+            Assert.That(after[("qaas.mocker.requests.accepted", null)] - before[("qaas.mocker.requests.accepted", null)],
+                Is.EqualTo(5));
+            foreach (var (key, increase) in new[] { ("hit", 1L), ("miss", 2L), ("error", 2L) })
+                Assert.That(after[("qaas.mocker.requests.completed", key)] -
+                    before[("qaas.mocker.requests.completed", key)], Is.EqualTo(increase), key);
+            Assert.That(durations, Has.Count.EqualTo(5));
+            Assert.That(durations.All(x => x.Name == "qaas.mocker.request.duration" &&
+                x.Unit == "s" && double.IsFinite(x.Value) && x.Value >= 0 && x.TagCount == 0), Is.True);
+        });
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void HttpMetrics_BadExternalListenerDoesNotPropagateDuringInstrumentPublication()
+    {
+        var throwOnNewInstrument = false;
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, _) =>
+            {
+                if (throwOnNewInstrument && instrument.Meter.Name == "QaaS.Mocker.Http")
+                    throw new InvalidOperationException("synthetic observer failure");
+            }
+        };
+        listener.Start();
+        throwOnNewInstrument = true;
+
+        Assert.That(HttpRequestMetrics.TryCreate(), Is.Null);
+    }
+
     private static HttpServer CreateServer()
     {
         return CreateServer(new HttpServerConfig
@@ -317,12 +441,12 @@ public class HttpServerTests
         };
     }
 
-    private static Data<object> CreateResponse(string payload)
+    private static Data<object> CreateResponse(string payload, int statusCode = StatusCodes.Status200OK)
     {
         return new Data<object>
         {
             Body = Encoding.UTF8.GetBytes(payload),
-            MetaData = new MetaData { Http = new Http { StatusCode = StatusCodes.Status200OK } }
+            MetaData = new MetaData { Http = new Http { StatusCode = statusCode } }
         };
     }
 

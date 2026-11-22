@@ -185,3 +185,7 @@ dotnet test QaaS.Mocker.sln -c Release --no-build
 - Official docs: [thesmoketeam.github.io/qaas-docs](https://thesmoketeam.github.io/qaas-docs/)
 - CI workflow: [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
 - NuGet package: [QaaS.Mocker on NuGet](https://www.nuget.org/packages/QaaS.Mocker/)
+
+### Optional HTTP metrics
+
+[Enable bounded in-process HTTP metrics](examples/observability/README.md) to observe mock dispatch, errors, and latency. Mocker does not enable a network exporter.
