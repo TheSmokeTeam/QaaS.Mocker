@@ -28,15 +28,18 @@ builders. A missing, invalid, or already-reserved slot rejects the attempted
 configuration explicitly. This does not alter an already-running owner's state
 or responses.
 
-Reservation begins at successful HTTP server construction and lasts until
-process exit, even if a server is never started or is stopped. No slot is reused
-for another server in the same process: otherwise historic samples and
-cumulative resets could become indistinguishable. Rebuilding the server topology
-therefore needs a full process restart; new processes can reuse the same slots
-with zero counters. In the CLI all configured executions are built before their
-server tasks start. A control-plane action that swaps a stub on an existing server
-does not construct a new server or change its slot. The slot limit applies to
-opted-in servers only; use separately identified processes for more than eight.
+The constructor checks range and any existing owner but does not claim or
+export a slot. Startup claims it atomically, and pre-bind failure releases
+that unexported reservation so an embedded caller can retry. Starting a second
+server with the same slot rejects it even if both objects were constructed
+before either started. Once the listener starts (or the first real request
+reaches it), that slot is permanent for the process, including after shutdown:
+reassignment would make historic samples indistinguishable from a counter
+reset. Starting an activated slot again requires a fresh process, where it
+can be reused with zero counters. In the CLI,
+startup faults terminate the run; there is no automatic retry. A control-plane
+stub swap does not construct a new server or change its slot. The limit applies
+only to opted-in servers; use separately identified processes for more than eight.
 An observer that throws nonfatally during instrument publication disables this
 publisher rather than preventing a correctly configured server from starting.
 Only consumers that elect to listen receive the measurements:

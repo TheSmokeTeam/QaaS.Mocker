@@ -22,7 +22,7 @@ public class HttpServer : IServer
     private readonly ILogger _logger;
     private readonly HttpServerConfig _configuration;
     private readonly HttpServerState _httpServerState;
-    private readonly HttpRequestMetrics? _metrics;
+    private readonly int? _httpMetricsSlot;
 
     public IServerState State { get; init; }
 
@@ -37,7 +37,9 @@ public class HttpServer : IServer
             httpServerConfig.InternalErrorTransactionStubName,
             httpServerConfig.Endpoints);
         State = _httpServerState;
-        _metrics = httpServerConfig.EnableHttpMetrics ? HttpRequestMetrics.Register(httpServerConfig.HttpMetricsSlot) : null;
+        _httpMetricsSlot = httpServerConfig.EnableHttpMetrics
+            ? HttpRequestMetrics.ValidateAvailableSlot(httpServerConfig.HttpMetricsSlot)
+            : null;
     }
 
     /// <summary>
@@ -45,15 +47,39 @@ public class HttpServer : IServer
     /// </summary>
     public void Start()
     {
-        var host = BuildHost();
+        if (_httpMetricsSlot is not { } slot)
+        {
+            // Keep the default host lifecycle and logging order unchanged.
+            var host = BuildHost(null);
+            LogListening();
+            host.Run();
+            return;
+        }
+
+        var metrics = HttpRequestMetrics.Reserve(slot);
+        try
+        {
+            using var host = BuildHost(metrics);
+            host.Start();
+            metrics.Activate();
+            LogListening();
+            host.WaitForShutdown();
+        }
+        finally
+        {
+            // Dispose the failed host first. Successful startup (or an already accepted real request)
+            // permanently claims the slot, even if later logging or shutdown fails.
+            metrics.ReleaseUnactivated();
+        }
+    }
+
+    private void LogListening() =>
         _logger.LogInformation("HTTP Server started. Listening on {Schema}://{Host}:{Port}",
             _configuration.IsSecuredSchema ? "https" : "http",
             _configuration.IsLocalhost ? "localhost" : "0.0.0.0",
             _configuration.Port);
-        host.Run();
-    }
 
-    private IHost BuildHost()
+    private IHost BuildHost(HttpRequestMetrics? metrics)
     {
         var builder = WebApplication.CreateBuilder();
 
@@ -86,13 +112,13 @@ public class HttpServer : IServer
         builder.Services.AddRouting();
 
         var app = builder.Build();
-        app.Map("/{**path}", HandleTransactionAsync);
+        app.Map("/{**path}", context => HandleTransactionAsync(context, metrics));
         return app;
     }
 
-    private async Task HandleTransactionAsync(HttpContext context)
+    private async Task HandleTransactionAsync(HttpContext context, HttpRequestMetrics? metrics)
     {
-        var started = _metrics?.Start() ?? 0;
+        var started = metrics?.Start();
         var outcome = HttpRequestOutcome.Error;
         try
         {
@@ -111,7 +137,8 @@ public class HttpServer : IServer
         }
         finally
         {
-            _metrics?.Complete(outcome, started);
+            if (started is { } timestamp)
+                metrics!.Complete(outcome, timestamp);
         }
     }
 

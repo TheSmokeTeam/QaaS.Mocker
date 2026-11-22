@@ -1,6 +1,8 @@
 using System.Collections.Immutable;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.Metrics;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -9,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Framework.SDK.DataSourceObjects;
@@ -301,6 +304,8 @@ public class HttpServerTests
             CreateStub(Constants.DefaultInternalErrorTransactionStubLabel, _ => CreateResponse("error",
                 StatusCodes.Status202Accepted))
         ]);
+        var metrics = enabled ? HttpRequestMetrics.Reserve(1) : null;
+        metrics?.Activate();
         listener.RecordObservableInstruments();
         var before = counters.ToDictionary(x => (x.Name, Slot: (int)x.Tags.Single(t => t.Key == "metric_slot").Value!,
             Outcome: x.Tags.FirstOrDefault(t => t.Key == "outcome").Value as string), x => x.Value);
@@ -322,7 +327,7 @@ public class HttpServerTests
             context.Request.Host = new HostString("localhost", 8080);
             await using var body = new MemoryStream();
             context.Response.Body = body;
-            await InvokeHandleTransactionAsync(server, context);
+            await InvokeHandleTransactionAsync(server, context, metrics);
             Assert.That(context.Response.StatusCode, Is.EqualTo(expected), $"{method} {path}");
         }
 
@@ -371,6 +376,8 @@ public class HttpServerTests
             Endpoints = CreateEndpoints()
         };
         var server = CreateServer(Config(2));
+        var metrics = HttpRequestMetrics.Reserve(2);
+        metrics.Activate();
         Assert.That(() => CreateServer(Config(2)),
             Throws.TypeOf<InvalidOperationException>().With.Message.Contains("already assigned"));
         Assert.That(() => CreateServer(Config(9)), Throws.TypeOf<ArgumentOutOfRangeException>());
@@ -382,10 +389,161 @@ public class HttpServerTests
         context.Request.Path = "/health";
         await using var body = new MemoryStream();
         context.Response.Body = body;
-        await InvokeHandleTransactionAsync(server, context);
+        await InvokeHandleTransactionAsync(server, context, metrics);
 
         Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
         Assert.That(Encoding.UTF8.GetString(body.ToArray()), Is.EqualTo("ok"));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    [NonParallelizable]
+    public async Task HttpMetrics_FailedBindCanBeRetriedWithANewEmbeddedServer(bool enabled)
+    {
+        const int slot = 5;
+        using var blocker = new TcpListener(IPAddress.Loopback, 0);
+        blocker.Start();
+        var port = ((IPEndPoint)blocker.LocalEndpoint).Port;
+        HttpServerConfig Config() => new()
+        {
+            Port = port,
+            IsLocalhost = true,
+            EnableHttpMetrics = enabled,
+            HttpMetricsSlot = slot,
+            Endpoints = CreateEndpoints()
+        };
+        var accepted = new List<long>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, owner) =>
+            {
+                if (instrument.Meter.Name == "QaaS.Mocker.Http" && instrument.Name == "qaas.mocker.requests.accepted")
+                    owner.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
+        {
+            if (tags.Length == 1 && tags[0] is { Key: "metric_slot", Value: slot })
+                accepted.Add(value);
+        });
+        listener.Start();
+
+        var failed = CreateServer(Config());
+        listener.RecordObservableInstruments();
+        var preBindSeries = accepted.Count;
+        accepted.Clear();
+        Assert.That(failed.Start, Throws.InstanceOf<IOException>()
+            .With.Message.Contains("Failed to bind"));
+        listener.RecordObservableInstruments();
+        var failedBindSeries = accepted.Count;
+        accepted.Clear();
+        blocker.Stop();
+
+        // This was the parity failure: disabled reconstruction worked; opted in it threw here.
+        var replacement = CreateServer(Config());
+        var preconstructedDuplicate = enabled ? CreateServer(Config()) : null;
+        Assert.That(preBindSeries, Is.Zero, "A merely constructed owner must not be exported.");
+        Assert.That(failedBindSeries, Is.Zero, "Failed pre-bind ownership must not be exported.");
+        var thread = StartBackgroundServer(replacement, out var errors);
+        try
+        {
+            await AssertServerResponds(port);
+            listener.RecordObservableInstruments();
+            Assert.That(accepted, Is.EqualTo(enabled ? new long[] { 1 } : []));
+            if (enabled)
+            {
+                Assert.That(() => CreateServer(Config()), Throws.InvalidOperationException
+                    .With.Message.Contains("already assigned"));
+                Assert.That(preconstructedDuplicate!.Start, Throws.InvalidOperationException
+                    .With.Message.Contains("already assigned"));
+            }
+        }
+        finally
+        {
+            if (thread.IsAlive)
+                thread.Interrupt();
+            Assert.That(thread.Join(TimeSpan.FromSeconds(5)), Is.True);
+        }
+        Assert.That(errors, Is.Empty);
+        if (enabled)
+        {
+            Assert.That(() => CreateServer(Config()), Throws.InvalidOperationException
+                .With.Message.Contains("already assigned"), "Never reset a published slot after shutdown.");
+            accepted.Clear();
+            listener.RecordObservableInstruments();
+            Assert.That(accepted, Is.EqualTo(new long[] { 1 }), "Preserve the exported count after shutdown.");
+        }
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void HttpMetrics_StartupLogFailureDisposesHostWithoutReleasingAnActivatedSlot()
+    {
+        // Pick an ephemeral port without using a fixed service port shared with other tests.
+        using var portReservation = new TcpListener(IPAddress.Loopback, 0);
+        portReservation.Start();
+        var port = ((IPEndPoint)portReservation.LocalEndpoint).Port;
+        portReservation.Stop();
+        var config = new HttpServerConfig
+        {
+            Port = port,
+            IsLocalhost = true,
+            EnableHttpMetrics = true,
+            HttpMetricsSlot = 6,
+            Endpoints = CreateEndpoints()
+        };
+
+        var server = CreateServer(config, new ThrowOnListenLogger());
+        Assert.That(server.Start, Throws.InvalidOperationException.With.Message.EqualTo("synthetic logging failure"));
+
+        // Do not strand a listener if a logger throws after bind.
+        portReservation.Start();
+        Assert.That(() => CreateServer(config), Throws.InvalidOperationException.With.Message.Contains("already assigned"));
+    }
+
+    private sealed class ThrowOnListenLogger : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (formatter(state, exception).StartsWith("HTTP Server started.", StringComparison.Ordinal))
+                throw new InvalidOperationException("synthetic logging failure");
+        }
+    }
+
+    private static Thread StartBackgroundServer(HttpServer server, out List<Exception> errors)
+    {
+        var captured = new List<Exception>();
+        errors = captured;
+        var thread = new Thread(() =>
+        {
+            try { server.Start(); }
+            catch (ThreadInterruptedException) { }
+            catch (Exception error) { captured.Add(error); }
+        }) { IsBackground = true };
+        thread.Start();
+        return thread;
+    }
+
+    private static async Task AssertServerResponds(int port)
+    {
+        using var handler = new SocketsHttpHandler { UseProxy = false };
+        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(2) };
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (true)
+        {
+            try
+            {
+                Assert.That(await http.GetStringAsync($"http://127.0.0.1:{port}/health"), Is.EqualTo("ok"));
+                return;
+            }
+            catch (HttpRequestException error) when (error.InnerException is SocketException && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(25);
+            }
+        }
     }
 
     [Test]
@@ -417,11 +575,11 @@ public class HttpServerTests
         });
     }
 
-    private static HttpServer CreateServer(HttpServerConfig config)
+    private static HttpServer CreateServer(HttpServerConfig config, ILogger? logger = null)
     {
         return new HttpServer(
             config,
-            Globals.Logger,
+            logger ?? Globals.Logger,
             [
                 CreateStub("MainStub", _ => CreateResponse("ok")),
                 CreateStub(Constants.DefaultNotFoundTransactionStubLabel, _ => CreateResponse("fallback")),
@@ -449,11 +607,11 @@ public class HttpServerTests
         ];
     }
 
-    private static async Task InvokeHandleTransactionAsync(HttpServer server, HttpContext context)
+    private static async Task InvokeHandleTransactionAsync(HttpServer server, HttpContext context, HttpRequestMetrics? metrics = null)
     {
         var task = (Task)typeof(HttpServer)
             .GetMethod("HandleTransactionAsync", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .Invoke(server, [context])!;
+            .Invoke(server, [context, metrics])!;
 
         await task;
     }
@@ -462,7 +620,7 @@ public class HttpServerTests
     {
         return (IHost)typeof(HttpServer)
             .GetMethod("BuildHost", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .Invoke(server, null)!;
+            .Invoke(server, [null])!;
     }
 
     private static TransactionStub CreateStub(string name, Func<Data<object>, Data<object>> process)

@@ -31,21 +31,67 @@ internal sealed class HttpRequestMetrics
     private long _misses;
     private long _errors;
 
-    private HttpRequestMetrics(int slot) => _slotTag = new("metric_slot", slot);
+    private const int Reserved = 0;
+    private const int Active = 1;
+    private const int Released = 2;
+    private int _state;
+    private readonly int _ownerIndex;
+    private Publisher? _publisher;
 
-    internal static HttpRequestMetrics? Register(int? slot)
+    private HttpRequestMetrics(int slot)
+    {
+        _ownerIndex = slot - MinSlot;
+        _slotTag = new("metric_slot", slot);
+    }
+
+    internal static int ValidateAvailableSlot(int? slot)
     {
         if (slot is < MinSlot or > MaxSlot or null)
             throw new ArgumentOutOfRangeException(nameof(slot), slot,
                 $"Enabled HTTP metrics require HttpMetricsSlot from {MinSlot} to {MaxSlot}.");
+        if (Volatile.Read(ref Owners[slot.Value - MinSlot]) is not null)
+            throw DuplicateSlot(slot.Value);
+        return slot.Value;
+    }
 
-        var owner = new HttpRequestMetrics(slot.Value);
-        // Do not reassign a time-series identity inside the same process. A stopped
-        // server's four counters stay frozen under its slot until process restart.
-        if (Interlocked.CompareExchange(ref Owners[slot.Value - MinSlot], owner, null) is not null)
-            throw new InvalidOperationException($"HTTP metrics slot {slot} is already assigned in this process.");
+    internal static HttpRequestMetrics Reserve(int slot)
+    {
+        var owner = new HttpRequestMetrics(slot);
+        // Constructors can coexist before startup; exactly one startup can own the slot.
+        if (Interlocked.CompareExchange(ref Owners[owner._ownerIndex], owner, null) is not null)
+            throw DuplicateSlot(slot);
+        try
+        {
+            // Once the listener exists it can see active owners, but never a pre-bind reservation.
+            // Initialize before the host can accept a request: observer callbacks cannot block
+            // a live handler that would otherwise need to wait on this Lazy initialization.
+            owner._publisher = SharedPublisher.Value;
+            return owner;
+        }
+        catch
+        {
+            owner.ReleaseUnactivated();
+            throw;
+        }
+    }
 
-        return SharedPublisher.Value is null ? null : owner;
+    private static InvalidOperationException DuplicateSlot(int slot) =>
+        new($"HTTP metrics slot {slot} is already assigned in this process.");
+
+    internal bool Activate()
+    {
+        // A handler can see a real request just before IHost.Start returns. The first activation
+        // wins against failed-start cleanup; once active an identity can never go backwards/reset.
+        if (Volatile.Read(ref _state) != Active &&
+            Interlocked.CompareExchange(ref _state, Active, Reserved) == Released)
+            return false;
+        return true;
+    }
+
+    internal void ReleaseUnactivated()
+    {
+        if (Interlocked.CompareExchange(ref _state, Released, Reserved) == Reserved)
+            Interlocked.CompareExchange(ref Owners[_ownerIndex], null, this);
     }
 
     internal static Publisher? TryCreatePublisher()
@@ -75,7 +121,7 @@ internal sealed class HttpRequestMetrics
     {
         for (var i = 0; i < Owners.Length; ++i)
         {
-            if (Volatile.Read(ref Owners[i]) is { } owner)
+            if (Volatile.Read(ref Owners[i]) is { } owner && Volatile.Read(ref owner._state) == Active)
                 yield return owner;
         }
     }
@@ -96,8 +142,10 @@ internal sealed class HttpRequestMetrics
         }
     }
 
-    internal long Start()
+    internal long? Start()
     {
+        if (!Activate() || _publisher is null)
+            return null;
         Interlocked.Increment(ref _accepted);
         return Stopwatch.GetTimestamp();
     }
@@ -120,7 +168,7 @@ internal sealed class HttpRequestMetrics
 
         try
         {
-            SharedPublisher.Value?.Duration.Record(elapsedSeconds, _slotTag);
+            _publisher?.Duration.Record(elapsedSeconds, _slotTag);
         }
         catch (Exception exception) when (IsNonFatal(exception))
         {
