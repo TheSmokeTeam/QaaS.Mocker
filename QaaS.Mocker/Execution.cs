@@ -3,6 +3,7 @@ using QaaS.Framework.SDK.ContextObjects;
 using Microsoft.Extensions.Logging;
 using QaaS.Mocker.Logics;
 using QaaS.Mocker.Options;
+using QaaS.Mocker.Servers;
 
 namespace QaaS.Mocker;
 
@@ -15,6 +16,8 @@ public class Execution : BaseExecution
     private readonly ExecutionMode _executionMode;
     private readonly bool _runLocally;
 
+    internal MockerLogIdentity? LogIdentity { get; init; }
+    internal bool LoggedExecution { get; private set; }
     internal ServerLogic ServerLogic { get; init; } = null!;
     internal ControllerLogic? ControllerLogic { get; init; }
     internal TemplateLogic TemplateLogic { get; init; } = null!;
@@ -47,17 +50,48 @@ public class Execution : BaseExecution
     /// </summary>
     public override int Start()
     {
+        LoggedExecution = false;
         Context.Logger.LogInformation(
             "Starting QaaS.Mocker in {ExecutionMode} mode (RunLocally: {RunLocally})",
             _executionMode, _runLocally);
 
-        return _executionMode switch
+        if (_executionMode == ExecutionMode.Template)
+            return Template();
+        if (_executionMode != ExecutionMode.Run)
+            throw new ArgumentOutOfRangeException(nameof(_executionMode), _executionMode, "Unsupported mocker execution mode");
+
+        var identity = LogIdentity ?? MockerLogIdentity.From(Context);
+        if (identity == null)
+            return Run();
+
+        LogExecution(identity, "MockerExecutionStarted", null);
+        int result;
+        try
         {
-            ExecutionMode.Run => Run(),
-            ExecutionMode.Template => Template(),
-            _ => throw new ArgumentOutOfRangeException(nameof(_executionMode), _executionMode,
-                "Unsupported mocker execution mode")
-        };
+            result = Run();
+        }
+        catch
+        {
+            LogExecution(identity, "MockerExecutionFinished", 1);
+            throw;
+        }
+        LogExecution(identity, "MockerExecutionFinished", result == 0 ? 0 : 1);
+        return result;
+    }
+
+    private void LogExecution(MockerLogIdentity identity, string eventName, int? failed)
+    {
+        try
+        {
+            Context.Logger.LogDebug(
+                "{QaasEvent} (ExecutionId: {ExecutionId}, Team: {Team}, System: {System}, Failed: {Failed})",
+                eventName, identity.ExecutionId, identity.Team, identity.System, failed);
+            LoggedExecution = true;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not AccessViolationException)
+        {
+            // Observability must preserve the mocker's original result and exceptions.
+        }
     }
 
     private int Template()

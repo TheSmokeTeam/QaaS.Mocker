@@ -249,4 +249,12 @@ public class MockerLoader<TRunner, TOptions> : MockerLoader<TOptions>
     {
         return Bootstrap.CreateRunner<TRunner>([LoadContextToExecutionBuilder(GetLoadedContext())]);
     }
+
+    internal TRunner GetCliRunner(long started, bool sinkConnected)
+    {
+        var runner = GetLoadedRunner();
+        if (SerilogLogger is IDisposable logger)
+            runner.DrainCliLogger = () => MockerRunner.DrainLogger(logger, started, sinkConnected);
+        return runner;
+    }
 }

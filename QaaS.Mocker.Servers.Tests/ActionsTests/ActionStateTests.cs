@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using Moq;
 using QaaS.Mocker.Servers.Actions;
 
 namespace QaaS.Mocker.Servers.Tests.ActionsTests;
@@ -9,11 +10,12 @@ public class ActionStateTests
     [Test]
     public async Task SetEnabledForTimeoutMs_EnablesThenDisables()
     {
-        var state = new ActionState<int> { State = 1 };
+        var alarms = new Queue<Action>();
+        var state = WithManualClock(alarms);
 
         var task = state.SetEnabledForTimeoutMs(60);
-        await Task.Delay(15);
         var enabledWhileRunning = state.Enabled;
+        alarms.Dequeue()();
         await task;
 
         Assert.Multiple(() =>
@@ -36,25 +38,38 @@ public class ActionStateTests
     [Test]
     public async Task SetEnabledForTimeoutMs_WhenTriggeredAgain_KeepsLatestWindowActive()
     {
-        var state = new ActionState<int> { State = 1 };
+        var alarms = new Queue<Action>();
+        var state = WithManualClock(alarms);
 
         var firstTrigger = state.SetEnabledForTimeoutMs(40);
-        await Task.Delay(10);
         var secondTrigger = state.SetEnabledForTimeoutMs(300);
 
+        alarms.Dequeue()();
         await firstTrigger;
         var enabledAfterFirstWindowElapsed = state.Enabled;
-        await Task.Delay(100);
-        var stillEnabledDuringSecondWindow = state.Enabled;
+        alarms.Dequeue()();
         await secondTrigger;
 
         Assert.Multiple(() =>
         {
             Assert.That(enabledAfterFirstWindowElapsed, Is.True);
-            Assert.That(stillEnabledDuringSecondWindow, Is.True);
             Assert.That(state.Enabled, Is.False);
         });
     }
+
+    private static ActionState<int> WithManualClock(Queue<Action> alarms)
+    {
+        var clock = new Mock<TimeProvider>();
+        clock.Setup(x => x.CreateTimer(It.IsAny<TimerCallback>(), It.IsAny<object?>(),
+                It.IsAny<TimeSpan>(), It.IsAny<TimeSpan>()))
+            .Returns((TimerCallback callback, object? state, TimeSpan _, TimeSpan _) =>
+            {
+                alarms.Enqueue(() => callback(state));
+                return Mock.Of<ITimer>();
+            });
+        return new ActionState<int> { State = 1, Clock = clock.Object };
+    }
+
     [Test]
     public async Task SetEnabledForTimeoutMs_WhenDefaultEnabled_RestoresEnabledStateAfterTimeout()
     {

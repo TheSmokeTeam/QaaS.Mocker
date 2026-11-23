@@ -1,5 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics;
+using Moq;
 using QaaS.Framework.Executions;
 using NUnit.Framework;
 
@@ -8,6 +10,61 @@ namespace QaaS.Mocker.Tests;
 [TestFixture]
 public class MockerRunnerTests
 {
+    [Test]
+    public void Run_BuildFailureLeavesLoggerAvailableForRetry()
+    {
+        var failure = new InvalidOperationException("original build failure");
+        var builder = new Mock<ExecutionBuilder>();
+        builder.Setup(x => x.Build()).Throws(failure);
+        var drained = false;
+        var runner = new MockerRunner([builder.Object], _ => { }) { DrainCliLogger = () => drained = true };
+        Assert.That(Assert.Throws<InvalidOperationException>(runner.Run), Is.SameAs(failure));
+        Assert.That(drained, Is.False);
+        Assert.That(runner.DrainCliLogger, Is.Not.Null);
+    }
+
+    [Test]
+    public void DrainLogger_ConnectedSinkWaitsForSlowFinalBatch()
+    {
+        var delivered = new TaskCompletionSource();
+        var logger = new Mock<IDisposable>();
+        logger.Setup(x => x.Dispose()).Callback(() =>
+        {
+            // A busy but connected sink can need several hundred milliseconds to finish a write.
+            Thread.Sleep(TimeSpan.FromMilliseconds(500));
+            delivered.SetResult();
+        });
+
+        MockerRunner.DrainLogger(logger.Object, Stopwatch.GetTimestamp(), sinkConnected: true);
+
+        Assert.That(delivered.Task.IsCompletedSuccessfully, Is.True);
+    }
+
+    [Test]
+    public async Task DrainLogger_SlowOrThrowingProviderPreservesCaller()
+    {
+        using var release = new ManualResetEventSlim();
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = new Mock<IDisposable>();
+        logger.Setup(x => x.Dispose()).Callback(() =>
+        {
+            release.Wait();
+            disposed.SetResult();
+            throw new InvalidOperationException("sink failure");
+        });
+        try
+        {
+            await Task.Run(() => MockerRunner.DrainLogger(logger.Object,
+                Stopwatch.GetTimestamp() - 5 * Stopwatch.Frequency, sinkConnected: false)).WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.That(disposed.Task.IsCompleted, Is.False);
+        }
+        finally
+        {
+            release.Set();
+        }
+        await disposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
     [Test]
     public void Run_WithNullExecutionBuilder_ReturnsWithoutThrowing()
     {

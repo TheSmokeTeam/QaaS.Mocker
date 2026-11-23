@@ -2,6 +2,8 @@ using Microsoft.Extensions.Configuration;
 using Moq;
 using NUnit.Framework;
 using QaaS.Framework.SDK.ContextObjects;
+using QaaS.Framework.SDK;
+using QaaS.Framework.SDK.Extensions;
 using QaaS.Mocker.Controller.Controllers;
 using QaaS.Mocker.Logics;
 using QaaS.Mocker.Options;
@@ -12,6 +14,89 @@ namespace QaaS.Mocker.Tests.ExecutionTests;
 [TestFixture]
 public class ExecutionBranchTests
 {
+    [Test]
+    public void Run_UsesCodeFirstOwnershipWithYamlFallbackForMissingLabels()
+    {
+        var logger = new Mock<Microsoft.Extensions.Logging.ILogger>();
+        logger.Setup(x => x.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)).Returns(true);
+        var context = new InternalContext
+        {
+            Logger = logger.Object,
+            RootConfiguration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+                { ["MetaData:Team"] = "yaml-team", ["MetaData:System"] = "orders" }).Build()
+        };
+        context.InsertValueIntoGlobalDictionary(context.GetMetaDataPath(), new MetaDataConfig { Team = "sdk-team" });
+        Assert.That(CreateExecution(ExecutionMode.Run, context).Start(), Is.Zero);
+        var events = logger.Invocations.Where(x => x.Method.Name == "Log")
+            .Select(x => ((IEnumerable<KeyValuePair<string, object?>>)x.Arguments[2]).ToDictionary())
+            .Where(x => x.ContainsKey("QaasEvent")).ToArray();
+        Assert.That(events, Has.Length.EqualTo(2));
+        Assert.That(events.All(x => Equals(x["Team"], "sdk-team") && Equals(x["System"], "orders")), Is.True);
+    }
+
+    [TestCase(ExecutionMode.Template, true, "orders")]
+    [TestCase(ExecutionMode.Run, false, "orders")]
+    [TestCase(ExecutionMode.Run, true, " ")]
+    public void Start_ExcludesTemplatesDisabledDebugAndMissingOwners(ExecutionMode mode, bool debug, string system)
+    {
+        var logger = new Mock<Microsoft.Extensions.Logging.ILogger>();
+        logger.Setup(x => x.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)).Returns(debug);
+        var context = new Context
+        {
+            Logger = logger.Object,
+            RootConfiguration = new ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?> { ["MetaData:Team"] = "red", ["MetaData:System"] = system }).Build()
+        };
+        var builder = new Mock<ExecutionBuilder>();
+        builder.Setup(x => x.Build()).Returns(CreateExecution(mode, context));
+        var drained = false;
+        var runner = new MockerRunner([builder.Object], code => Assert.That(code, Is.Zero))
+        {
+            DrainCliLogger = () => drained = true
+        };
+        runner.Run();
+        Assert.That(drained, Is.False);
+        var messages = logger.Invocations.Where(x => x.Method.Name == "Log")
+            .Select(x => ((IEnumerable<KeyValuePair<string, object?>>)x.Arguments[2]).ToDictionary()).ToList();
+        Assert.That(messages.Any(x => x.ContainsKey("QaasEvent")), Is.False);
+        Assert.That(messages.Any(x => x["{OriginalFormat}"]?.ToString() == "Starting QaaS.Mocker in {ExecutionMode} mode (RunLocally: {RunLocally})"), Is.True);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void Run_LogsOneScopedStartAndTerminalOutcome(bool fail)
+    {
+        var logger = new Mock<Microsoft.Extensions.Logging.ILogger>();
+        logger.Setup(x => x.IsEnabled(It.IsAny<Microsoft.Extensions.Logging.LogLevel>())).Returns(true);
+        var context = new Context
+        {
+            Logger = logger.Object,
+            RootConfiguration = new ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?> { ["MetaData:Team"] = "red", ["MetaData:System"] = "orders" }).Build()
+        };
+        var server = new Mock<IServer>();
+        if (fail)
+            server.Setup(x => x.Start()).Throws(new InvalidOperationException("original failure"));
+        var execution = CreateExecution(ExecutionMode.Run, context, new ServerLogic(server.Object));
+        if (fail)
+            Assert.That(() => execution.Start(), Throws.TypeOf<AggregateException>());
+        else
+            Assert.That(execution.Start(), Is.Zero);
+
+        var events = logger.Invocations.Where(x => x.Method.Name == "Log")
+            .Select(x => ((IEnumerable<KeyValuePair<string, object?>>)x.Arguments[2]).ToDictionary())
+            .Where(x => x.ContainsKey("QaasEvent")).ToArray();
+        Assert.That(events.Select(x => x["QaasEvent"]),
+            Is.EqualTo(new[] { "MockerExecutionStarted", "MockerExecutionFinished" }));
+        Assert.Multiple(() =>
+        {
+            Assert.That(events[1]["Failed"], Is.EqualTo(fail ? 1 : 0));
+            Assert.That(events.All(x => Equals(x["Team"], "red") && Equals(x["System"], "orders")), Is.True);
+            Assert.That(events[0]["ExecutionId"], Is.Not.Null.And.Not.Empty);
+            Assert.That(events[1]["ExecutionId"], Is.EqualTo(events[0]["ExecutionId"]));
+        });
+    }
+
     [Test]
     public void Start_WithTemplateMode_WritesTemplateToRequestedFolder()
     {

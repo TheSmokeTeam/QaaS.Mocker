@@ -684,7 +684,8 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         var dataSources = BuildDataSources().ToImmutableList();
         var stubs = BuildStubs(dataSources);
         var configuredServers = ResolveConfiguredServers();
-        var server = new ServerFactory(Context, configuredServers).Build(dataSources, stubs);
+        var serverFactory = new ServerFactory(Context, configuredServers);
+        var server = serverFactory.Build(dataSources, stubs);
         var controller = new ControllerFactory(Context, Controller).Build(server.State);
         // Log the assembled runtime graph once the builder has resolved every major dependency.
         Context.Logger.LogInformation(
@@ -708,6 +709,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
 
         return new Execution(_executionMode, Context, _runLocally)
         {
+            LogIdentity = serverFactory.LogIdentity,
             ServerLogic = serverLogic,
             ControllerLogic = controllerLogic,
             TemplateLogic = templateLogic

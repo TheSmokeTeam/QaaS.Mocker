@@ -181,11 +181,18 @@ dotnet build QaaS.Mocker.sln -c Release --no-restore
 dotnet test QaaS.Mocker.sln -c Release --no-build
 ```
 
+## Execution and HTTP dashboards
+
+Pass `--send-logs --elastic-uri <url>` to use the Framework’s Elasticsearch sink, or configure the existing Elastic logging defaults. Set `MetaData.Team` and `MetaData.System` in the mocker configuration. Both labels are required for the summaries. The Framework’s built-in shipping path enables Debug events for Elasticsearch independently of the console level. A custom logger must allow Debug events. Framework sets `Environment` to `CI` when `KUBERNETES_SERVICE_HOST` is present and to `Local` otherwise.
+
+Import the [Mocker usage dashboard](docs/grafana/mocker-usage.json) into Grafana and select an Elasticsearch data source with index pattern `qaas-*` and time field `@timestamp`. The dashboard detects `.raw` or `.keyword` exact-match fields, so choose an index pattern with a consistent mapping across the time range. A start counts one built execution entering `run`. Failure rate is the fraction of finished executions with `Failed = 1`. Template commands are excluded. Configuration failures before execution, processes still running and abruptly stopped processes do not contribute terminal results. [Dashboard preview](docs/grafana/mocker-usage.png)
+
+Set `Server.Http.EnableHttpMetrics` (or `Servers[].Http.EnableHttpMetrics`) to `true` to log HTTP totals per server instance. Every ten seconds, an active server emits its completed requests since the previous summary. Graceful HTTP host shutdown flushes the final interval. Immediate process exit (including redirected `--run-locally`) can skip that flush. Each event includes `ExecutionId`, `ServerId`, and configured `Port`. Handler error rate uses `sum(HandlerErrors) / sum(Requests)`. It includes exceptions while reading, dispatching or writing the response, including processing failures handled by a fallback stub. `Http5xx` counts responses with a 500–599 status, including intentional stub responses. `Misses` counts unmatched routes or methods that the not-found stub handled successfully. Grafana calculates both error rates across the selected interval using request totals.
+
+The request handler updates one in-memory counter per completion. The summary contains counts and labels only. Hard termination can lose the current interval. If a run emitted usage events and the existing Elasticsearch sink connected during startup, the standard CLI waits for the final batch to finish, for up to two seconds. A short-lived process can exceed 2% wall-time overhead when a previously connected bulk write stalls. If the sink attempted a connection without confirming it, the CLI waits up to 1% of elapsed CLI time (40 ms maximum). Delivery is best effort at either deadline. A console-only or file-only logger uses its existing shutdown behavior. Custom embedded runners retain control over their own lifetime. Existing request diagnostics keep their original messages, exceptions and severity levels.
+
 ## Documentation
+
 - Official docs: [thesmoketeam.github.io/qaas-docs](https://thesmoketeam.github.io/qaas-docs/)
 - CI workflow: [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
 - NuGet package: [QaaS.Mocker on NuGet](https://www.nuget.org/packages/QaaS.Mocker/)
-
-### Optional HTTP metrics
-
-[Enable bounded in-process HTTP metrics](examples/observability/README.md) to observe mock dispatch, errors, and latency. Mocker does not enable a network exporter.

@@ -22,12 +22,17 @@ public class HttpServer : IServer
     private readonly ILogger _logger;
     private readonly HttpServerConfig _configuration;
     private readonly HttpServerState _httpServerState;
-    private readonly int? _httpMetricsSlot;
+    private readonly MockerLogIdentity? _identity;
 
     public IServerState State { get; init; }
 
     public HttpServer(HttpServerConfig httpServerConfig, ILogger logger, IImmutableList<TransactionStub> transactionStubList)
+        : this(httpServerConfig, logger, transactionStubList, null) { }
+
+    internal HttpServer(HttpServerConfig httpServerConfig, ILogger logger,
+        IImmutableList<TransactionStub> transactionStubList, MockerLogIdentity? identity)
     {
+        _identity = identity;
         _logger = logger;
         _configuration = httpServerConfig;
         _httpServerState = new HttpServerState(
@@ -37,9 +42,6 @@ public class HttpServer : IServer
             httpServerConfig.InternalErrorTransactionStubName,
             httpServerConfig.Endpoints);
         State = _httpServerState;
-        _httpMetricsSlot = httpServerConfig.EnableHttpMetrics
-            ? HttpRequestMetrics.ValidateAvailableSlot(httpServerConfig.HttpMetricsSlot)
-            : null;
     }
 
     /// <summary>
@@ -47,30 +49,12 @@ public class HttpServer : IServer
     /// </summary>
     public void Start()
     {
-        if (_httpMetricsSlot is not { } slot)
-        {
-            // Keep the default host lifecycle and logging order unchanged.
-            var host = BuildHost(null);
-            LogListening();
-            host.Run();
-            return;
-        }
-
-        var metrics = HttpRequestMetrics.Reserve(slot);
-        try
-        {
-            using var host = BuildHost(metrics);
-            host.Start();
-            metrics.Activate();
-            LogListening();
-            host.WaitForShutdown();
-        }
-        finally
-        {
-            // Dispose the failed host first. Successful startup (or an already accepted real request)
-            // permanently claims the slot, even if later logging or shutdown fails.
-            metrics.ReleaseUnactivated();
-        }
+        using var metrics = _configuration.EnableHttpMetrics && _identity != null
+            ? new HttpRequestMetrics(_logger, _identity, _configuration.Port)
+            : null;
+        var host = BuildHost(metrics);
+        LogListening();
+        host.Run();
     }
 
     private void LogListening() =>
@@ -118,7 +102,6 @@ public class HttpServer : IServer
 
     private async Task HandleTransactionAsync(HttpContext context, HttpRequestMetrics? metrics)
     {
-        var started = metrics?.Start();
         var outcome = HttpRequestOutcome.Error;
         try
         {
@@ -137,8 +120,7 @@ public class HttpServer : IServer
         }
         finally
         {
-            if (started is { } timestamp)
-                metrics!.Complete(outcome, timestamp);
+            metrics?.Complete(outcome, context.Response.StatusCode);
         }
     }
 

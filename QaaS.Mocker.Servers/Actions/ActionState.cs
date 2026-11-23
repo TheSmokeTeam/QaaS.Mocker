@@ -11,6 +11,7 @@ public class ActionState<TStateIndicator> : ActionToTransactionStub
     private CancellationTokenSource? _disableCancellation;
     private long _activationVersion;
     private int _enabledState;
+    internal TimeProvider Clock { get; init; } = TimeProvider.System;
 
     /// <summary>
     /// Baseline enablement for the action when no temporary trigger window is active.
@@ -59,7 +60,7 @@ public class ActionState<TStateIndicator> : ActionToTransactionStub
 
         try
         {
-            await Task.Delay(timeoutMs, cancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(timeoutMs), Clock, cancellationToken);
         }
         catch (OperationCanceledException)
         {

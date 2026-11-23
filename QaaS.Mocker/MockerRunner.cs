@@ -1,4 +1,5 @@
 using QaaS.Framework.Executions;
+using System.Diagnostics;
 
 namespace QaaS.Mocker;
 
@@ -8,6 +9,7 @@ namespace QaaS.Mocker;
 public class MockerRunner : IRunner
 {
     private readonly Action<int> _exitAction;
+    internal Action? DrainCliLogger { get; set; }
     private int? BootstrapHandledExitCode { get; set; }
 
     public MockerRunner(IEnumerable<ExecutionBuilder>? executionBuilders, Action<int>? exitAction = null)
@@ -50,7 +52,38 @@ public class MockerRunner : IRunner
         if (ExecutionBuilders.Count == 0)
             return;
 
-        ExitProcess(StartExecutions(BuildExecutions()));
+        var executions = BuildExecutions();
+        int exitCode;
+        try
+        {
+            exitCode = StartExecutions(executions);
+        }
+        finally
+        {
+            if (DrainCliLogger != null && executions.Any(execution => execution is Execution { LoggedExecution: true }))
+                DrainCliLogger();
+            DrainCliLogger = null;
+        }
+
+        ExitProcess(exitCode);
+    }
+
+    internal static void DrainLogger(IDisposable logger, long started, bool sinkConnected)
+    {
+        // An established sink needs time to serialize and post the last batch. Unreachable sinks can retry for seconds.
+        var budget = sinkConnected ? TimeSpan.FromSeconds(2) :
+            TimeSpan.FromTicks(Math.Min(Stopwatch.GetElapsedTime(started).Ticks / 100, 40 * TimeSpan.TicksPerMillisecond));
+        // A connected sink can wait for bulk I/O. Leave pool threads available for its asynchronous continuations.
+        var scheduling = sinkConnected ? TaskCreationOptions.LongRunning : TaskCreationOptions.None;
+        var drain = Task.Factory.StartNew(() =>
+        {
+            try { logger.Dispose(); }
+            catch (Exception exception) when (exception is not OutOfMemoryException and not AccessViolationException)
+            {
+                // Keep the original execution outcome if a logging provider fails during shutdown.
+            }
+        }, CancellationToken.None, scheduling | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
+        drain.Wait(budget);
     }
 
     /// <summary>

@@ -16,12 +16,15 @@ public class ServerFactory
     private readonly Context _context;
     private readonly IReadOnlyList<ServerConfig> _servers;
 
+    internal MockerLogIdentity? LogIdentity { get; }
+
     public ServerFactory(Context context, ServerConfig server) : this(context, [server])
     {
     }
 
     public ServerFactory(Context context, IReadOnlyList<ServerConfig> servers)
     {
+        LogIdentity = MockerLogIdentity.From(context);
         _context = context;
         _servers = servers;
     }
@@ -51,7 +54,7 @@ public class ServerFactory
     {
         return server.ResolveType() switch
         {
-            ServerType.Http => new HttpServer(server.Http!, _context.Logger, transactionStubList),
+            ServerType.Http => new HttpServer(server.Http!, _context.Logger, transactionStubList, LogIdentity),
             ServerType.Grpc => new GrpcServer(server.Grpc!, _context.Logger, transactionStubList),
             ServerType.Socket => new SocketServer(server.Socket!, _context.Logger, transactionStubList,
                 dataSourceList),

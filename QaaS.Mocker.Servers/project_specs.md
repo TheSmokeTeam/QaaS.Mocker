@@ -44,12 +44,4 @@ pipeline (`QaaS.Mocker.Stubs`).
 `QaaS.Mocker.Servers.Tests` — covers routing, stub dispatch, and
 lifecycle reconciliation per protocol.
 
-## Optional HTTP metrics
-
-Configured HTTP servers may opt in to the bounded `QaaS.Mocker.Http` meter using
-a lifecycle-stable slot from 1 through 8. Each server owns its counters; the
-process-scoped publisher claims a slot at startup, releases failed
-pre-activation reservations, and never reassigns an activated slot.
-Match/fallback outcomes come from the dispatcher and are independent of
-status codes.
-No exporter is part of this feature. See [HTTP metrics](../examples/observability/README.md).
+HTTP servers configured with `EnableHttpMetrics` write per-instance request deltas through the execution logger. See the [Mocker dashboard guide](../README.md#execution-and-http-dashboards) for fields and shutdown behavior.
