@@ -1,5 +1,4 @@
 using QaaS.Framework.Executions;
-using System.Diagnostics;
 
 namespace QaaS.Mocker;
 
@@ -68,13 +67,9 @@ public class MockerRunner : IRunner
         ExitProcess(exitCode);
     }
 
-    internal static void DrainLogger(IDisposable logger, long started, bool sinkConnected)
+    internal static void DrainLogger(IDisposable logger)
     {
-        // An established sink needs time to serialize and post the last batch. Unreachable sinks can retry for seconds.
-        var budget = sinkConnected ? TimeSpan.FromSeconds(2) :
-            TimeSpan.FromTicks(Math.Min(Stopwatch.GetElapsedTime(started).Ticks / 100, 40 * TimeSpan.TicksPerMillisecond));
         // A connected sink can wait for bulk I/O. Leave pool threads available for its asynchronous continuations.
-        var scheduling = sinkConnected ? TaskCreationOptions.LongRunning : TaskCreationOptions.None;
         var drain = Task.Factory.StartNew(() =>
         {
             try { logger.Dispose(); }
@@ -82,8 +77,8 @@ public class MockerRunner : IRunner
             {
                 // Keep the original execution outcome if a logging provider fails during shutdown.
             }
-        }, CancellationToken.None, scheduling | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
-        drain.Wait(budget);
+        }, CancellationToken.None, TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
+        drain.Wait(TimeSpan.FromSeconds(2));
     }
 
     /// <summary>

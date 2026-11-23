@@ -1,6 +1,5 @@
 using System.Threading;
 using System.Threading.Tasks;
-using System.Diagnostics;
 using Moq;
 using QaaS.Framework.Executions;
 using NUnit.Framework;
@@ -35,7 +34,7 @@ public class MockerRunnerTests
             delivered.SetResult();
         });
 
-        MockerRunner.DrainLogger(logger.Object, Stopwatch.GetTimestamp(), sinkConnected: true);
+        MockerRunner.DrainLogger(logger.Object);
 
         Assert.That(delivered.Task.IsCompletedSuccessfully, Is.True);
     }
@@ -54,8 +53,7 @@ public class MockerRunnerTests
         });
         try
         {
-            await Task.Run(() => MockerRunner.DrainLogger(logger.Object,
-                Stopwatch.GetTimestamp() - 5 * Stopwatch.Frequency, sinkConnected: false)).WaitAsync(TimeSpan.FromSeconds(2));
+            await Task.Run(() => MockerRunner.DrainLogger(logger.Object)).WaitAsync(TimeSpan.FromSeconds(6));
             Assert.That(disposed.Task.IsCompleted, Is.False);
         }
         finally

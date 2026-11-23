@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Diagnostics;
 using CommandLine;
 using QaaS.Mocker.CommandLineBuilders;
 using QaaS.Mocker.Loaders;
@@ -85,18 +84,17 @@ public static class Bootstrap
 
     private static TRunner LoadRunner<TRunner>(RunOptions options) where TRunner : MockerRunner
     {
-        var started = Stopwatch.GetTimestamp();
         var canShip = options.SendLogs || options.LoggerConfigurationFilePath != null ||
             (!options.DisableElasticDefaults && ExecutionLogging.GetDefaultsProvider() != null);
         MockerLoader<TRunner, RunOptions> loader;
-        bool? connected;
+        bool connected;
         using (var startup = typeof(TRunner) == typeof(MockerRunner) && canShip ? new ElasticSinkStartup() : null)
         {
             loader = new MockerLoader<TRunner, RunOptions>(options);
-            connected = startup?.Connected;
+            connected = startup?.Connected == true;
         }
         using (loader)
-            return connected.HasValue ? loader.GetCliRunner(started, connected.Value) : loader.GetLoadedRunner();
+            return connected ? loader.GetCliRunner() : loader.GetLoadedRunner();
     }
 
     /// <summary>

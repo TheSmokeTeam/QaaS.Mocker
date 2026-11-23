@@ -4,6 +4,8 @@ using QaaS.Framework.Executions;
 using QaaS.Mocker.CommandLineBuilders;
 using QaaS.Mocker.Options;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 
 namespace QaaS.Mocker.Tests;
 
@@ -393,6 +395,34 @@ public class BootstrapTests
                 File.WriteAllText(defaultConfigurationPath, existingContent!);
             else if (File.Exists(defaultConfigurationPath))
                 File.Delete(defaultConfigurationPath);
+        }
+    }
+
+    [Test]
+    public void New_RefusedElasticConnectionDoesNotArmShutdownDrain()
+    {
+        // Reserve a loopback port without listening so another process cannot open it during the handshake.
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        var endpoint = (IPEndPoint)socket.LocalEndPoint!;
+        var dir = CreateTempDirectory();
+        try
+        {
+            var config = WriteFile(dir, "mocker.qaas.yaml", """
+                MetaData:
+                  Team: checkout
+                  System: orders
+                Server:
+                  Http:
+                    Port: 0
+                """);
+            var runner = Bootstrap.New(["run", config, "--no-env", "--disable-elastic-defaults",
+                "--send-logs", "--elastic-uri", $"http://{endpoint}"]);
+            Assert.That(runner.DrainCliLogger, Is.Null);
+        }
+        finally
+        {
+            DeleteDirectory(dir);
         }
     }
 

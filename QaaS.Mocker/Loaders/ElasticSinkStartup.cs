@@ -1,20 +1,18 @@
 using System.Diagnostics;
-using Elasticsearch.Net;
 using Elasticsearch.Net.Diagnostics;
 
 namespace QaaS.Mocker.Loaders;
 
-/// <summary>Observes the existing sink's startup handshake to choose its CLI shutdown deadline.</summary>
+/// <summary>Detects a successful response to an existing Elasticsearch sink request during CLI startup.</summary>
 internal sealed class ElasticSinkStartup : IObserver<DiagnosticListener>, IDisposable
 {
     private readonly AsyncLocal<bool> _loading = new();
     private readonly IDisposable _sources;
     private readonly Lock _gate = new();
-    private List<IDisposable>? _audits = [];
-    private volatile bool _attempted;
+    private List<IDisposable>? _subscriptions = [];
     private volatile bool _connected;
 
-    internal bool? Connected => _attempted ? _connected : null;
+    internal bool Connected => _connected;
 
     internal ElasticSinkStartup()
     {
@@ -24,17 +22,14 @@ internal sealed class ElasticSinkStartup : IObserver<DiagnosticListener>, IDispo
 
     void IObserver<DiagnosticListener>.OnNext(DiagnosticListener source)
     {
-        if (source.Name != DiagnosticSources.AuditTrailEvents.SourceName)
+        if (source.Name != DiagnosticSources.RequestPipeline.SourceName)
             return;
         lock (_gate)
-            _audits?.Add(source.Subscribe(new AuditDiagnosticObserver(entry =>
+            _subscriptions?.Add(source.Subscribe(new RequestPipelineDiagnosticObserver(null, completion =>
             {
-                // Another embedded loader can initialize an unrelated sink at the same time.
-                if (!_loading.Value)
-                    return;
-                if (entry.Value.Event is AuditEvent.ProductCheckSuccess or AuditEvent.HealthyResponse)
+                // The end event carries the actual response. Scope it to this loader's connection.
+                if (_loading.Value && completion.Value is { Success: true, HttpStatusCode: >= 200 and < 300 })
                     _connected = true;
-                _attempted = true;
             })));
     }
 
@@ -45,14 +40,14 @@ internal sealed class ElasticSinkStartup : IObserver<DiagnosticListener>, IDispo
     {
         _loading.Value = false;
         _sources.Dispose();
-        List<IDisposable>? audits;
+        List<IDisposable>? subscriptions;
         lock (_gate)
         {
-            audits = _audits;
-            _audits = null;
+            subscriptions = _subscriptions;
+            _subscriptions = null;
         }
-        if (audits != null)
-            foreach (var audit in audits)
-                audit.Dispose();
+        if (subscriptions != null)
+            foreach (var subscription in subscriptions)
+                subscription.Dispose();
     }
 }
