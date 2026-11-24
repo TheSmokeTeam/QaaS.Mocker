@@ -2252,7 +2252,7 @@
       "id": 29,
       "type": "timeseries",
       "title": "HTTP requests / s",
-      "description": "Sum of observed request deltas divided by seconds in each UTC histogram bucket. Batches are placed at flush time; empty windows have no observation.",
+      "description": "Sum of observed request deltas divided by seconds in each UTC histogram bucket. Buckets are at least ten seconds wide to match the reporting period. Counts are attributed to flush time. Empty windows have no observation.",
       "gridPos": {
         "x": 0,
         "y": 45,
@@ -2322,13 +2322,14 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "interval": "10s"
     },
     {
       "id": 30,
       "type": "timeseries",
       "title": "HTTP outcomes over time",
-      "description": "Counts per flush-time bucket. A handler error may also return 5xx. These series must not be added together.",
+      "description": "Counts per flush-time bucket of at least ten seconds. A handler error may also return 5xx. These series must not be added together.",
       "gridPos": {
         "x": 12,
         "y": 45,
@@ -2448,7 +2449,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "interval": "10s"
     },
     {
       "id": 31,
@@ -2526,7 +2528,24 @@
           "unit": "short",
           "noValue": "\u2014"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Port"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
