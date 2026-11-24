@@ -1,3 +1,4 @@
+using System.Globalization;
 using QaaS.Framework.Executions;
 
 namespace QaaS.Mocker;
@@ -67,8 +68,17 @@ public class MockerRunner : IRunner
         ExitProcess(exitCode);
     }
 
-    internal static void DrainLogger(IDisposable logger)
+    internal static TimeSpan GetFlushBudget()
     {
+        var configured = Environment.GetEnvironmentVariable("QAAS_USAGE_FLUSH_MS");
+        if (int.TryParse(configured, NumberStyles.None, CultureInfo.InvariantCulture, out var milliseconds))
+            return TimeSpan.FromMilliseconds(Math.Min(milliseconds, 2000));
+        return TimeSpan.FromMilliseconds(125);
+    }
+
+    internal static void DrainLogger(IDisposable logger, TimeSpan budget)
+    {
+        if (budget <= TimeSpan.Zero) return;
         // A connected sink can wait for bulk I/O. Leave pool threads available for its asynchronous continuations.
         var drain = Task.Factory.StartNew(() =>
         {
@@ -78,7 +88,7 @@ public class MockerRunner : IRunner
                 // Keep the original execution outcome if a logging provider fails during shutdown.
             }
         }, CancellationToken.None, TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
-        drain.Wait(TimeSpan.FromSeconds(2));
+        drain.Wait(budget);
     }
 
     /// <summary>

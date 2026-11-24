@@ -1,3 +1,4 @@
+using QaaS.Mocker.Servers;
 using System.Reflection;
 using CommandLine;
 using QaaS.Mocker.CommandLineBuilders;
@@ -88,7 +89,7 @@ public static class Bootstrap
             (!options.DisableElasticDefaults && ExecutionLogging.GetDefaultsProvider() != null);
         MockerLoader<TRunner, RunOptions> loader;
         bool connected;
-        using (var startup = typeof(TRunner) == typeof(MockerRunner) && canShip ? new ElasticSinkStartup() : null)
+        using (var startup = typeof(TRunner) == typeof(MockerRunner) && canShip && MockerLogIdentity.Enabled ? new ElasticSinkStartup() : null)
         {
             loader = new MockerLoader<TRunner, RunOptions>(options);
             connected = startup?.Connected == true;

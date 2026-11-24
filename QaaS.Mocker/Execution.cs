@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using QaaS.Framework.Executions;
 using QaaS.Framework.SDK.ContextObjects;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,7 @@ namespace QaaS.Mocker;
 /// </summary>
 public class Execution : BaseExecution
 {
+    internal static readonly string ProductVersion = MockerLogIdentity.GetVersion(typeof(Execution).Assembly);
     private readonly IExecutionConsole _executionConsole;
     private readonly ExecutionMode _executionMode;
     private readonly bool _runLocally;
@@ -64,28 +66,39 @@ public class Execution : BaseExecution
         if (identity == null)
             return Run();
 
-        LogExecution(identity, "MockerExecutionStarted", null);
-        int result;
+        var attempt = identity.NewAttempt(_runLocally, ControllerLogic != null, ProductVersion);
+        var previous = identity.CurrentAttempt;
+        identity.CurrentAttempt = attempt;
+        var started = Stopwatch.GetTimestamp();
         try
         {
-            result = Run();
+            LogExecution(identity, attempt, "MockerExecutionStarted", null, null);
+            int result;
+            try { result = Run(); }
+            catch (Exception exception)
+            {
+                var cancelled = exception is OperationCanceledException ||
+                    exception is AggregateException aggregate && aggregate.Flatten().InnerExceptions.All(e => e is OperationCanceledException);
+                LogExecution(identity, attempt, "MockerExecutionFinished", cancelled ? "cancelled" : "mocker_error",
+                    Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                throw;
+            }
+            LogExecution(identity, attempt, "MockerExecutionFinished", result == 0 ? "success" : "mocker_error",
+                Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            return result;
         }
-        catch
-        {
-            LogExecution(identity, "MockerExecutionFinished", 1);
-            throw;
-        }
-        LogExecution(identity, "MockerExecutionFinished", result == 0 ? 0 : 1);
-        return result;
+        finally { identity.CurrentAttempt = previous; }
     }
 
-    private void LogExecution(MockerLogIdentity identity, string eventName, int? failed)
+    private void LogExecution(MockerLogIdentity identity, MockerAttempt attempt, string eventName, string? outcome, double? durationMs)
     {
         try
         {
-            Context.Logger.LogDebug(
-                "{QaasEvent} (ExecutionId: {ExecutionId}, Team: {Team}, System: {System}, Failed: {Failed})",
-                eventName, identity.ExecutionId, identity.Team, identity.System, failed);
+            int? failed = outcome == null ? null : outcome == "success" ? 0 : 1;
+            Context.Logger.LogDebug("{QaasEvent} " + MockerLogIdentity.Labels + " (Outcome: {Outcome}, Failed: {Failed}, DurationMs: {DurationMs})",
+                eventName, identity.ExecutionId, attempt.Id, identity.Team, identity.Project, identity.System,
+                identity.TeamKnown, identity.ProjectKnown, identity.SystemKnown, attempt.ExecutionType, attempt.Version,
+                attempt.Features, outcome, failed, durationMs);
             LoggedExecution = true;
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not AccessViolationException)

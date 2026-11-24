@@ -254,7 +254,7 @@ public class MockerLoader<TRunner, TOptions> : MockerLoader<TOptions>
     {
         var runner = GetLoadedRunner();
         if (SerilogLogger is IDisposable logger)
-            runner.DrainCliLogger = () => MockerRunner.DrainLogger(logger);
+            runner.DrainCliLogger = () => MockerRunner.DrainLogger(logger, MockerRunner.GetFlushBudget());
         return runner;
     }
 }

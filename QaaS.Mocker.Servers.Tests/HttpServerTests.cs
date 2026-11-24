@@ -296,6 +296,9 @@ public class HttpServerTests
             Assert.That(values["HandlerErrors"], Is.EqualTo(3));
             Assert.That(values["Misses"], Is.EqualTo(1));
             Assert.That(values["Http5xx"], Is.EqualTo(3));
+            Assert.That(values["AttemptId"], Is.Not.Empty);
+            Assert.That(values["BatchSequence"], Is.EqualTo(1L));
+            Assert.That(values["ProjectKnown"], Is.False);
             Assert.That(values["ExecutionId"], Is.EqualTo("instance"));
             Assert.That(values["Team"], Is.EqualTo("red"));
             Assert.That(values["System"], Is.EqualTo("billing"));
@@ -323,11 +326,14 @@ public class HttpServerTests
             .Select(x => ((IEnumerable<KeyValuePair<string, object?>>)x.Arguments[2]).ToDictionary())
             .GroupBy(x => x["ServerId"]).Select(group => new
             {
+                Sequence = group.Select(x => (long)x["BatchSequence"]!).Order().ToArray(),
                 Requests = group.Sum(x => (long)x["Requests"]!),
                 Errors = group.Sum(x => (long)x["HandlerErrors"]!),
                 Misses = group.Sum(x => (long)x["Misses"]!)
             }).ToArray();
         Assert.That(totals, Has.Length.EqualTo(2));
+        foreach (var instance in totals)
+            Assert.That(instance.Sequence, Is.EqualTo(Enumerable.Range(1, instance.Sequence.Length).Select(i => (long)i)));
         Assert.That(totals.Select(x => (x.Requests, x.Errors, x.Misses)),
             Is.EquivalentTo(new[] { (1000L, 1000L, 0L), (1000L, 0L, 1000L) }));
     }

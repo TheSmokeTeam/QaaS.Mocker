@@ -24,7 +24,7 @@ public class ServerFactory
 
     public ServerFactory(Context context, IReadOnlyList<ServerConfig> servers)
     {
-        LogIdentity = MockerLogIdentity.From(context);
+        LogIdentity = MockerLogIdentity.From(context, servers);
         _context = context;
         _servers = servers;
     }

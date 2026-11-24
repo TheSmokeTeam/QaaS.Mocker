@@ -22,6 +22,23 @@ public class MockerRunnerTests
         Assert.That(runner.DrainCliLogger, Is.Not.Null);
     }
 
+    [TestCase("0", 0)]
+    [TestCase("275", 275)]
+    [TestCase("10000", 2000)]
+    [TestCase(null, 125)]
+    [TestCase("invalid", 125)]
+    [NonParallelizable]
+    public void FlushTimeoutBoundsAcceptedValues(string? setting, int expected)
+    {
+        var previous = Environment.GetEnvironmentVariable("QAAS_USAGE_FLUSH_MS");
+        try
+        {
+            Environment.SetEnvironmentVariable("QAAS_USAGE_FLUSH_MS", setting);
+            Assert.That(MockerRunner.GetFlushBudget().TotalMilliseconds, Is.EqualTo(expected));
+        }
+        finally { Environment.SetEnvironmentVariable("QAAS_USAGE_FLUSH_MS", previous); }
+    }
+
     [Test]
     public void DrainLogger_ConnectedSinkWaitsForSlowFinalBatch()
     {
@@ -34,7 +51,7 @@ public class MockerRunnerTests
             delivered.SetResult();
         });
 
-        MockerRunner.DrainLogger(logger.Object);
+        MockerRunner.DrainLogger(logger.Object, TimeSpan.FromSeconds(2));
 
         Assert.That(delivered.Task.IsCompletedSuccessfully, Is.True);
     }
@@ -53,7 +70,7 @@ public class MockerRunnerTests
         });
         try
         {
-            await Task.Run(() => MockerRunner.DrainLogger(logger.Object)).WaitAsync(TimeSpan.FromSeconds(6));
+            await Task.Run(() => MockerRunner.DrainLogger(logger.Object, TimeSpan.FromMilliseconds(15))).WaitAsync(TimeSpan.FromSeconds(6));
             Assert.That(disposed.Task.IsCompleted, Is.False);
         }
         finally
