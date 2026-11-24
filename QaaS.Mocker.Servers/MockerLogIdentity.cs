@@ -9,16 +9,19 @@ namespace QaaS.Mocker.Servers;
 
 internal sealed record MockerAttempt(string Id, string ExecutionType, string Version, string[] Features);
 
-internal sealed record MockerLogIdentity(string ExecutionId, string Team, string System, string Project = "Unknown")
+internal sealed class MockerLogIdentity(string? team, string? system, string? project = null)
 {
     private const string Unknown = "Unknown";
-    internal const string Labels = "(ExecutionId: {ExecutionId}, AttemptId: {AttemptId}, Team: {Team}, Project: {Project}, System: {System}, TeamKnown: {TeamKnown}, ProjectKnown: {ProjectKnown}, SystemKnown: {SystemKnown}, ExecutionType: {ExecutionType}, Version: {Version}, Features: {Features})";
+    internal const string Labels = "(AttemptId: {AttemptId}, Team: {Team}, Project: {Project}, System: {System}, TeamKnown: {TeamKnown}, ProjectKnown: {ProjectKnown}, SystemKnown: {SystemKnown}, ExecutionType: {ExecutionType}, Version: {Version}, Features: {Features})";
     private readonly AsyncLocal<MockerAttempt?> _attempt = new();
 
     internal static bool Enabled => !string.Equals(Environment.GetEnvironmentVariable("QAAS_USAGE_ENABLED"), "false", StringComparison.OrdinalIgnoreCase);
-    internal bool TeamKnown => Team != Unknown;
-    internal bool ProjectKnown => Project != Unknown;
-    internal bool SystemKnown => System != Unknown;
+    internal string Team { get; } = team ?? Unknown;
+    internal string Project { get; } = project ?? Unknown;
+    internal string System { get; } = system ?? Unknown;
+    internal bool TeamKnown { get; } = team != null;
+    internal bool ProjectKnown { get; } = project != null;
+    internal bool SystemKnown { get; } = system != null;
     internal string[] ServerFeatures { get; private init; } = [];
     internal MockerAttempt? CurrentAttempt { get => _attempt.Value; set => _attempt.Value = value; }
 
@@ -52,8 +55,7 @@ internal sealed record MockerLogIdentity(string ExecutionId, string Team, string
             var team = Label(metadata?.Team, config?["MetaData:Team"]);
             var system = Label(metadata?.System, config?["MetaData:System"]);
             var project = Label(metadata?.ExtraLabels?.GetValueOrDefault("Project") as string, config?["MetaData:ExtraLabels:Project"]);
-            var executionId = Guid.TryParse(context.ExecutionId, out var existingId) ? existingId : Guid.NewGuid();
-            return new(executionId.ToString("N"), team, system, project) { ServerFeatures = Features(servers) };
+            return new(team, system, project) { ServerFeatures = Features(servers) };
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not AccessViolationException)
         {
@@ -62,11 +64,13 @@ internal sealed record MockerLogIdentity(string ExecutionId, string Team, string
         }
     }
 
-    private static string Label(string? configured, string? fallback)
+    private static string? Label(string? configured, string? fallback)
     {
-        var value = (string.IsNullOrWhiteSpace(configured) ? fallback : configured)?.Trim();
-        return string.IsNullOrEmpty(value) || value.Length > 128 || value.Any(char.IsControl) ||
-               string.Equals(value, Unknown, StringComparison.OrdinalIgnoreCase) ? Unknown : value;
+        var value = string.IsNullOrWhiteSpace(configured) ? fallback : configured;
+        if (value is not { Length: > 0 and <= 128 } || value.Any(char.IsControl))
+            return null;
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
     }
 
     private static string[] Features(IReadOnlyList<ServerConfig>? servers)

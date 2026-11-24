@@ -256,7 +256,7 @@ public class HttpServerTests
     public async Task HttpSummary_ClassifiesDispatchAndResponseIndependently()
     {
         var logger = new Mock<ILogger>();
-        var identity = new MockerLogIdentity("instance", "red", "billing");
+        var identity = new MockerLogIdentity("red", "billing");
         using var metrics = new HttpRequestMetrics(logger.Object, identity, 8080);
         var endpoints = CreateEndpoints();
         endpoints[0].Actions = [.. endpoints[0].Actions, new HttpEndpointActionConfig
@@ -299,7 +299,7 @@ public class HttpServerTests
             Assert.That(values["AttemptId"], Is.Not.Empty);
             Assert.That(values["BatchSequence"], Is.EqualTo(1L));
             Assert.That(values["ProjectKnown"], Is.False);
-            Assert.That(values["ExecutionId"], Is.EqualTo("instance"));
+            Assert.That(values.ContainsKey("ExecutionId"), Is.False);
             Assert.That(values["Team"], Is.EqualTo("red"));
             Assert.That(values["System"], Is.EqualTo("billing"));
         });
@@ -309,7 +309,7 @@ public class HttpServerTests
     public void HttpSummary_ConcurrentServersAndFlushesKeepSeparateTotals()
     {
         var logger = new Mock<ILogger>();
-        var identity = new MockerLogIdentity("execution", "red", "billing");
+        var identity = new MockerLogIdentity("red", "billing");
         using var first = new HttpRequestMetrics(logger.Object, identity, 0);
         using var second = new HttpRequestMetrics(logger.Object, identity, 0);
         Parallel.For(0, 1_000, i =>

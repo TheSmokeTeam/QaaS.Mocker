@@ -77,9 +77,7 @@ public class Execution : BaseExecution
             try { result = Run(); }
             catch (Exception exception)
             {
-                var cancelled = exception is OperationCanceledException ||
-                    exception is AggregateException aggregate && aggregate.Flatten().InnerExceptions.All(e => e is OperationCanceledException);
-                LogExecution(identity, attempt, "MockerExecutionFinished", cancelled ? "cancelled" : "mocker_error",
+                LogExecution(identity, attempt, "MockerExecutionFinished", IsCancellation(exception) ? "cancelled" : "mocker_error",
                     Stopwatch.GetElapsedTime(started).TotalMilliseconds);
                 throw;
             }
@@ -90,13 +88,17 @@ public class Execution : BaseExecution
         finally { identity.CurrentAttempt = previous; }
     }
 
+    private static bool IsCancellation(Exception exception) =>
+        exception is OperationCanceledException ||
+        exception is AggregateException { InnerExceptions.Count: > 0 } aggregate && aggregate.InnerExceptions.All(IsCancellation);
+
     private void LogExecution(MockerLogIdentity identity, MockerAttempt attempt, string eventName, string? outcome, double? durationMs)
     {
         try
         {
             int? failed = outcome == null ? null : outcome == "success" ? 0 : 1;
             Context.Logger.LogDebug("{QaasEvent} " + MockerLogIdentity.Labels + " (Outcome: {Outcome}, Failed: {Failed}, DurationMs: {DurationMs})",
-                eventName, identity.ExecutionId, attempt.Id, identity.Team, identity.Project, identity.System,
+                eventName, attempt.Id, identity.Team, identity.Project, identity.System,
                 identity.TeamKnown, identity.ProjectKnown, identity.SystemKnown, attempt.ExecutionType, attempt.Version,
                 attempt.Features, outcome, failed, durationMs);
             LoggedExecution = true;

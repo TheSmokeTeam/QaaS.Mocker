@@ -36,6 +36,61 @@ public class ExecutionBranchTests
         Assert.That(events.All(x => Equals(x["Team"], "sdk-team") && Equals(x["System"], "orders")), Is.True);
     }
 
+    [TestCase(true)]
+    [TestCase(false)]
+    public void Run_ExplicitUnknownOwnersStayKnownWithoutExposingCallerId(bool sdk)
+    {
+        var logger = new Mock<Microsoft.Extensions.Logging.ILogger>();
+        logger.Setup(x => x.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)).Returns(true);
+        var callerId = Guid.NewGuid().ToString("N");
+        var context = new InternalContext
+        {
+            Logger = logger.Object, ExecutionId = callerId,
+            RootConfiguration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["MetaData:Team"] = " Unknown ", ["MetaData:System"] = "uNkNoWn", ["MetaData:ExtraLabels:Project"] = "UNKNOWN"
+            }).Build()
+        };
+        var metadata = sdk ? new MetaDataConfig { Team = " Unknown ", System = "uNkNoWn",
+            ExtraLabels = new() { ["Project"] = "UNKNOWN" } } : new MetaDataConfig();
+        context.InsertValueIntoGlobalDictionary(context.GetMetaDataPath(), metadata);
+        Assert.That(CreateExecution(ExecutionMode.Run, context).Start(), Is.Zero);
+        var events = logger.Invocations.Where(x => x.Method.Name == "Log")
+            .Select(x => ((IEnumerable<KeyValuePair<string, object?>>)x.Arguments[2]).ToDictionary())
+            .Where(x => x.ContainsKey("QaasEvent")).ToArray();
+        Assert.That(events, Has.Length.EqualTo(2));
+        Assert.That(events.All(x => Equals(x["Team"], "Unknown") && Equals(x["TeamKnown"], true) &&
+            Equals(x["System"], "uNkNoWn") && Equals(x["SystemKnown"], true) &&
+            Equals(x["Project"], "UNKNOWN") && Equals(x["ProjectKnown"], true)), Is.True);
+        Assert.That(events.All(x => !x.ContainsKey("ExecutionId") &&
+            !x.Values.Contains(callerId) && !Equals(x["AttemptId"], callerId)), Is.True);
+    }
+
+    [Test]
+    public void Run_RejectsInvalidOwnershipValues()
+    {
+        var logger = new Mock<Microsoft.Extensions.Logging.ILogger>();
+        logger.Setup(x => x.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)).Returns(true);
+        var context = new InternalContext
+        {
+            Logger = logger.Object,
+            RootConfiguration = new ConfigurationBuilder().Build()
+        };
+        context.InsertValueIntoGlobalDictionary(context.GetMetaDataPath(), new MetaDataConfig
+        {
+            Team = new string('x', 129), System = "x\u0001y", ExtraLabels = new() { ["Project"] = " " }
+        });
+        Assert.That(CreateExecution(ExecutionMode.Run, context).Start(), Is.Zero);
+        var record = logger.Invocations.Where(x => x.Method.Name == "Log")
+            .Select(x => ((IEnumerable<KeyValuePair<string, object?>>)x.Arguments[2]).ToDictionary())
+            .First(x => x.ContainsKey("QaasEvent"));
+        foreach (var label in new[] { "Team", "System", "Project" })
+        {
+            Assert.That(record[label], Is.EqualTo("Unknown"));
+            Assert.That(record[label + "Known"], Is.False);
+        }
+    }
+
     [TestCase(ExecutionMode.Template, true, "orders")]
     [TestCase(ExecutionMode.Run, false, "orders")]
     public void Start_ExcludesTemplatesAndDisabledDebug(ExecutionMode mode, bool debug, string system)
@@ -86,20 +141,21 @@ public class ExecutionBranchTests
         Assert.That(records[0]["Features"], Is.EqualTo(new[] { "none" }));
     }
 
-    [Test]
-    public void Run_CancellationRemainsAnExceptionAndIsReportedSeparately()
+    [TestCase(false, "cancelled")]
+    [TestCase(true, "mocker_error")]
+    public void Run_CancellationRequiresAtLeastOneCancellationLeaf(bool empty, string expected)
     {
         var logger = new Mock<Microsoft.Extensions.Logging.ILogger>();
         logger.Setup(x => x.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)).Returns(true);
         var context = new Context { Logger = logger.Object, RootConfiguration = new ConfigurationBuilder().Build() };
         var server = new Mock<IServer>();
-        server.Setup(x => x.Start()).Throws(new OperationCanceledException());
+        server.Setup(x => x.Start()).Throws(empty ? new AggregateException() : new OperationCanceledException());
         var execution = CreateExecution(ExecutionMode.Run, context, new ServerLogic(server.Object));
         Assert.That(execution.Start, Throws.TypeOf<AggregateException>());
         var terminal = logger.Invocations.Where(x => x.Method.Name == "Log")
             .Select(x => ((IEnumerable<KeyValuePair<string, object?>>)x.Arguments[2]).ToDictionary())
             .Single(x => Equals(x.GetValueOrDefault("QaasEvent"), "MockerExecutionFinished"));
-        Assert.That(terminal["Outcome"], Is.EqualTo("cancelled"));
+        Assert.That(terminal["Outcome"], Is.EqualTo(expected));
         Assert.That(terminal["Failed"], Is.EqualTo(1));
     }
 
@@ -154,8 +210,8 @@ public class ExecutionBranchTests
             Assert.That(events[1]["Failed"], Is.EqualTo(fail ? 1 : 0));
             Assert.That(events[1]["Outcome"], Is.EqualTo(fail ? "mocker_error" : "success"));
             Assert.That(events.All(x => Equals(x["Team"], "red") && Equals(x["System"], "orders")), Is.True);
-            Assert.That(events[0]["ExecutionId"], Is.Not.Null.And.Not.Empty);
-            Assert.That(events[1]["ExecutionId"], Is.EqualTo(events[0]["ExecutionId"]));
+            Assert.That(events[0]["AttemptId"], Is.Not.Null.And.Not.Empty);
+            Assert.That(events[1]["AttemptId"], Is.EqualTo(events[0]["AttemptId"]));
         });
     }
 

@@ -51,7 +51,7 @@ internal sealed class HttpRequestMetrics : IDisposable
                 "{QaasEvent}: {Requests} HTTP requests, {HandlerErrors} handler errors, {Misses} unmatched, {Http5xx} HTTP 5xx (ServerId: {ServerId}, Port: {Port}, BatchSequence: {BatchSequence}) " + MockerLogIdentity.Labels,
                 "MockerHttpRequests", requests, counts[4] + counts[5], counts[2] + counts[3],
                 counts[1] + counts[3] + counts[5], _serverId, _port, Interlocked.Increment(ref _batchSequence),
-                _identity.ExecutionId, _attempt.Id, _identity.Team, _identity.Project, _identity.System,
+                _attempt.Id, _identity.Team, _identity.Project, _identity.System,
                 _identity.TeamKnown, _identity.ProjectKnown, _identity.SystemKnown, _attempt.ExecutionType,
                 _attempt.Version, _attempt.Features);
         }
