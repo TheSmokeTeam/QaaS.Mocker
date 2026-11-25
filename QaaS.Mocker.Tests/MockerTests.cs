@@ -40,6 +40,43 @@ public class MockerRunnerTests
     }
 
     [Test]
+    public void DrainLogger_PrefersNativeAsyncDisposal()
+    {
+        var logger = new Mock<IDisposable>();
+        var asynchronous = logger.As<IAsyncDisposable>();
+        asynchronous.Setup(provider => provider.DisposeAsync()).Returns(ValueTask.CompletedTask);
+
+        MockerRunner.DrainLogger(logger.Object, TimeSpan.FromSeconds(2));
+
+        asynchronous.Verify(provider => provider.DisposeAsync(), Times.Once);
+        logger.Verify(provider => provider.Dispose(), Times.Never);
+    }
+
+    [Test]
+    public async Task DrainLogger_BoundsSynchronousPrefixOfAsyncDisposal()
+    {
+        using var release = new ManualResetEventSlim();
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = new Mock<IDisposable>();
+        logger.As<IAsyncDisposable>().Setup(provider => provider.DisposeAsync()).Returns(() =>
+        {
+            release.Wait();
+            finished.SetResult();
+            return ValueTask.FromException(new InvalidOperationException("sink failure"));
+        });
+        try
+        {
+            await Task.Run(() => MockerRunner.DrainLogger(logger.Object, TimeSpan.FromMilliseconds(15))).WaitAsync(TimeSpan.FromSeconds(6));
+            Assert.That(finished.Task.IsCompleted, Is.False);
+        }
+        finally
+        {
+            release.Set();
+        }
+        await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Test]
     public void DrainLogger_ConnectedSinkWaitsForSlowFinalBatch()
     {
         var delivered = new TaskCompletionSource();

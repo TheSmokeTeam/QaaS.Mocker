@@ -79,15 +79,21 @@ public class MockerRunner : IRunner
     internal static void DrainLogger(IDisposable logger, TimeSpan budget)
     {
         if (budget <= TimeSpan.Zero) return;
-        // A connected sink can wait for bulk I/O. Leave pool threads available for its asynchronous continuations.
-        var drain = Task.Factory.StartNew(() =>
+        // A custom sink may block even before its first await. Keep disposal off the caller.
+        var drain = Task.Run(async () =>
         {
-            try { logger.Dispose(); }
+            try
+            {
+                if (logger is IAsyncDisposable asyncLogger)
+                    await asyncLogger.DisposeAsync().ConfigureAwait(false);
+                else
+                    logger.Dispose();
+            }
             catch (Exception exception) when (exception is not OutOfMemoryException and not AccessViolationException)
             {
                 // Keep the original execution outcome if a logging provider fails during shutdown.
             }
-        }, CancellationToken.None, TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
+        });
         drain.Wait(budget);
     }
 
