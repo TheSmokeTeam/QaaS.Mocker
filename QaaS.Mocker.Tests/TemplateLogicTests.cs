@@ -72,26 +72,21 @@ public class TemplateLogicTests
     [Test]
     public void Run_WithExistingOutputFolder_WritesTemplateFileWithoutRecreatingDirectory()
     {
+        var outputFolder = Path.Combine(Environment.CurrentDirectory, "templates");
+        var existing = Path.Combine(outputFolder, "existing.txt");
         var fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
         {
-            [@"C:\temp\templates\existing.txt"] = new("seed")
+            [existing] = new("seed")
         });
-        var originalDirectory = Environment.CurrentDirectory;
+        var logic = new TemplateLogic(CreateContext(), outputFolder, fileSystem, TextWriter.Null);
 
-        try
+        _ = logic.Run(new ExecutionData());
+
+        Assert.Multiple(() =>
         {
-            Environment.CurrentDirectory = @"C:\temp";
-            var logic = new TemplateLogic(CreateContext(), "templates", fileSystem, TextWriter.Null);
-            var expectedPath = fileSystem.Path.Combine(Environment.CurrentDirectory, "templates", "template.qaas.yaml");
-
-            _ = logic.Run(new ExecutionData());
-
-            Assert.That(fileSystem.File.Exists(expectedPath), Is.True);
-        }
-        finally
-        {
-            Environment.CurrentDirectory = originalDirectory;
-        }
+            Assert.That(fileSystem.File.Exists(Path.Combine(outputFolder, "template.qaas.yaml")), Is.True);
+            Assert.That(fileSystem.File.ReadAllText(existing), Is.EqualTo("seed"));
+        });
     }
 
     [Test]

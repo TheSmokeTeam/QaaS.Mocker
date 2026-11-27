@@ -11,6 +11,7 @@ internal sealed class HttpRequestMetrics : IDisposable
     private readonly int _port;
     private readonly MockerAttempt _attempt;
     private long _batchSequence;
+    private int _flushInProgress;
     private readonly Guid _serverId = Guid.NewGuid();
     private readonly Timer _timer;
     // One increment per completion keeps the denominator and both rates consistent across flushes.
@@ -34,6 +35,23 @@ internal sealed class HttpRequestMetrics : IDisposable
 
     internal void Flush()
     {
+        // A slow provider must not start overlapping writes or drain a newer window out of order.
+        // Completions remain in the counters for the next successful acquisition.
+        if (Interlocked.CompareExchange(ref _flushInProgress, 1, 0) != 0)
+            return;
+
+        try
+        {
+            FlushWindow();
+        }
+        finally
+        {
+            Volatile.Write(ref _flushInProgress, 0);
+        }
+    }
+
+    private void FlushWindow()
+    {
         Span<long> counts = stackalloc long[6];
         long requests = 0;
         for (var i = 0; i < counts.Length; i++)
@@ -50,7 +68,7 @@ internal sealed class HttpRequestMetrics : IDisposable
             _logger.LogDebug(
                 "{QaasEvent}: {Requests} HTTP requests, {HandlerErrors} handler errors, {Misses} unmatched, {Http5xx} HTTP 5xx (ServerId: {ServerId}, Port: {Port}, BatchSequence: {BatchSequence}) " + MockerLogIdentity.Labels,
                 "MockerHttpRequests", requests, counts[4] + counts[5], counts[2] + counts[3],
-                counts[1] + counts[3] + counts[5], _serverId, _port, Interlocked.Increment(ref _batchSequence),
+                counts[1] + counts[3] + counts[5], _serverId, _port, ++_batchSequence,
                 _attempt.Id, _identity.Team, _identity.Project, _identity.System,
                 _identity.TeamKnown, _identity.ProjectKnown, _identity.SystemKnown, _attempt.ExecutionType,
                 _attempt.Version, _attempt.Features);

@@ -338,6 +338,48 @@ public class HttpServerTests
             Is.EquivalentTo(new[] { (1000L, 1000L, 0L), (1000L, 0L, 1000L) }));
     }
 
+    [Test]
+    public async Task HttpSummary_SkipsOverlappingWritesWithoutDrainingTheirCounts()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var logger = new Mock<ILogger>();
+        logger.Setup(x => x.Log(LogLevel.Debug, It.IsAny<EventId>(), It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(), It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
+            .Callback(new InvocationAction(invocation =>
+            {
+                var fields = ((IEnumerable<KeyValuePair<string, object?>>)invocation.Arguments[2]).ToDictionary();
+                if (Equals(fields["BatchSequence"], 1L))
+                {
+                    entered.Set();
+                    release.Wait(TimeSpan.FromSeconds(8));
+                }
+            }));
+        using var metrics = new HttpRequestMetrics(logger.Object, new MockerLogIdentity("red", "billing"), 8080);
+
+        metrics.Complete(HttpRequestOutcome.Error, 500);
+        var first = Task.Run(metrics.Flush);
+        try
+        {
+            Assert.That(entered.Wait(TimeSpan.FromSeconds(3)), Is.True);
+            metrics.Complete(HttpRequestOutcome.Miss, 404);
+            metrics.Flush();
+            Assert.That(logger.Invocations.Count(x => x.Method.Name == "Log"), Is.EqualTo(1));
+        }
+        finally
+        {
+            release.Set();
+            await first.WaitAsync(TimeSpan.FromSeconds(3));
+        }
+
+        metrics.Flush();
+        var fields = logger.Invocations.Where(x => x.Method.Name == "Log")
+            .Select(x => ((IEnumerable<KeyValuePair<string, object?>>)x.Arguments[2]).ToDictionary()).ToArray();
+        Assert.That(fields.Select(x => x["BatchSequence"]), Is.EqualTo(new object[] { 1L, 2L }));
+        Assert.That(fields.Select(x => x["Requests"]), Is.EqualTo(new object[] { 1L, 1L }));
+        Assert.That(fields[1]["Misses"], Is.EqualTo(1L));
+    }
+
     private static HttpServer CreateServer()
     {
         return CreateServer(new HttpServerConfig
