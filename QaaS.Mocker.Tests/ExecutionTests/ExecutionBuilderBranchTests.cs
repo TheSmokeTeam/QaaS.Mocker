@@ -335,43 +335,81 @@ public class ExecutionBuilderBranchTests
     }
 
     [Test]
-    public void ResolveProcessorTypeName_WithQualifiedName_ReturnsConfiguredValue()
+    public void GetProcessorHooks_QualifiedAndBlankNamesSkipAssemblyDiscovery()
     {
         var fullName = typeof(ExecutionBuilderCrudTests.CodeFirstProcessor).FullName!;
-
-        var resolved = InvokeResolveProcessorTypeName(fullName);
-
-        Assert.That(resolved, Is.EqualTo(fullName));
+        var stubs = new[] { new TransactionStubConfig { Processor = fullName }, new TransactionStubConfig { Processor = " " } };
+        var hooks = ExecutionBuilder.GetProcessorHooks(stubs, () => throw new AssertionException("Unexpected discovery"));
+        Assert.That(hooks.Select(hook => hook.Type), Is.EqualTo(new[] { fullName, " " }));
     }
 
     [Test]
-    public void ResolveProcessorTypeName_WithWhitespace_ReturnsConfiguredValue()
-    {
-        var resolved = InvokeResolveProcessorTypeName(" ");
-
-        Assert.That(resolved, Is.EqualTo(" "));
-    }
-
-    [Test]
-    public void ResolveProcessorTypeName_WithUniqueShortName_ReturnsFullName()
-    {
-        var resolved = InvokeResolveProcessorTypeName(nameof(ExecutionBuilderCrudTests.CodeFirstProcessor));
-
-        Assert.That(resolved, Is.EqualTo(typeof(ExecutionBuilderCrudTests.CodeFirstProcessor).FullName));
-    }
-
-    [Test]
-    public void GetLoadableTypes_WhenAssemblyThrowsReflectionTypeLoadException_ReturnsAvailableTypes()
+    public void GetProcessorHooks_ScansEachAssemblyOnceForAllShortNames()
     {
         var assembly = new Mock<Assembly>();
-        assembly.Setup(instance => instance.GetTypes()).Throws(
-            new ReflectionTypeLoadException(
-                [typeof(DummyGenerator), null!],
-                [new TypeLoadException("boom"), new TypeLoadException("ignored")]));
+        var first = typeof(ExecutionBuilderCrudTests.CodeFirstProcessor);
+        var second = typeof(DummyProcessor);
+        assembly.Setup(item => item.GetTypes()).Returns([first, first, second, typeof(DummyGenerator)]);
+        var stubs = new[] { first.Name, second.Name, first.Name, "MissingProcessor", "DummyGenerator" }
+            .Select(name => new TransactionStubConfig { Name = name, Processor = name }).ToArray();
 
-        var types = InvokeGetLoadableTypes(assembly.Object).ToArray();
+        var hooks = ExecutionBuilder.GetProcessorHooks(stubs, () => [assembly.Object]).ToArray();
 
-        Assert.That(types, Is.EqualTo(new[] { typeof(DummyGenerator) }));
+        Assert.That(hooks.Select(hook => hook.Type),
+            Is.EqualTo(new[] { first.FullName, second.FullName, first.FullName, "MissingProcessor", "DummyGenerator" }));
+        Assert.That(hooks.Select(hook => hook.Name), Is.EqualTo(stubs.Select(stub => stub.Name)));
+        Assert.That(hooks.Select(hook => hook.Configuration), Is.EqualTo(stubs.Select(stub => stub.ProcessorConfiguration)));
+        assembly.Verify(item => item.GetTypes(), Times.Once());
+    }
+
+    [Test]
+    public void GetProcessorHooks_AmbiguousShortNameIsPassedToTheHookProvider()
+    {
+        var assembly = new Mock<Assembly>();
+        assembly.Setup(item => item.GetTypes()).Returns([typeof(First.Duplicate), typeof(Second.Duplicate)]);
+
+        var hooks = ExecutionBuilder.GetProcessorHooks([new TransactionStubConfig { Processor = "Duplicate" }], () => [assembly.Object]);
+
+        Assert.That(hooks.Single().Type, Is.EqualTo("Duplicate"));
+    }
+
+    [Test]
+    public void GetProcessorHooks_PicksUpAssembliesLoadedWhileInitializingAnEarlierHook()
+    {
+        var first = new Mock<Assembly>();
+        first.Setup(item => item.GetTypes()).Returns([typeof(First.Duplicate)]);
+        var second = new Mock<Assembly>();
+        second.Setup(item => item.GetTypes()).Returns([typeof(Second.Duplicate), typeof(DummyProcessor)]);
+        var loaded = new List<Assembly> { first.Object };
+        var stubs = new[] { "Duplicate", "Duplicate", nameof(DummyProcessor) }
+            .Select(name => new TransactionStubConfig { Processor = name });
+        using var hooks = ExecutionBuilder.GetProcessorHooks(stubs, () => loaded).GetEnumerator();
+
+        Assert.That(hooks.MoveNext(), Is.True);
+        Assert.That(hooks.Current.Type, Is.EqualTo(typeof(First.Duplicate).FullName));
+        loaded.Add(second.Object);
+        Assert.That(hooks.MoveNext(), Is.True);
+        Assert.That(hooks.Current.Type, Is.EqualTo("Duplicate"));
+        Assert.That(hooks.MoveNext(), Is.True);
+        Assert.That(hooks.Current.Type, Is.EqualTo(typeof(DummyProcessor).FullName));
+        first.Verify(item => item.GetTypes(), Times.Once);
+        second.Verify(item => item.GetTypes(), Times.Once);
+    }
+
+    [Test]
+    public void GetProcessorHooks_RetriesPartiallyLoadedAssembliesForLaterHooks()
+    {
+        var assembly = new Mock<Assembly>();
+        assembly.SetupSequence(item => item.GetTypes())
+            .Throws(new ReflectionTypeLoadException([typeof(First.Duplicate), null!], [new TypeLoadException()]))
+            .Returns([typeof(First.Duplicate), typeof(Second.Duplicate), typeof(DummyProcessor)]);
+        var stubs = new[] { "Duplicate", "Duplicate", nameof(DummyProcessor) }
+            .Select(name => new TransactionStubConfig { Processor = name });
+
+        var hooks = ExecutionBuilder.GetProcessorHooks(stubs, () => [assembly.Object]).Select(hook => hook.Type).ToArray();
+
+        Assert.That(hooks, Is.EqualTo(new[] { typeof(First.Duplicate).FullName, "Duplicate", typeof(DummyProcessor).FullName }));
+        assembly.Verify(item => item.GetTypes(), Times.Exactly(2));
     }
 
     [Test]
@@ -508,20 +546,6 @@ public class ExecutionBuilderBranchTests
         Assert.That(context.GetMetaDataFromContext(), Is.Not.Null);
     }
 
-    private static string InvokeResolveProcessorTypeName(string configuredProcessor)
-    {
-        return (string)typeof(ExecutionBuilder)
-            .GetMethod("ResolveProcessorTypeName", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Static)!
-            .Invoke(null, [configuredProcessor])!;
-    }
-
-    private static IEnumerable<Type> InvokeGetLoadableTypes(Assembly assembly)
-    {
-        return (IEnumerable<Type>)typeof(ExecutionBuilder)
-            .GetMethod("GetLoadableTypes", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Static)!
-            .Invoke(null, [assembly])!;
-    }
-
     private static IEnumerable<string> InvokeResolveActionNames(IEnumerable<ServerConfig> servers)
     {
         return (IEnumerable<string>)typeof(ExecutionBuilder)
@@ -625,7 +649,10 @@ public class ExecutionBuilderBranchTests
         }
     }
 
-    private sealed class DummyProcessor : ITransactionProcessor
+    private static class First { public sealed class Duplicate : DummyProcessor; }
+    private static class Second { public sealed class Duplicate : DummyProcessor; }
+
+    private class DummyProcessor : ITransactionProcessor
     {
         public Context Context { get; set; } = null!;
 

@@ -7,6 +7,7 @@ using QaaS.Mocker.Servers.Actions;
 using QaaS.Mocker.Servers.Caches;
 using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 using QaaS.Mocker.Servers.Exceptions;
+using QaaS.Mocker.Servers.Metrics;
 using QaaS.Mocker.Stubs;
 using QaaS.Mocker.Stubs.Stubs;
 using HttpMethod = QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs.HttpMethod;
@@ -98,9 +99,10 @@ public class HttpServerState : IServerState
     /// <param name="path">Request path.</param>
     /// <param name="method">HTTP method.</param>
     /// <param name="pathParameters">The path parameter from the key</param>
-    /// <returns>Tuple containing the transaction stub name</returns>
+    /// <param name="matched">Whether a configured route and method matched before fallback.</param>
+    /// <returns>The resolved transaction stub.</returns>
     private TransactionStub ResolveTransactionStub(string path, HttpMethod method,
-        out IDictionary<string, string>? pathParameters)
+        out IDictionary<string, string>? pathParameters, out bool matched)
     {
         foreach (var mappedEndpointPathRegex in _httpActions.Keys)
         {
@@ -121,6 +123,7 @@ public class HttpServerState : IServerState
             }
             else pathParameters = null;
 
+            matched = true;
             return mappedAction.Stub;
         }
 
@@ -128,6 +131,7 @@ public class HttpServerState : IServerState
             "No HTTP action matched request '{HttpMethod} {Path}'. Falling back to stub '{StubName}'",
             method, path, _notFoundTransactionStub.Name);
         pathParameters = null;
+        matched = false;
         return _notFoundTransactionStub;
     }
 
@@ -155,13 +159,19 @@ public class HttpServerState : IServerState
     /// <param name="requestData">Request data.</param>
     /// <returns>Response data.</returns>
     public Data<object> Process(string path, HttpMethod method, Data<object> requestData)
+        => Process(path, method, requestData, out _);
+
+    internal Data<object> Process(string path, HttpMethod method, Data<object> requestData,
+        out HttpRequestOutcome outcome)
     {
+        outcome = HttpRequestOutcome.Error;
         Data<object>? responseData;
         var transactionProcessedSuccessfully = true;
+        var matched = false;
         var actionName = ResolveActionName(path, method);
         try
         {
-            var transactionStub = ResolveTransactionStub(path, method, out var pathParameters);
+            var transactionStub = ResolveTransactionStub(path, method, out var pathParameters, out matched);
             requestData.MetaData!.Http.PathParameters = pathParameters;
             _cache.StoreInput(requestData.CloneDetailed(), actionName);
             _logger.LogDebug(
@@ -181,6 +191,7 @@ public class HttpServerState : IServerState
         if (transactionProcessedSuccessfully)
         {
             _cache.StoreOutput(responseData!.CloneDetailed(), actionName);
+            outcome = matched ? HttpRequestOutcome.Hit : HttpRequestOutcome.Miss;
             return responseData!;
         }
 

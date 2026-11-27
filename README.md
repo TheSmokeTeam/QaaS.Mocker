@@ -181,7 +181,22 @@ dotnet build QaaS.Mocker.sln -c Release --no-restore
 dotnet test QaaS.Mocker.sln -c Release --no-build
 ```
 
+## Execution and HTTP dashboards
+
+Enable existing Elasticsearch logging with `--send-logs --elastic-uri <url>` or the configured defaults. A custom logger must admit Debug events. Set `MetaData.Team`, `MetaData.System` and the string `MetaData.ExtraLabels.Project` to trusted organizational labels. Missing ownership appears under `(unattributed)`. The framework classifies Kubernetes executions as CI and other executions as Local.
+
+Mocker measures each built server run. Set `Server.Http.EnableHttpMetrics` or `Servers[].Http.EnableHttpMetrics` to `true` for request counters. Each active HTTP server attempts to publish nonempty request summaries every ten seconds and once on graceful shutdown. If a previous summary is still being written, the next scheduled write is skipped and its counts stay in memory for the next flush. A configured 503 counts as HTTP 5xx. A routing miss and a handler error have separate counters. Hard termination can lose the last window. Each measured invocation has a fresh attempt ID. Setup failures before the execution starts and template commands fall outside the lifecycle counts.
+
+1. Open the [Elasticsearch configuration](https://raw.githubusercontent.com/TheSmokeTeam/QaaS.Mocker/265859576ea77a85874533ece393a1386d83df8d/observability/elasticsearch.console) in Kibana Dev Tools. Install its shared ingest pipeline and mapping component. Add `qaas-usage-fields-v1` to the template for future daily logs, or copy its two field mappings into the existing legacy template. Apply the same mappings to current `qaas-20*` log indices before enabling the pipeline.
+2. Configure `qaas-usage-stamp-v1` as `index.final_pipeline` in the log template and current index settings. If a final pipeline is already in use, append a `pipeline` processor calling `qaas-usage-stamp-v1` to it. Preserve the existing processors. Run the remaining Console requests to create the product destination, create the continuous transform and start it. The stated resources require Elasticsearch ingest, transform and index privileges. The transform reads stamped logs from installation onward. Keep raw logs for at least the longest run plus the retry window, and size destination retention for the usage history you want to query.
+3. Configure Grafana’s Elasticsearch data source with UID `qaas-mocker-usage-v1`, index `qaasusage-mocker-v1` and time field `event.Time`. Import or file-provision the [Mocker dashboard](https://raw.githubusercontent.com/TheSmokeTeam/QaaS.Mocker/265859576ea77a85874533ece393a1386d83df8d/grafana/mocker-usage.json). Check `GET /_transform/qaasusage-mocker-v1/_stats` for checkpoint progress. The transform checks every 30 seconds with a 10-second ingestion delay.
+
+The standard CLI allows up to 125 ms for its existing sink to drain after a successful connection. `QAAS_USAGE_FLUSH_MS` accepts 0–2000. This limits waiting for sink disposal, not overall shutdown time. Either lifecycle record can be lost if the sink cannot flush before exit. Embedded hosts control their own lifetime.
+
+Set `QAAS_USAGE_ENABLED=false` to disable these events while retaining ordinary diagnostics. To suspend analytics, stop the transform with `POST /_transform/qaasusage-mocker-v1/_stop`. Existing raw logs remain available.
+
 ## Documentation
+
 - Official docs: [thesmoketeam.github.io/qaas-docs](https://thesmoketeam.github.io/qaas-docs/)
 - CI workflow: [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
 - NuGet package: [QaaS.Mocker on NuGet](https://www.nuget.org/packages/QaaS.Mocker/)

@@ -42,6 +42,9 @@ public record HttpServerConfig : IValidatableObject
      DefaultValue(128)]
     public int ConnectionAcceptanceValue { get; set; } = 128;
 
+    [Description("Write periodic per-server HTTP request totals to the configured logger."), DefaultValue(false)]
+    public bool EnableHttpMetrics { get; set; }
+
     /// <summary>
     /// Validates HTTPS-specific settings before server startup.
     /// </summary>

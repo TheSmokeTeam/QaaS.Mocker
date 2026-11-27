@@ -1,3 +1,4 @@
+using System.Globalization;
 using QaaS.Framework.Executions;
 
 namespace QaaS.Mocker;
@@ -8,6 +9,7 @@ namespace QaaS.Mocker;
 public class MockerRunner : IRunner
 {
     private readonly Action<int> _exitAction;
+    internal Action? DrainCliLogger { get; set; }
     private int? BootstrapHandledExitCode { get; set; }
 
     public MockerRunner(IEnumerable<ExecutionBuilder>? executionBuilders, Action<int>? exitAction = null)
@@ -50,7 +52,49 @@ public class MockerRunner : IRunner
         if (ExecutionBuilders.Count == 0)
             return;
 
-        ExitProcess(StartExecutions(BuildExecutions()));
+        var executions = BuildExecutions();
+        int exitCode;
+        try
+        {
+            exitCode = StartExecutions(executions);
+        }
+        finally
+        {
+            if (DrainCliLogger != null && executions.Any(execution => execution is Execution { LoggedExecution: true }))
+                DrainCliLogger();
+            DrainCliLogger = null;
+        }
+
+        ExitProcess(exitCode);
+    }
+
+    internal static TimeSpan GetFlushBudget()
+    {
+        var configured = Environment.GetEnvironmentVariable("QAAS_USAGE_FLUSH_MS");
+        if (int.TryParse(configured, NumberStyles.None, CultureInfo.InvariantCulture, out var milliseconds))
+            return TimeSpan.FromMilliseconds(Math.Min(milliseconds, 2000));
+        return TimeSpan.FromMilliseconds(125);
+    }
+
+    internal static void DrainLogger(IDisposable logger, TimeSpan budget)
+    {
+        if (budget <= TimeSpan.Zero) return;
+        // A custom sink may block even before its first await. Keep disposal off the caller.
+        var drain = Task.Run(async () =>
+        {
+            try
+            {
+                if (logger is IAsyncDisposable asyncLogger)
+                    await asyncLogger.DisposeAsync().ConfigureAwait(false);
+                else
+                    logger.Dispose();
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException and not AccessViolationException)
+            {
+                // Keep the original execution outcome if a logging provider fails during shutdown.
+            }
+        });
+        drain.Wait(budget);
     }
 
     /// <summary>

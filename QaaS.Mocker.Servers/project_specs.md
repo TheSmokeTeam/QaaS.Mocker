@@ -43,3 +43,5 @@ pipeline (`QaaS.Mocker.Stubs`).
 
 `QaaS.Mocker.Servers.Tests` — covers routing, stub dispatch, and
 lifecycle reconciliation per protocol.
+
+HTTP servers configured with `EnableHttpMetrics` write per-instance request deltas through the execution logger. See the [Mocker dashboard guide](../README.md#execution-and-http-dashboards) for fields and shutdown behavior.

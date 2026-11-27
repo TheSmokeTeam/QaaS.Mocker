@@ -633,13 +633,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
             ).InstancePerLifetimeScope();
 
             containerBuilder.Register<IComponentContext, IEnumerable<HookData<ITransactionProcessor>>>(_ =>
-                Stubs.Select(stubConfig => new HookData<ITransactionProcessor>
-                {
-                    Type = ResolveProcessorTypeName(stubConfig.Processor!),
-                    Configuration = stubConfig.ProcessorConfiguration,
-                    Name = stubConfig.Name!
-                })
-            ).InstancePerLifetimeScope();
+                GetProcessorHooks(Stubs, AppDomain.CurrentDomain.GetAssemblies)).InstancePerLifetimeScope();
 
             containerBuilder.RegisterModule(new HooksLoaderModule<IGenerator>(_validationResults));
             containerBuilder.RegisterModule(new HooksLoaderModule<ITransactionProcessor>(_validationResults));
@@ -684,7 +678,8 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
         var dataSources = BuildDataSources().ToImmutableList();
         var stubs = BuildStubs(dataSources);
         var configuredServers = ResolveConfiguredServers();
-        var server = new ServerFactory(Context, configuredServers).Build(dataSources, stubs);
+        var serverFactory = new ServerFactory(Context, configuredServers);
+        var server = serverFactory.Build(dataSources, stubs);
         var controller = new ControllerFactory(Context, Controller).Build(server.State);
         // Log the assembled runtime graph once the builder has resolved every major dependency.
         Context.Logger.LogInformation(
@@ -708,6 +703,7 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
 
         return new Execution(_executionMode, Context, _runLocally)
         {
+            LogIdentity = serverFactory.LogIdentity,
             ServerLogic = serverLogic,
             ControllerLogic = controllerLogic,
             TemplateLogic = templateLogic
@@ -721,38 +717,60 @@ public class ExecutionBuilder : BaseExecutionBuilder<InternalContext, ExecutionD
                    "Could not resolve generator name from DataSource configuration. Ensure DataSources are configured correctly.");
     }
 
-    private static string ResolveProcessorTypeName(string configuredProcessor)
+    internal static IEnumerable<HookData<ITransactionProcessor>> GetProcessorHooks(
+        IEnumerable<TransactionStubConfig> stubs, Func<IEnumerable<Assembly>> getAssemblies)
     {
-        if (string.IsNullOrWhiteSpace(configuredProcessor) || configuredProcessor.Contains('.'))
-            return configuredProcessor;
+        var processorsByAssembly = new Dictionary<Assembly, Type[]>(ReferenceEqualityComparer.Instance);
+        foreach (var stub in stubs)
+        {
+            var name = stub.Processor;
+            if (!string.IsNullOrWhiteSpace(name) && !name.Contains('.'))
+            {
+                // The framework initializes each hook before requesting the next one. Its callback may load plugins.
+                var matches = getAssemblies()
+                    .Where(assembly => !assembly.IsDynamic)
+                    .SelectMany(assembly => GetProcessorTypes(assembly, processorsByAssembly))
+                    .Where(type => string.Equals(type.Name, name, StringComparison.Ordinal))
+                    .Select(type => type.FullName)
+                    .Where(fullName => !string.IsNullOrWhiteSpace(fullName))
+                    .Distinct(StringComparer.Ordinal).ToArray();
+                if (matches.Length == 1)
+                    name = matches[0];
+            }
 
-        var matchingProcessorTypes = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(assembly => !assembly.IsDynamic)
-            .SelectMany(GetLoadableTypes)
-            .Where(type =>
-                type is { IsAbstract: false, IsInterface: false } &&
-                typeof(ITransactionProcessor).IsAssignableFrom(type) &&
-                string.Equals(type.Name, configuredProcessor, StringComparison.Ordinal))
-            .Select(type => type.FullName)
-            .Where(typeName => !string.IsNullOrWhiteSpace(typeName))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        return matchingProcessorTypes.Length == 1
-            ? matchingProcessorTypes[0]!
-            : configuredProcessor;
+            yield return new HookData<ITransactionProcessor>
+            {
+                Type = name!,
+                Configuration = stub.ProcessorConfiguration,
+                Name = stub.Name!
+            };
+        }
     }
 
-    private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
+    private static Type[] GetProcessorTypes(Assembly assembly, Dictionary<Assembly, Type[]> cache)
     {
+        if (cache.TryGetValue(assembly, out var processors))
+            return processors;
+
+        Type[] types;
         try
         {
-            return assembly.GetTypes();
+            types = assembly.GetTypes();
         }
         catch (ReflectionTypeLoadException exception)
         {
-            return exception.Types.Where(type => type is not null)!;
+            // A later hook can load a missing dependency, making additional types available.
+            return OnlyProcessors(exception.Types);
         }
+
+        processors = OnlyProcessors(types);
+        cache.Add(assembly, processors);
+        return processors;
+
+        static Type[] OnlyProcessors(IEnumerable<Type?> candidates) => candidates
+            .Where(type => type is { IsAbstract: false, IsInterface: false } &&
+                           typeof(ITransactionProcessor).IsAssignableFrom(type))
+            .ToArray()!;
     }
 
     private static IConfiguration GetDataSourceGeneratorConfiguration(DataSourceBuilder dataSourceBuilder)

@@ -4,6 +4,8 @@ using QaaS.Framework.Executions;
 using QaaS.Mocker.CommandLineBuilders;
 using QaaS.Mocker.Options;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 
 namespace QaaS.Mocker.Tests;
 
@@ -397,6 +399,70 @@ public class BootstrapTests
     }
 
     [Test]
+    public void New_RefusedElasticConnectionDoesNotArmShutdownDrain()
+    {
+        // Reserve a loopback port without listening so another process cannot open it during the handshake.
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        var endpoint = (IPEndPoint)socket.LocalEndPoint!;
+        var dir = CreateTempDirectory();
+        try
+        {
+            var config = WriteFile(dir, "mocker.qaas.yaml", """
+                MetaData:
+                  Team: checkout
+                  System: orders
+                Server:
+                  Http:
+                    Port: 0
+                """);
+            var runner = Bootstrap.New(["run", config, "--no-env", "--disable-elastic-defaults",
+                "--send-logs", "--elastic-uri", $"http://{endpoint}"]);
+            Assert.That(runner.DrainCliLogger, Is.Null);
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
+    public void New_ConsoleOnlyDebugLoggerMeasuresOwnedExecutionWithoutArmingElasticDrain()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            var certificate = WriteFile(dir, "invalid.pfx", "not a certificate");
+            var config = WriteFile(dir, "mocker.qaas.yaml", $"""
+                MetaData:
+                  Team: ownership-test
+                  System: checkout
+                Server:
+                  Http:
+                    Port: 0
+                    IsSecuredSchema: true
+                    CertificatePath: {certificate.Replace('\\', '/')}
+                    CertificatePassword: test
+                """);
+            var logs = WriteFile(dir, "logger.yaml", """
+                Serilog:
+                  MinimumLevel: Debug
+                  WriteTo:
+                    - Name: Console
+                """);
+            var runner = Bootstrap.New(["run", config, "--no-env", "--disable-elastic-defaults", "-g", logs]);
+            using var execution = (Execution)runner.ExecutionBuilders.Single().Build();
+            Assert.That(execution.Start, Throws.TypeOf<AggregateException>());
+            Assert.That(execution.LoggedExecution, Is.True);
+            Assert.That(runner.DrainCliLogger, Is.Null);
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
     public void New_WithCustomRunner_ReturnsCustomRunnerAndUsesCustomLifecycle()
     {
         var tempDirectory = CreateTempDirectory();
@@ -412,6 +478,15 @@ public class BootstrapTests
             var customRunner = runner as TrackingMockerRunner;
 
             Assert.That(customRunner, Is.Not.Null);
+            Assert.That(Bootstrap.New(["template", configFile, "--send-logs", "--disable-elastic-defaults"]).DrainCliLogger, Is.Null);
+            var embedded = (TrackingMockerRunner)Bootstrap.New<TrackingMockerRunner>(
+                ["run", configFile, "--send-logs", "--disable-elastic-defaults"]);
+            Assert.That(embedded.DrainCliLogger, Is.Null);
+            embedded.FailStart = true;
+            Assert.That(embedded.Run, Throws.TypeOf<InvalidOperationException>().With.Message.EqualTo("retry"));
+            embedded.FailStart = false;
+            embedded.Run();
+            Assert.That(embedded.ObservedExitCode, Is.Zero);
 
             customRunner!.Run();
 
@@ -528,6 +603,7 @@ public class BootstrapTests
     {
         public bool BuildExecutionCalled { get; private set; }
         public bool StartExecutionCalled { get; private set; }
+        public bool FailStart { private get; set; }
         public bool ExitProcessCalled { get; private set; }
         public int? ObservedExitCode { get; private set; }
         public int? BootstrapExitCode { get; private set; }
@@ -541,6 +617,8 @@ public class BootstrapTests
         protected override int StartExecution(BaseExecution execution)
         {
             StartExecutionCalled = true;
+            if (FailStart)
+                throw new InvalidOperationException("retry");
             return 0;
         }
 

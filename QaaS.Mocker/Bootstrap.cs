@@ -1,8 +1,10 @@
+using QaaS.Mocker.Servers;
 using System.Reflection;
 using CommandLine;
 using QaaS.Mocker.CommandLineBuilders;
 using QaaS.Mocker.Loaders;
 using QaaS.Mocker.Options;
+using QaaS.Framework.Executions;
 
 namespace QaaS.Mocker;
 
@@ -72,17 +74,28 @@ public static class Bootstrap
 
         return cliParserResult
             .MapResult(
-                (RunOptions options) =>
-                {
-                    using var loader = new MockerLoader<TRunner, RunOptions>(options);
-                    return loader.GetLoadedRunner();
-                },
+                (RunOptions options) => LoadRunner<TRunner>(options),
                 (TemplateOptions options) =>
                 {
                     using var loader = new MockerLoader<TRunner, TemplateOptions>(options);
                     return loader.GetLoadedRunner();
                 },
                 errors => HandleParseError<TRunner>(cliParser, cliParserResult, errors));
+    }
+
+    private static TRunner LoadRunner<TRunner>(RunOptions options) where TRunner : MockerRunner
+    {
+        var canShip = options.SendLogs || options.LoggerConfigurationFilePath != null ||
+            (!options.DisableElasticDefaults && ExecutionLogging.GetDefaultsProvider() != null);
+        MockerLoader<TRunner, RunOptions> loader;
+        bool connected;
+        using (var startup = typeof(TRunner) == typeof(MockerRunner) && canShip && MockerLogIdentity.Enabled ? new ElasticSinkStartup() : null)
+        {
+            loader = new MockerLoader<TRunner, RunOptions>(options);
+            connected = startup?.Connected == true;
+        }
+        using (loader)
+            return connected ? loader.GetCliRunner() : loader.GetLoadedRunner();
     }
 
     /// <summary>

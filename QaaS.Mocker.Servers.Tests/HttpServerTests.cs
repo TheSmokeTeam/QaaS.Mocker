@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Moq;
 using NUnit.Framework;
 using QaaS.Framework.SDK.ContextObjects;
 using QaaS.Framework.SDK.DataSourceObjects;
@@ -15,6 +17,7 @@ using QaaS.Framework.SDK.Hooks.Processor;
 using QaaS.Framework.SDK.Session.DataObjects;
 using QaaS.Framework.SDK.Session.MetaDataObjects;
 using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
+using QaaS.Mocker.Servers.Metrics;
 using QaaS.Mocker.Servers.Servers;
 using QaaS.Mocker.Stubs;
 using QaaS.Mocker.Stubs.Stubs;
@@ -249,6 +252,134 @@ public class HttpServerTests
         Assert.That(payload, Is.EqualTo("ok"));
     }
 
+    [Test]
+    public async Task HttpSummary_ClassifiesDispatchAndResponseIndependently()
+    {
+        var logger = new Mock<ILogger>();
+        var identity = new MockerLogIdentity("red", "billing");
+        using var metrics = new HttpRequestMetrics(logger.Object, identity, 8080);
+        var endpoints = CreateEndpoints();
+        endpoints[0].Actions = [.. endpoints[0].Actions, new HttpEndpointActionConfig
+            { Method = HttpMethod.Post, Name = "Broken", TransactionStubName = "Broken" }];
+        var server = new HttpServer(new HttpServerConfig { Endpoints = endpoints }, Globals.Logger,
+        [
+            CreateStub("MainStub", _ => CreateResponse("intentional", 503)),
+            CreateStub("Broken", _ => throw new InvalidOperationException("original failure")),
+            CreateStub(Constants.DefaultNotFoundTransactionStubLabel, _ => CreateResponse("fallback")),
+            CreateStub(Constants.DefaultInternalErrorTransactionStubLabel, _ => CreateResponse("error", 202))
+        ]);
+        foreach (var (method, path) in new[] { ("GET", "/health"), ("GET", "/absent"), ("BREW", "/health"), ("POST", "/health") })
+        {
+            var context = new DefaultHttpContext();
+            context.Request.Method = method;
+            context.Request.Path = path;
+            context.Request.Host = new HostString("localhost");
+            context.Request.Scheme = "http";
+            await InvokeHandleTransactionAsync(server, context, metrics);
+        }
+        var interruptedResponse = new DefaultHttpContext();
+        interruptedResponse.Request.Method = "GET";
+        interruptedResponse.Request.Path = "/health";
+        interruptedResponse.Request.Scheme = "http";
+        interruptedResponse.Request.Host = new HostString("localhost");
+        using var readOnlyBody = new MemoryStream([], writable: false);
+        interruptedResponse.Response.Body = readOnlyBody;
+        await InvokeHandleTransactionAsync(server, interruptedResponse, metrics);
+        metrics.Flush();
+        metrics.Flush();
+        var summary = logger.Invocations.Single(x => x.Method.Name == "Log");
+        var values = ((IEnumerable<KeyValuePair<string, object?>>)summary.Arguments[2]).ToDictionary();
+        Assert.Multiple(() =>
+        {
+            Assert.That(values["QaasEvent"], Is.EqualTo("MockerHttpRequests"));
+            Assert.That(values["Requests"], Is.EqualTo(5));
+            Assert.That(values["HandlerErrors"], Is.EqualTo(3));
+            Assert.That(values["Misses"], Is.EqualTo(1));
+            Assert.That(values["Http5xx"], Is.EqualTo(3));
+            Assert.That(values["AttemptId"], Is.Not.Empty);
+            Assert.That(values["BatchSequence"], Is.EqualTo(1L));
+            Assert.That(values["ProjectKnown"], Is.False);
+            Assert.That(values.ContainsKey("ExecutionId"), Is.False);
+            Assert.That(values["Team"], Is.EqualTo("red"));
+            Assert.That(values["System"], Is.EqualTo("billing"));
+        });
+    }
+
+    [Test]
+    public void HttpSummary_ConcurrentServersAndFlushesKeepSeparateTotals()
+    {
+        var logger = new Mock<ILogger>();
+        var identity = new MockerLogIdentity("red", "billing");
+        using var first = new HttpRequestMetrics(logger.Object, identity, 0);
+        using var second = new HttpRequestMetrics(logger.Object, identity, 0);
+        Parallel.For(0, 1_000, i =>
+        {
+            first.Complete(HttpRequestOutcome.Error, 500);
+            second.Complete(HttpRequestOutcome.Miss, 200);
+            if (i % 100 == 0)
+                first.Flush();
+        });
+        first.Flush();
+        second.Flush();
+
+        var totals = logger.Invocations.Where(x => x.Method.Name == "Log")
+            .Select(x => ((IEnumerable<KeyValuePair<string, object?>>)x.Arguments[2]).ToDictionary())
+            .GroupBy(x => x["ServerId"]).Select(group => new
+            {
+                Sequence = group.Select(x => (long)x["BatchSequence"]!).Order().ToArray(),
+                Requests = group.Sum(x => (long)x["Requests"]!),
+                Errors = group.Sum(x => (long)x["HandlerErrors"]!),
+                Misses = group.Sum(x => (long)x["Misses"]!)
+            }).ToArray();
+        Assert.That(totals, Has.Length.EqualTo(2));
+        foreach (var instance in totals)
+            Assert.That(instance.Sequence, Is.EqualTo(Enumerable.Range(1, instance.Sequence.Length).Select(i => (long)i)));
+        Assert.That(totals.Select(x => (x.Requests, x.Errors, x.Misses)),
+            Is.EquivalentTo(new[] { (1000L, 1000L, 0L), (1000L, 0L, 1000L) }));
+    }
+
+    [Test]
+    public async Task HttpSummary_SkipsOverlappingWritesWithoutDrainingTheirCounts()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var logger = new Mock<ILogger>();
+        logger.Setup(x => x.Log(LogLevel.Debug, It.IsAny<EventId>(), It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(), It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
+            .Callback(new InvocationAction(invocation =>
+            {
+                var fields = ((IEnumerable<KeyValuePair<string, object?>>)invocation.Arguments[2]).ToDictionary();
+                if (Equals(fields["BatchSequence"], 1L))
+                {
+                    entered.Set();
+                    release.Wait(TimeSpan.FromSeconds(8));
+                }
+            }));
+        using var metrics = new HttpRequestMetrics(logger.Object, new MockerLogIdentity("red", "billing"), 8080);
+
+        metrics.Complete(HttpRequestOutcome.Error, 500);
+        var first = Task.Run(metrics.Flush);
+        try
+        {
+            Assert.That(entered.Wait(TimeSpan.FromSeconds(3)), Is.True);
+            metrics.Complete(HttpRequestOutcome.Miss, 404);
+            metrics.Flush();
+            Assert.That(logger.Invocations.Count(x => x.Method.Name == "Log"), Is.EqualTo(1));
+        }
+        finally
+        {
+            release.Set();
+            await first.WaitAsync(TimeSpan.FromSeconds(3));
+        }
+
+        metrics.Flush();
+        var fields = logger.Invocations.Where(x => x.Method.Name == "Log")
+            .Select(x => ((IEnumerable<KeyValuePair<string, object?>>)x.Arguments[2]).ToDictionary()).ToArray();
+        Assert.That(fields.Select(x => x["BatchSequence"]), Is.EqualTo(new object[] { 1L, 2L }));
+        Assert.That(fields.Select(x => x["Requests"]), Is.EqualTo(new object[] { 1L, 1L }));
+        Assert.That(fields[1]["Misses"], Is.EqualTo(1L));
+    }
+
     private static HttpServer CreateServer()
     {
         return CreateServer(new HttpServerConfig
@@ -259,11 +390,11 @@ public class HttpServerTests
         });
     }
 
-    private static HttpServer CreateServer(HttpServerConfig config)
+    private static HttpServer CreateServer(HttpServerConfig config, ILogger? logger = null)
     {
         return new HttpServer(
             config,
-            Globals.Logger,
+            logger ?? Globals.Logger,
             [
                 CreateStub("MainStub", _ => CreateResponse("ok")),
                 CreateStub(Constants.DefaultNotFoundTransactionStubLabel, _ => CreateResponse("fallback")),
@@ -291,11 +422,11 @@ public class HttpServerTests
         ];
     }
 
-    private static async Task InvokeHandleTransactionAsync(HttpServer server, HttpContext context)
+    private static async Task InvokeHandleTransactionAsync(HttpServer server, HttpContext context, HttpRequestMetrics? metrics = null)
     {
         var task = (Task)typeof(HttpServer)
             .GetMethod("HandleTransactionAsync", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .Invoke(server, [context])!;
+            .Invoke(server, [context, metrics])!;
 
         await task;
     }
@@ -304,7 +435,7 @@ public class HttpServerTests
     {
         return (IHost)typeof(HttpServer)
             .GetMethod("BuildHost", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .Invoke(server, null)!;
+            .Invoke(server, [null])!;
     }
 
     private static TransactionStub CreateStub(string name, Func<Data<object>, Data<object>> process)
@@ -317,12 +448,12 @@ public class HttpServerTests
         };
     }
 
-    private static Data<object> CreateResponse(string payload)
+    private static Data<object> CreateResponse(string payload, int statusCode = StatusCodes.Status200OK)
     {
         return new Data<object>
         {
             Body = Encoding.UTF8.GetBytes(payload),
-            MetaData = new MetaData { Http = new Http { StatusCode = StatusCodes.Status200OK } }
+            MetaData = new MetaData { Http = new Http { StatusCode = statusCode } }
         };
     }
 

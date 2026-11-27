@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using QaaS.Mocker.Servers.ConfigurationObjects.HttpServerConfigs;
 using QaaS.Mocker.Servers.Extensions;
+using QaaS.Mocker.Servers.Metrics;
 using QaaS.Mocker.Servers.ServerStates;
 using QaaS.Mocker.Stubs.Stubs;
 
@@ -21,11 +22,17 @@ public class HttpServer : IServer
     private readonly ILogger _logger;
     private readonly HttpServerConfig _configuration;
     private readonly HttpServerState _httpServerState;
+    private readonly MockerLogIdentity? _identity;
 
     public IServerState State { get; init; }
 
     public HttpServer(HttpServerConfig httpServerConfig, ILogger logger, IImmutableList<TransactionStub> transactionStubList)
+        : this(httpServerConfig, logger, transactionStubList, null) { }
+
+    internal HttpServer(HttpServerConfig httpServerConfig, ILogger logger,
+        IImmutableList<TransactionStub> transactionStubList, MockerLogIdentity? identity)
     {
+        _identity = identity;
         _logger = logger;
         _configuration = httpServerConfig;
         _httpServerState = new HttpServerState(
@@ -42,15 +49,21 @@ public class HttpServer : IServer
     /// </summary>
     public void Start()
     {
-        var host = BuildHost();
+        using var metrics = _configuration.EnableHttpMetrics && _identity != null
+            ? new HttpRequestMetrics(_logger, _identity, _configuration.Port)
+            : null;
+        var host = BuildHost(metrics);
+        LogListening();
+        host.Run();
+    }
+
+    private void LogListening() =>
         _logger.LogInformation("HTTP Server started. Listening on {Schema}://{Host}:{Port}",
             _configuration.IsSecuredSchema ? "https" : "http",
             _configuration.IsLocalhost ? "localhost" : "0.0.0.0",
             _configuration.Port);
-        host.Run();
-    }
 
-    private IHost BuildHost()
+    private IHost BuildHost(HttpRequestMetrics? metrics)
     {
         var builder = WebApplication.CreateBuilder();
 
@@ -83,25 +96,31 @@ public class HttpServer : IServer
         builder.Services.AddRouting();
 
         var app = builder.Build();
-        app.Map("/{**path}", HandleTransactionAsync);
+        app.Map("/{**path}", context => HandleTransactionAsync(context, metrics));
         return app;
     }
 
-    private async Task HandleTransactionAsync(HttpContext context)
+    private async Task HandleTransactionAsync(HttpContext context, HttpRequestMetrics? metrics)
     {
+        var outcome = HttpRequestOutcome.Error;
         try
         {
             var path = context.Request.Path.Value ?? "/";
             var method = context.Request.Method.ToHttpMethodEnum();
             var requestData = await context.Request.ConstructRequestDataAsync();
-            var responseData = _httpServerState.Process(path, method, requestData);
+            var responseData = _httpServerState.Process(path, method, requestData, out var dispatchOutcome);
             await context.Response.HandleResponseDataAndCloseAsync(responseData, method);
+            outcome = dispatchOutcome;
         }
         catch (Exception exception)
         {
             _logger.LogCritical(exception, "Encountered critical HTTP server error, closing the server.");
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             await context.Response.CompleteAsync();
+        }
+        finally
+        {
+            metrics?.Complete(outcome, context.Response.StatusCode);
         }
     }
 
